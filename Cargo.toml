@@ -1,0 +1,26 @@
+[workspace]
+members = [
+    "crates/smb100a-commands",
+    "crates/m8812-commands",
+    "crates/oe1022d-commands",
+    "crates/cni-laser-commands",
+    "crates/device-transport",
+    "crates/smb100a-transport",
+    "crates/m8812-transport",
+    "crates/oe1022d-transport",
+    "crates/cni-laser-transport",
+    "crates/station-resolver",
+    "crates/acquisition-runtime",
+    "apps/odmr-cli",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+version = "0.1.0"
+authors = ["OpenAI Codex"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

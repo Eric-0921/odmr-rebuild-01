@@ -1,0 +1,10 @@
+[package]
+name = "m8812-commands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "m8812_commands"
+path = "src/lib.rs"
+

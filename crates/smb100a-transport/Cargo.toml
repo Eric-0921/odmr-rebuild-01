@@ -1,0 +1,13 @@
+[package]
+name = "smb100a-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "smb100a_transport"
+path = "src/lib.rs"
+
+[dependencies]
+device-transport = { path = "../device-transport" }
+smb100a-commands = { path = "../smb100a-commands" }

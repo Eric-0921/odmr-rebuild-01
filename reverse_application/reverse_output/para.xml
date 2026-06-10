@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Commports>
+    <PortX Port="COM4" BaudRate="9600" />
+    <PortY Port="COM6" BaudRate="9600" />
+    <PortZ Port="COM3" BaudRate="9600" />
+  </Commports>
+  <DataSaveDir>E:\4-线圈组项目\SimplePowerController\SimplePowerController\bin\Debug\Data</DataSaveDir>
+  <CoilConstant X="143.26" Y="141.77" Z="156.15" />
+  <ZeroOffset X="0" Y="0" Z="0" />
+</Root>

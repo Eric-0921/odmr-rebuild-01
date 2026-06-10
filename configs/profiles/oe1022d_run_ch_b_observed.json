@@ -1,0 +1,30 @@
+{
+  "profile_id": "oe1022d_run_ch_b_observed",
+  "command_settle_ms": 500,
+  "fixed": {
+    "channel": 2,
+    "input_source": 0,
+    "input_grounding": 0,
+    "input_coupling": 1,
+    "line_notch_filter": 0,
+    "reference_source": 0,
+    "reference_slope": 2,
+    "phase_deg": 0.0,
+    "harmonic_1": 1,
+    "harmonic_2": 1,
+    "dynamic_reserve": 1,
+    "sensitivity_index": 24,
+    "time_constant_index": 9,
+    "filter_slope": 1,
+    "sync_filter": 0,
+    "sine_output_mode": 0,
+    "sine_output_voltage_vrms": 1.0
+  },
+  "collector": {
+    "poll_interval_ms": 48,
+    "frame_exact_bytes": 12288,
+    "frame_max_bytes": 16384,
+    "ring_capacity_frames": 512,
+    "guard_margin_ms": 3000
+  }
+}

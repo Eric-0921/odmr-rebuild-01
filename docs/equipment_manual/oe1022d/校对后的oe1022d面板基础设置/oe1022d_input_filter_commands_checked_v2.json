@@ -1,0 +1,504 @@
+{
+  "_meta": {
+    "filename": "OE1022D用户使用文档V1.5.pdf",
+    "instrument": "SSI OE1022D DSP Lock-In Amplifier",
+    "target_panel": "LabVIEW/PC 软件 - 输入与滤波器配置",
+    "version": "checked_v2",
+    "version_note_cn": "v2 在原 examples/.../oe1022d_labview_input_filter_commands.json 基础上合并:加入截图当前值、灰显项标注、软按钮标记。已对照说明书 5.2.3 / 5.2.4 / 5.2.7 逐条核对。",
+    "checked_against": [
+      "04_menu.md 4.1 (菜单定义)",
+      "05_oe1022d_remote_programming_commands_55_74.md 5.2.3 / 5.2.4 / 5.2.7 (指令集)"
+    ]
+  },
+  "document": {
+    "filename": "OE1022D用户使用文档V1.5.pdf",
+    "instrument": "SSI OE1022D DSP Lock-In Amplifier",
+    "target_panel": "LabVIEW/PC 软件 - 输入与滤波器配置",
+    "source_sections": [
+      {"section": "5.1 OE1022D 命令语法", "local_extracted_text_lines": "2134-2170"},
+      {"section": "5.2.3 输入与滤波器指令", "local_extracted_text_lines": "2349-2376"},
+      {"section": "5.2.4 灵敏度和时间常数指令", "local_extracted_text_lines": "2380-2427"},
+      {"section": "5.2.1 参考与相位指令中的 HARMD", "local_extracted_text_lines": "2235-2243"},
+      {"section": "5.2.7 自动设置指令", "local_extracted_text_lines": "2559-2585"},
+      {"section": "6.2.3 输入与滤波器配置", "local_extracted_text_lines": "3204-3381"}
+    ]
+  },
+  "communication": {
+    "encoding": "ASCII",
+    "command_case": "uppercase mnemonic",
+    "terminator": "<LF> or <CR>; 串口调试助手中也可附加十六进制 0D",
+    "parameter_separator": ",",
+    "multiple_command_separator": ";",
+    "query_rule": "在命令助记符后加 ?，并省略用于设置的参数，例如 SENSD? 2 查询 Ch-B 灵敏度",
+    "channel_argument_i": {"1": "Ch-A", "2": "Ch-B"},
+    "recommended_channel_for_current_setup": {"channel": "Ch-B", "i": 2}
+  },
+  "screenshot_current_values": {
+    "description_cn": "以下为用户提供 4 张 UI 截图中，Ch-A 与 Ch-B 实际的当前显示值。灰显项是 UI 上因前置条件不满足而不可点击的字段；远程指令无此限制。",
+    "ch_a": {
+      "input_source": "单端电压信号",
+      "input_shield_grounding": "浮空",
+      "input_coupling": "交流耦合",
+      "input_notch_filter": "关闭所有陷波器",
+      "dynamic_reserve": "正常",
+      "sensitivity": "100 mV/nA",
+      "time_constant": "300 ms",
+      "filter_slope": "12 dB/oct",
+      "synchronous_filter": "关",
+      "synchronous_filter_button_state": "可点击(未灰显)",
+      "harmonic_1": 1,
+      "harmonic_2": 1
+    },
+    "ch_b": {
+      "input_source": "单端电压信号",
+      "input_shield_grounding": "浮空",
+      "input_coupling": "交流耦合",
+      "input_notch_filter": "关闭所有陷波器",
+      "dynamic_reserve": "正常",
+      "sensitivity": "100 mV/nA",
+      "time_constant": "300 ms",
+      "filter_slope": "12 dB/oct",
+      "synchronous_filter": "关",
+      "synchronous_filter_button_state": "灰显(不可点击)",
+      "harmonic_1": 1,
+      "harmonic_2": 1
+    }
+  },
+  "labview_panel_groups": [
+    {
+      "name_cn": "输入信号的软件配置",
+      "apply_button_cn": "配置输入信号",
+      "button_has_independent_remote_command": false,
+      "button_note_cn": "软按钮；不是独立指令。点击后把 ISRCD / IGNDD / ICPLD / ILIND 共 4 条指令的最新界面值写入仪器。",
+      "parameters": ["Input Source", "Input Shield Grounding", "Input Coupling", "Input Notch Filter"]
+    },
+    {
+      "name_cn": "动态储备和灵敏度配置",
+      "apply_button_cn": "配置动态储备与灵敏度",
+      "button_has_independent_remote_command": false,
+      "button_note_cn": "软按钮；点击后写入 RMODD / SENSD 两条指令的最新值。",
+      "parameters": ["Dynamic Reserve", "Sensitivity", "Auto Sensitivity", "Auto Reserve"]
+    },
+    {
+      "name_cn": "滤波器配置",
+      "apply_button_cn": "配置滤波器",
+      "button_has_independent_remote_command": false,
+      "button_note_cn": "软按钮；点击后写入 OFLTD / OFSLD 两条指令。同步滤波器独立切换。",
+      "parameters": ["Time Constant", "Sync Filter", "Filter Slope"]
+    },
+    {
+      "name_cn": "谐波测量配置",
+      "apply_button_cn": "配置谐波检测",
+      "button_has_independent_remote_command": false,
+      "button_note_cn": "软按钮；点击后写入 HARMD 的最新值。Auto Scale 独立触发。",
+      "parameters": ["Harmonic 1", "Harmonic 2", "Auto Scale"]
+    }
+  ],
+  "commands": [
+    {
+      "ui_group_cn": "输入信号的软件配置",
+      "labview_parameter_en": "Input Source",
+      "labview_parameter_cn": "输入信号源",
+      "command": "ISRCD",
+      "command_type": "set_or_query",
+      "set_syntax": "ISRCD i,j",
+      "query_syntax": "ISRCD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "输入信号类型", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "Single-Ended Voltage", "ui_value_cn": "单端电压信号", "description_cn": "选择 A/IN+ 单端电压输入", "is_screenshot_current": true},
+        {"code": 1, "ui_value": "Differential Voltage", "ui_value_cn": "差分电压信号", "description_cn": "选择 A-B / IN+ 与 IN- 差分电压输入"},
+        {"code": 2, "ui_value": "1 MOhm Current Gain", "ui_value_cn": "1 MOhm 电流增益", "description_cn": "电流输入，放大倍数 10E6 V/A"},
+        {"code": 3, "ui_value": "100 MOhm Current Gain", "ui_value_cn": "100 MOhm 电流增益", "description_cn": "电流输入，放大倍数 10E8 V/A"}
+      ],
+      "labview_apply_button_cn": "配置输入信号",
+      "ch_b_examples": {
+        "set_single_ended_voltage": "ISRCD 2,0",
+        "set_differential_voltage": "ISRCD 2,1",
+        "query": "ISRCD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "输入信号的软件配置",
+      "labview_parameter_en": "Input Shield Grounding",
+      "labview_parameter_cn": "输入屏蔽接地",
+      "command": "IGNDD",
+      "command_type": "set_or_query",
+      "set_syntax": "IGNDD i,j",
+      "query_syntax": "IGNDD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "接地方式", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "Float", "ui_value_cn": "浮空/隔离", "description_cn": "输入接头地与仪器地通过 10 kOhm 电阻隔离", "is_screenshot_current": true},
+        {"code": 1, "ui_value": "Ground", "ui_value_cn": "接地", "description_cn": "输入接头地与仪器地通过 10 Ohm 电阻短接"}
+      ],
+      "labview_apply_button_cn": "配置输入信号",
+      "ch_b_examples": {
+        "set_float": "IGNDD 2,0",
+        "set_ground": "IGNDD 2,1",
+        "query": "IGNDD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "输入信号的软件配置",
+      "labview_parameter_en": "Input Coupling",
+      "labview_parameter_cn": "输入耦合",
+      "command": "ICPLD",
+      "command_type": "set_or_query",
+      "set_syntax": "ICPLD i,j",
+      "query_syntax": "ICPLD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "耦合方式", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "AC", "ui_value_cn": "交流耦合", "is_screenshot_current": true},
+        {"code": 1, "ui_value": "DC", "ui_value_cn": "直流耦合"}
+      ],
+      "labview_apply_button_cn": "配置输入信号",
+      "ch_b_examples": {
+        "set_ac": "ICPLD 2,0",
+        "set_dc": "ICPLD 2,1",
+        "query": "ICPLD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "输入信号的软件配置",
+      "labview_parameter_en": "Input Notch Filter",
+      "labview_parameter_cn": "输入陷波器",
+      "command": "ILIND",
+      "command_type": "set_or_query",
+      "set_syntax": "ILIND i,j",
+      "query_syntax": "ILIND? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "陷波器状态", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "None", "ui_value_cn": "不开启陷波器", "is_screenshot_current": true},
+        {"code": 1, "ui_value": "Line Notch", "ui_value_cn": "50 Hz 陷波器", "description_cn": "开启 50 Hz 陷波器"},
+        {"code": 2, "ui_value": "Both Notch Filters", "ui_value_cn": "50 Hz + 100 Hz 陷波器", "description_cn": "同时开启 50 Hz 和 100 Hz 陷波器"},
+        {"code": 3, "ui_value": "2x Line Notch", "ui_value_cn": "100 Hz 陷波器", "description_cn": "开启 100 Hz 陷波器"}
+      ],
+      "labview_apply_button_cn": "配置输入信号",
+      "ch_b_examples": {
+        "set_none": "ILIND 2,0",
+        "set_50_hz": "ILIND 2,1",
+        "set_50_and_100_hz": "ILIND 2,2",
+        "set_100_hz": "ILIND 2,3",
+        "query": "ILIND? 2"
+      }
+    },
+    {
+      "ui_group_cn": "动态储备和灵敏度配置",
+      "labview_parameter_en": "Dynamic Reserve",
+      "labview_parameter_cn": "动态储备",
+      "command": "RMODD",
+      "command_type": "set_or_query",
+      "set_syntax": "RMODD i,j",
+      "query_syntax": "RMODD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "动态储备模式", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "Low Noise", "ui_value_cn": "低噪声"},
+        {"code": 1, "ui_value": "Normal", "ui_value_cn": "正常", "is_screenshot_current": true},
+        {"code": 2, "ui_value": "High Reserve", "ui_value_cn": "高储备"}
+      ],
+      "labview_apply_button_cn": "配置动态储备与灵敏度",
+      "ch_b_examples": {
+        "set_low_noise": "RMODD 2,0",
+        "set_normal": "RMODD 2,1",
+        "set_high_reserve": "RMODD 2,2",
+        "query": "RMODD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "动态储备和灵敏度配置",
+      "labview_parameter_en": "Sensitivity",
+      "labview_parameter_cn": "满偏灵敏度",
+      "command": "SENSD",
+      "command_type": "set_or_query",
+      "set_syntax": "SENSD i,j",
+      "query_syntax": "SENSD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "灵敏度量程编号", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "sensitivity": "1 nV/fA"},
+        {"code": 1, "sensitivity": "2 nV/fA"},
+        {"code": 2, "sensitivity": "5 nV/fA"},
+        {"code": 3, "sensitivity": "10 nV/fA"},
+        {"code": 4, "sensitivity": "20 nV/fA"},
+        {"code": 5, "sensitivity": "50 nV/fA"},
+        {"code": 6, "sensitivity": "100 nV/fA"},
+        {"code": 7, "sensitivity": "200 nV/fA"},
+        {"code": 8, "sensitivity": "500 nV/fA"},
+        {"code": 9, "sensitivity": "1 uV/pA"},
+        {"code": 10, "sensitivity": "2 uV/pA"},
+        {"code": 11, "sensitivity": "5 uV/pA"},
+        {"code": 12, "sensitivity": "10 uV/pA"},
+        {"code": 13, "sensitivity": "20 uV/pA"},
+        {"code": 14, "sensitivity": "50 uV/pA"},
+        {"code": 15, "sensitivity": "100 uV/pA"},
+        {"code": 16, "sensitivity": "200 uV/pA"},
+        {"code": 17, "sensitivity": "500 uV/pA"},
+        {"code": 18, "sensitivity": "1 mV/nA"},
+        {"code": 19, "sensitivity": "2 mV/nA"},
+        {"code": 20, "sensitivity": "5 mV/nA"},
+        {"code": 21, "sensitivity": "10 mV/nA"},
+        {"code": 22, "sensitivity": "20 mV/nA"},
+        {"code": 23, "sensitivity": "50 mV/nA"},
+        {"code": 24, "sensitivity": "100 mV/nA", "is_screenshot_current": true},
+        {"code": 25, "sensitivity": "200 mV/nA"},
+        {"code": 26, "sensitivity": "500 mV/nA"},
+        {"code": 27, "sensitivity": "1 V/uA"}
+      ],
+      "labview_apply_button_cn": "配置动态储备与灵敏度",
+      "ch_b_examples": {
+        "set_100_mV_per_nA": "SENSD 2,24",
+        "set_1_V_per_uA": "SENSD 2,27",
+        "set_100_uV_per_pA": "SENSD 2,15",
+        "query": "SENSD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "动态储备和灵敏度配置",
+      "labview_parameter_en": "Auto Sensitivity / Auto Gain",
+      "labview_parameter_cn": "自动灵敏度/自动增益",
+      "command": "AGAND",
+      "command_type": "event_only",
+      "set_syntax": "AGAND i",
+      "query_syntax": null,
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}}
+      ],
+      "values": [
+        {"ui_value": "Disable", "ui_value_cn": "关闭", "command_sent": null},
+        {"ui_value": "Enable", "ui_value_cn": "开启/执行一次自动灵敏度", "command_sent": "AGAND i"}
+      ],
+      "notes_cn": "触发式指令，不是持续保持 Enable 状态；执行后可用 SENSD? i 查询新的灵敏度。",
+      "labview_apply_button_cn": "该自动功能相对独立，不通过配置动态储备与灵敏度按钮触发",
+      "post_action_query_syntax": "SENSD? i",
+      "ch_b_examples": {
+        "run_auto_sensitivity": "AGAND 2",
+        "query_result": "SENSD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "动态储备和灵敏度配置",
+      "labview_parameter_en": "Auto Reserve",
+      "labview_parameter_cn": "自动动态储备",
+      "command": "ARSVD",
+      "command_type": "event_only",
+      "set_syntax": "ARSVD i",
+      "query_syntax": null,
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}}
+      ],
+      "values": [
+        {"ui_value": "Disable", "ui_value_cn": "关闭", "command_sent": null},
+        {"ui_value": "Enable", "ui_value_cn": "开启/执行一次自动动态储备", "command_sent": "ARSVD i"}
+      ],
+      "notes_cn": "触发式指令，不是持续保持 Enable 状态；执行后可用 RMODD? i 查询新的动态储备模式。",
+      "labview_apply_button_cn": "该自动功能相对独立，不通过配置动态储备与灵敏度按钮触发",
+      "post_action_query_syntax": "RMODD? i",
+      "ch_b_examples": {
+        "run_auto_reserve": "ARSVD 2",
+        "query_result": "RMODD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "滤波器配置",
+      "labview_parameter_en": "Time Constant",
+      "labview_parameter_cn": "滤波器时间常数",
+      "command": "OFLTD",
+      "command_type": "set_or_query",
+      "set_syntax": "OFLTD i,j",
+      "query_syntax": "OFLTD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "时间常数编号", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "time_constant": "10 us"},
+        {"code": 1, "time_constant": "30 us"},
+        {"code": 2, "time_constant": "100 us"},
+        {"code": 3, "time_constant": "300 us"},
+        {"code": 4, "time_constant": "1 ms"},
+        {"code": 5, "time_constant": "3 ms"},
+        {"code": 6, "time_constant": "10 ms"},
+        {"code": 7, "time_constant": "30 ms"},
+        {"code": 8, "time_constant": "100 ms"},
+        {"code": 9, "time_constant": "300 ms", "is_screenshot_current": true},
+        {"code": 10, "time_constant": "1 s"},
+        {"code": 11, "time_constant": "3 s"},
+        {"code": 12, "time_constant": "10 s"},
+        {"code": 13, "time_constant": "30 s"},
+        {"code": 14, "time_constant": "100 s"},
+        {"code": 15, "time_constant": "300 s"},
+        {"code": 16, "time_constant": "1000 s"},
+        {"code": 17, "time_constant": "3000 s"}
+      ],
+      "labview_apply_button_cn": "配置滤波器",
+      "ch_b_examples": {
+        "set_100_ms": "OFLTD 2,8",
+        "set_300_ms": "OFLTD 2,9",
+        "query": "OFLTD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "滤波器配置",
+      "labview_parameter_en": "Filter Slope",
+      "labview_parameter_cn": "滤波器陡降/低通滤波器滚降",
+      "command": "OFSLD",
+      "command_type": "set_or_query",
+      "set_syntax": "OFSLD i,j",
+      "query_syntax": "OFSLD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "滚降编号", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "6 dB/oct"},
+        {"code": 1, "ui_value": "12 dB/oct", "is_screenshot_current": true},
+        {"code": 2, "ui_value": "18 dB/oct"},
+        {"code": 3, "ui_value": "24 dB/oct"}
+      ],
+      "labview_apply_button_cn": "配置滤波器",
+      "ch_b_examples": {
+        "set_6_dB_oct": "OFSLD 2,0",
+        "set_12_dB_oct": "OFSLD 2,1",
+        "set_18_dB_oct": "OFSLD 2,2",
+        "set_24_dB_oct": "OFSLD 2,3",
+        "query": "OFSLD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "滤波器配置",
+      "labview_parameter_en": "Sync Filter",
+      "labview_parameter_cn": "同步滤波器",
+      "command": "SYNCD",
+      "command_type": "set_or_query",
+      "set_syntax": "SYNCD i,j",
+      "query_syntax": "SYNCD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "同步滤波器开关", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "Disable", "ui_value_cn": "同步滤波器关", "is_screenshot_current": true},
+        {"code": 1, "ui_value": "Enable", "ui_value_cn": "同步滤波器开"}
+      ],
+      "notes_cn": "一般当参考频率低于 200 Hz 时需要开启同步滤波器；在 LabVIEW 面板中该项相对独立，不通过配置滤波器按钮触发。截图显示 Ch-B 的同步滤波器关按钮在 UI 上呈灰色禁用，远程指令 SYNCD 无此限制。",
+      "labview_apply_button_cn": "相对独立，通过同步滤波器关/开按钮切换",
+      "ch_b_examples": {
+        "disable": "SYNCD 2,0",
+        "enable": "SYNCD 2,1",
+        "query": "SYNCD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "谐波测量配置",
+      "labview_parameter_en": "Harmonic 1",
+      "labview_parameter_cn": "谐波 1 检测设置",
+      "command": "HARMD",
+      "command_type": "set_or_query",
+      "set_syntax": "HARMD i,1,k",
+      "query_syntax": "HARMD? i,1",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "谐波槽位", "fixed_value": 1},
+        {"name": "k", "meaning_cn": "谐波阶数", "allowed_range": "1..32767", "constraint": "k * f <= 102 kHz"}
+      ],
+      "values": [
+        {"range": "1..32767", "default_meaning": "1 表示基波", "is_screenshot_current_value": 1}
+      ],
+      "notes_cn": "如果 k*f 大于 102 kHz，仪器会把谐波次数自动下调到满足条件的最大值。",
+      "labview_apply_button_cn": "配置谐波检测",
+      "ch_b_examples": {
+        "set_fundamental": "HARMD 2,1,1",
+        "set_third_harmonic": "HARMD 2,1,3",
+        "query": "HARMD? 2,1"
+      }
+    },
+    {
+      "ui_group_cn": "谐波测量配置",
+      "labview_parameter_en": "Harmonic 2",
+      "labview_parameter_cn": "谐波 2 检测设置",
+      "command": "HARMD",
+      "command_type": "set_or_query",
+      "set_syntax": "HARMD i,2,k",
+      "query_syntax": "HARMD? i,2",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "谐波槽位", "fixed_value": 2},
+        {"name": "k", "meaning_cn": "谐波阶数", "allowed_range": "1..32767", "constraint": "k * f <= 102 kHz"}
+      ],
+      "values": [
+        {"range": "1..32767", "default_meaning": "1 表示基波", "is_screenshot_current_value": 1}
+      ],
+      "notes_cn": "如果 k*f 大于 102 kHz，仪器会把谐波次数自动下调到满足条件的最大值。",
+      "labview_apply_button_cn": "配置谐波检测",
+      "ch_b_examples": {
+        "set_fundamental": "HARMD 2,2,1",
+        "set_third_harmonic": "HARMD 2,2,3",
+        "query": "HARMD? 2,2"
+      }
+    },
+    {
+      "ui_group_cn": "谐波测量配置",
+      "labview_parameter_en": "Auto Scale",
+      "labview_parameter_cn": "自动设置量程/自动显示刻度",
+      "command": "ASCLD",
+      "command_type": "event_only",
+      "set_syntax": "ASCLD i",
+      "query_syntax": null,
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}}
+      ],
+      "values": [
+        {"ui_value": "Disable", "ui_value_cn": "关闭", "command_sent": null},
+        {"ui_value": "Enable", "ui_value_cn": "开启/执行一次自动量程", "command_sent": "ASCLD i"}
+      ],
+      "notes_cn": "该指令等同于前面板 Auto Scale，用于自动设置显示刻度；输入输出本身不受影响。",
+      "labview_apply_button_cn": "该自动功能相对独立，不通过配置谐波检测按钮触发",
+      "ch_b_examples": {
+        "run_auto_scale": "ASCLD 2"
+      }
+    }
+  ],
+  "channel_b_quick_start_example": {
+    "description_cn": "以下是一组 Ch-B 常用初始化示例，目标为还原截图中 Ch-B 实际显示的配置。",
+    "commands": [
+      {"purpose_cn": "Ch-B 单端电压输入", "command": "ISRCD 2,0"},
+      {"purpose_cn": "Ch-B 输入屏蔽接地 Float", "command": "IGNDD 2,0"},
+      {"purpose_cn": "Ch-B AC 耦合", "command": "ICPLD 2,0"},
+      {"purpose_cn": "Ch-B 关闭输入陷波器", "command": "ILIND 2,0"},
+      {"purpose_cn": "Ch-B 动态储备 Normal", "command": "RMODD 2,1"},
+      {"purpose_cn": "Ch-B 灵敏度 = 100 mV/nA", "command": "SENSD 2,24"},
+      {"purpose_cn": "Ch-B 时间常数 300 ms", "command": "OFLTD 2,9"},
+      {"purpose_cn": "Ch-B 滤波器陡降 12 dB/oct", "command": "OFSLD 2,1"},
+      {"purpose_cn": "Ch-B 关闭同步滤波器", "command": "SYNCD 2,0"},
+      {"purpose_cn": "Ch-B 谐波 1 = 基波", "command": "HARMD 2,1,1"},
+      {"purpose_cn": "Ch-B 谐波 2 = 基波", "command": "HARMD 2,2,1"}
+    ],
+    "combined_command_line": "ISRCD 2,0;IGNDD 2,0;ICPLD 2,0;ILIND 2,0;RMODD 2,1;SENSD 2,24;OFLTD 2,9;OFSLD 2,1;SYNCD 2,0;HARMD 2,1,1;HARMD 2,2,1"
+  },
+  "query_all_channel_b_example": {
+    "description_cn": "查询 Ch-B 当前输入与滤波器配置的示例指令串",
+    "combined_query_line": "ISRCD? 2;IGNDD? 2;ICPLD? 2;ILIND? 2;RMODD? 2;SENSD? 2;OFLTD? 2;OFSLD? 2;SYNCD? 2;HARMD? 2,1;HARMD? 2,2"
+  },
+  "notes_cn": [
+    "LabVIEW 中点击配置输入信号、配置动态储备与灵敏度、配置滤波器、配置谐波检测相当于把对应区域的设置写入仪器；修改后不点击对应按钮，设置可能无效。",
+    "自动灵敏度 AGAND、自动动态储备 ARSVD、自动量程 ASCLD 是触发式指令，执行后按钮会回到关闭/初始状态。",
+    "本 JSON 只整理输入与滤波器配置面板相关参数；参考信号、通道输出、正弦输出、公式配置等面板未展开。",
+    "v2 新增：screenshot_current_values 字段记录了用户截图中 Ch-A / Ch-B 的实际显示值，以及 Ch-B 同步滤波器关按钮的灰显状态；远程指令对灰显项无限制。"
+  ]
+}

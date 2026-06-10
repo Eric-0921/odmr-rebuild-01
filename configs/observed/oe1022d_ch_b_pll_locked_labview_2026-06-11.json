@@ -1,0 +1,62 @@
+{
+  "device_id": "oe1022d_main",
+  "station_id": "lab_a",
+  "captured_at_local": "2026-06-11",
+  "capture_kind": "read_only_snapshot_after_vendor_labview_configuration",
+  "source_artifact": "out/hardware_state_snapshot/manual_after_labview/hardware_state_snapshot.json",
+  "notes": [
+    "该文件记录的是当前实验室真机只读观测结果，不是厂商 PDF 的枚举真值。",
+    "用途是阻止后续实现继续把 RSLPD 误写死为 0/1 两值。",
+    "在完成受控 write-back 实验前，RSLPD=2 只表示已观测锁定态，不强行推断内部语义。"
+  ],
+  "smb100a_context": {
+    "mod_state": "1",
+    "fm_state": "1",
+    "fm_source": "INT",
+    "fm_mode": "HDEV",
+    "fm_deviation_hz": "4000000",
+    "lfo_state": "1",
+    "lfo_voltage_vpeak": "0.137",
+    "lfo_frequency_hz": "500",
+    "lfo_shape": "SQU",
+    "lfo_source_impedance": "LOW"
+  },
+  "oe1022d_observed": {
+    "reference_source_query": {
+      "command": "FMODD? 2",
+      "observed": "0"
+    },
+    "reference_trigger_query": {
+      "command": "RSLPD? 2",
+      "observed": "2"
+    },
+    "reference_phase_query": {
+      "command": "PHASD? 2",
+      "observed": "0.00"
+    },
+    "reference_frequency_query": {
+      "command": "FREQD? 2",
+      "observed": "4.99999e+02"
+    },
+    "pll_query": {
+      "command": "*PLLD? 2",
+      "observed": "1"
+    },
+    "input_overload_query": {
+      "command": "INOVD ? 2",
+      "observed": "0"
+    },
+    "gain_overload_query": {
+      "command": "GNOVD ? 2",
+      "observed": "0"
+    }
+  },
+  "manual_stated_rslpd_enum_v1_5_pdf": {
+    "0": "TTL rising-edge trigger",
+    "1": "Sine zero-crossing trigger"
+  },
+  "implementation_guardrail": {
+    "do_not_assume_rslpd_query_is_binary": true,
+    "do_not_assume_pdf_enum_is_complete": true
+  }
+}

@@ -1,0 +1,99 @@
+{
+  "station_id": "lab_a",
+  "devices": [
+    {
+      "device_id": "smb100a_main",
+      "kind": "smb100a",
+      "required": true,
+      "transport_hint": {
+        "transport": "tcp_socket",
+        "host": "169.254.2.20",
+        "port": 5025
+      },
+      "identity": {
+        "contains_all": [
+          "Rohde&Schwarz",
+          "SMB100A",
+          "1406.6000k02/101623"
+        ]
+      }
+    },
+    {
+      "device_id": "oe1022d_main",
+      "kind": "oe1022d",
+      "required": true,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "/dev/cu.usbmodem3361358734371",
+        "baud_rate": 921600
+      },
+      "identity": {
+        "contains_all": [
+          "SSI LIA-OE1022D",
+          "SN:D6522078"
+        ]
+      }
+    },
+    {
+      "device_id": "mag_x",
+      "kind": "m8812",
+      "required": true,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "/dev/cu.PL2303G-USBtoUART1320",
+        "baud_rate": 9600
+      },
+      "identity": {
+        "contains_all": [
+          "MAYNUO",
+          "M8812",
+          "080020960220402020"
+        ]
+      }
+    },
+    {
+      "device_id": "mag_y",
+      "kind": "m8812",
+      "required": true,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "/dev/cu.PL2303G-USBtoUART1310",
+        "baud_rate": 9600
+      },
+      "identity": {
+        "contains_all": [
+          "MAYNUO",
+          "M8812",
+          "080020960220402022"
+        ]
+      }
+    },
+    {
+      "device_id": "mag_z",
+      "kind": "m8812",
+      "required": true,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "/dev/cu.PL2303G-USBtoUART1330",
+        "baud_rate": 9600
+      },
+      "identity": {
+        "contains_all": [
+          "MAYNUO",
+          "M8812",
+          "080020960220402003"
+        ]
+      }
+    },
+    {
+      "device_id": "cni_laser_main",
+      "kind": "cni_laser",
+      "required": false,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "/dev/cu.usbserial-FTE86EB2",
+        "baud_rate": 9600
+      }
+    }
+  ]
+}

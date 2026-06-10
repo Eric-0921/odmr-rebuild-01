@@ -1,0 +1,19 @@
+[package]
+name = "station-resolver"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "station_resolver"
+path = "src/lib.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serialport = "4"
+smb100a-transport = { path = "../smb100a-transport" }
+m8812-transport = { path = "../m8812-transport" }
+oe1022d-transport = { path = "../oe1022d-transport" }
+cni-laser-transport = { path = "../cni-laser-transport" }
+device-transport = { path = "../device-transport" }

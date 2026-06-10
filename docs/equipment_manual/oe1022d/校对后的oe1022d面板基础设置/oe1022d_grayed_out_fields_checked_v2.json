@@ -1,0 +1,121 @@
+{
+  "schema_version": "0.2.0",
+  "kind": "oe1022d_grayed_out_fields",
+  "source": "OE1022D legacy LabVIEW panel screenshots checked against 2026-06-07 notes",
+  "note_cn": "灰显字段应在 GUI 中显示但禁用，并展示原因；灰显与 SCPI 可写性解耦，执行层仍需根据当前模式做安全校验。",
+  "fig2_reference_signal": {
+    "ch_a": [
+      {
+        "field_id": "external_ref_trigger",
+        "display_value_cn": "过零检测",
+        "reason_cn": "Ch-A 当前为内部参考，外部参考触发方式不适用。"
+      },
+      {
+        "field_id": "internal_sweep_type",
+        "display_value_cn": "线性扫频类型",
+        "reason_cn": "Ch-A 当前不是内部扫频模式，内部扫频类型不可编辑。"
+      },
+      {
+        "field_id": "sweep_run_mode",
+        "display_value_cn": "停止扫频",
+        "reason_cn": "内部扫频未激活，扫频运行模式不可编辑。"
+      }
+    ],
+    "ch_b": [
+      {
+        "field_id": "internal_frequency_hz",
+        "display_value_cn": "102000.000 Hz",
+        "reason_cn": "Ch-B 当前为外部参考，内部参考频率不适用。"
+      },
+      {
+        "field_id": "internal_sweep_type",
+        "display_value_cn": "线性扫频类型",
+        "reason_cn": "Ch-B 当前为外部参考，内部扫频类型不适用。"
+      },
+      {
+        "field_id": "sweep_start_hz",
+        "display_value_cn": "1000.000 Hz",
+        "reason_cn": "Ch-B 当前为外部参考，扫频开始频率不适用。"
+      },
+      {
+        "field_id": "sweep_stop_hz",
+        "display_value_cn": "0.001 Hz",
+        "reason_cn": "Ch-B 当前为外部参考，扫频截止频率不适用。"
+      },
+      {
+        "field_id": "sweep_linear_step_hz",
+        "display_value_cn": "0.001 Hz",
+        "reason_cn": "Ch-B 当前为外部参考，线性步进频率不适用。"
+      },
+      {
+        "field_id": "sweep_step_time_ms",
+        "display_value_cn": "1 ms",
+        "reason_cn": "Ch-B 当前为外部参考，扫频步进时间不适用。"
+      },
+      {
+        "field_id": "sweep_run_mode",
+        "display_value_cn": "停止扫频",
+        "reason_cn": "Ch-B 当前为外部参考，扫频运行模式不适用。"
+      }
+    ],
+    "active_fields": {
+      "ch_b": [
+        {
+          "field_id": "external_ref_trigger",
+          "reason_cn": "Ch-B 当前为外部参考，此字段是可编辑字段。"
+        }
+      ]
+    }
+  },
+  "fig3_channel_output_sine_output": {
+    "sineout_fixed_mode": [
+      {
+        "field_id": "sineout_sweep_start_vrms",
+        "display_value_cn": "1.000 Vrms",
+        "reason_cn": "正弦输出模式为固定幅值，扫幅开始幅值不适用。"
+      },
+      {
+        "field_id": "sineout_sweep_stop_vrms",
+        "display_value_cn": "1.000 Vrms",
+        "reason_cn": "正弦输出模式为固定幅值，扫幅截止幅值不适用。"
+      },
+      {
+        "field_id": "sineout_sweep_step_vrms",
+        "display_value_cn": "1.000 Vrms",
+        "reason_cn": "正弦输出模式为固定幅值，扫幅步进幅值不适用。"
+      },
+      {
+        "field_id": "sineout_log_step_percent",
+        "display_value_cn": "1.000 %",
+        "reason_cn": "正弦输出模式为固定幅值，对数步进比例不适用。"
+      },
+      {
+        "field_id": "sineout_step_time_ms",
+        "display_value_cn": "1 ms",
+        "reason_cn": "正弦输出模式为固定幅值，扫幅步进时间不适用。"
+      },
+      {
+        "field_id": "sineout_run_mode",
+        "display_value_cn": "停止扫幅",
+        "reason_cn": "正弦输出模式为固定幅值，扫幅运行模式不适用。"
+      },
+      {
+        "field_id": "sineout_dc_voltage_vdc",
+        "display_value_cn": "0.000 Vdc",
+        "reason_cn": "正弦输出模式为固定幅值，直流输出幅值不适用。"
+      }
+    ],
+    "channel_output_source_a_minus_r": [
+      {
+        "field_id": "ch1.auxout_vdc",
+        "display_value_cn": "0.000 Vdc",
+        "reason_cn": "CH1 输出源为 A-R，不是 AUXOUT，AUXOUT 电压不适用。"
+      },
+      {
+        "field_id": "ch2.auxout_vdc",
+        "display_value_cn": "0.000 Vdc",
+        "reason_cn": "CH2 输出源为 A-R，不是 AUXOUT，AUXOUT 电压不适用。"
+      }
+    ]
+  }
+}

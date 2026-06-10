@@ -1,0 +1,10 @@
+[package]
+name = "oe1022d-commands"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "oe1022d_commands"
+path = "src/lib.rs"
+

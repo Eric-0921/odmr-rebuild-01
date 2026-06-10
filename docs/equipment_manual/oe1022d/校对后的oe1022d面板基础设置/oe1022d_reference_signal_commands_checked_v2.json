@@ -1,0 +1,419 @@
+{
+  "_meta": {
+    "filename": "OE1022D用户使用文档V1.5.pdf",
+    "instrument": "SSI OE1022D DSP Lock-In Amplifier",
+    "target_panel": "LabVIEW/PC 软件 - 参考信号配置 / 参考信号及扫频配置",
+    "version": "checked_v2",
+    "version_note_cn": "v2 在原 examples/.../oe1022d_labview_reference_signal_commands.json 基础上：加入截图当前值、灰显项标注、软按钮标记、start/stop 频率范围注明差异。已对照说明书 5.2.1 / 5.2.7 逐条核对。",
+    "checked_against": [
+      "04_menu.md 4.2 (REF/PHASE 菜单)",
+      "05_oe1022d_remote_programming_commands_55_74.md 5.2.1 (参考与相位指令)"
+    ]
+  },
+  "document": {
+    "filename": "OE1022D用户使用文档V1.5.pdf",
+    "instrument": "SSI OE1022D DSP Lock-In Amplifier",
+    "target_panel": "LabVIEW/PC 软件 - 参考信号配置 / 参考信号及扫频配置",
+    "scope_cn": "整理 LabVIEW 面板参考信号配置页中表 10 和表 11 涉及的全部可设置参数，并映射到远程控制指令。重点示例使用 Ch-B，即通道参数 i=2。",
+    "basis_note_cn": "本文件按上传的 V1.5 PDF 用户使用文档整理。V1.5 的 RSLPD 指令表和 LabVIEW 截图只列出 TTL Rising Edge 与 Sine Zero Crossing；如果使用其他修订版说明书，请核对是否新增 TTL Falling Edge。",
+    "source_sections": [
+      {"section": "5.1 OE1022D 命令语法", "printed_pages": "56-57", "local_extracted_text_lines": "2140-2170", "used_for": "ASCII 通信、命令终结符、逗号分隔、分号多命令、查询规则、i=1/2 通道定义"},
+      {"section": "5.2.1 参考与相位指令", "printed_pages": "57-58", "local_extracted_text_lines": "2174-2234", "used_for": "PHASD, FMODD, FREQD, RSLPD, SWTPD, SLLMD, SULMD, SSLLD, SSLGD, STLMD, SWRMD 指令"},
+      {"section": "5.2.7 自动设置指令", "printed_pages": "68", "local_extracted_text_lines": "2559-2585", "used_for": "APHSD 自动相移指令"},
+      {"section": "6.2.4 参考信号及扫频配置", "printed_pages": "91-93", "local_extracted_text_lines": "3385-3501", "used_for": "LabVIEW 面板参数表 10、表 11 与配置参考信号按钮说明"}
+    ]
+  },
+  "communication": {
+    "encoding": "ASCII",
+    "command_case": "uppercase mnemonic",
+    "terminator": "<LF> or <CR>; 串口调试助手中常用回车 <CR>",
+    "parameter_separator": ",",
+    "multiple_command_separator": ";",
+    "query_rule_cn": "在命令助记符后加 ?，并省略用于设置的参数，例如 FMODD? 2 查询 Ch-B 参考信号源。",
+    "channel_argument_i": {"1": "Ch-A", "2": "Ch-B"},
+    "recommended_channel_for_current_setup": {"channel": "Ch-B", "i": 2},
+    "value_formats_cn": "整数、浮点数或指数格式均可，例如 500, 500.0, 5E2。"
+  },
+  "screenshot_current_values": {
+    "description_cn": "以下为用户提供 4 张 UI 截图中，Ch-A 与 Ch-B 实际的当前显示值。灰显项是 UI 上因前置条件不满足而不可点击的字段；远程指令无此限制。",
+    "ch_a": {
+      "reference_source": "内部参考",
+      "external_ref_trigger": "过零检测(灰显)",
+      "internal_frequency_hz": 1.0,
+      "phase_deg": 0.0,
+      "internal_sweep_type": "线性扫频类型(灰显)",
+      "sweep_start_hz": 1000.0,
+      "sweep_stop_hz": 1000.0,
+      "sweep_linear_step_hz": 1000.0,
+      "sweep_step_time_ms": 1,
+      "sweep_run_mode": "停止扫频(灰显)",
+      "all_sweep_fields_actually_settable": false,
+      "all_sweep_fields_actually_settable_note": "Ch-A 参考源 = 内部参考(非内部扫频参考)，所以内部扫频相关字段在 UI 上灰显；但远程指令 SWTPD/SLLMD/SULMD/SSLLD/SSLGD/STLMD/SWRMD 均可正常下发。"
+    },
+    "ch_b": {
+      "reference_source": "外部参考",
+      "external_ref_trigger": "过零检测",
+      "internal_frequency_hz": 102000.0,
+      "internal_frequency_field_state": "灰显(不可点击)",
+      "phase_deg": 0.0,
+      "internal_sweep_type": "线性扫频类型(灰显)",
+      "sweep_start_hz": 1000.0,
+      "sweep_start_field_state": "灰显(不可点击)",
+      "sweep_stop_hz": 0.001,
+      "sweep_stop_field_state": "灰显(不可点击)",
+      "sweep_linear_step_hz": 0.001,
+      "sweep_linear_step_field_state": "灰显(不可点击)",
+      "sweep_step_time_ms": 1,
+      "sweep_step_time_field_state": "灰显(不可点击)",
+      "sweep_run_mode": "停止扫频(灰显)",
+      "all_sweep_fields_actually_settable": false,
+      "all_sweep_fields_actually_settable_note": "Ch-B 参考源 = 外部参考，所以内部参考频率与所有内部扫频字段在 UI 上均灰显；远程指令均可正常下发。"
+    }
+  },
+  "labview_panel_groups": [
+    {
+      "name_cn": "参考信号配置",
+      "apply_button_cn": "配置参考信号",
+      "button_has_independent_remote_command": false,
+      "button_note_cn": "软按钮；点击后把参考源、外部参考触发方式、内部参考频率、相位等写入仪器。",
+      "parameters": ["Reference Source", "External Ref Trigger", "Int.Frequency", "Phase", "Auto Phase"],
+      "notes_cn": [
+        "选择或修改 Reference Source、External Ref Trigger、Int.Frequency、Phase 后，需要点击配置参考信号才生效。",
+        "Auto Phase 是自动动作型设置，远程指令为 APHSD i；执行完成后用 PHASD? i 查询当前相位偏移。"
+      ]
+    },
+    {
+      "name_cn": "内部扫频参考配置",
+      "apply_button_cn": "配置参考信号",
+      "button_has_independent_remote_command": false,
+      "activation_condition_cn": "当 Reference Source 选择 Int. Sweep / 内部扫频参考时，该区域参数有效。",
+      "parameters": ["Int.Sweep Type", "Int.Sweep Run Mode", "Int.Sweep Start(Hz)", "Int.Sweep Step(Hz) / Log Step(%)", "Int.Sweep Stop(Hz)", "Linear Step Time(ms)"],
+      "notes_cn": [
+        "表 11 把 Linear Step 与 Log Step 都归入 Int.Sweep Step；远程指令分为 SSLLD 线性步进频率和 SSLGD 对数步进百分比。",
+        "内部扫频参数全部通过配置参考信号写入。"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "ui_group_cn": "参考信号配置",
+      "labview_parameter_en": "Reference Source",
+      "labview_parameter_cn": "参考信号源选择设置",
+      "command": "FMODD",
+      "command_type": "set_or_query",
+      "set_syntax": "FMODD i,j",
+      "query_syntax": "FMODD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "参考信号源", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "External", "ui_value_cn": "外部参考信号", "description_cn": "使用 REF IN 输入的外部参考；此时 External Ref Trigger/RSLPD 有效。", "is_screenshot_current_ch_b": true},
+        {"code": 1, "ui_value": "Internal", "ui_value_cn": "内部参考信号", "description_cn": "使用仪器内部参考；此时 Int.Frequency/FREQD 用于设定内部参考频率。", "is_screenshot_current_ch_a": true},
+        {"code": 2, "ui_value": "Int. Sweep", "ui_value_cn": "内部扫频参考", "description_cn": "使用内部参考扫频；此时内部扫频配置参数 SWTPD/SLLMD/SULMD/SSLLD/SSLGD/STLMD/SWRMD 有效。"}
+      ],
+      "manual_note_cn": "说明书 4.2.2 还提到第 4 个选项 Channel-A(仅 Ch-B 适用，调用 Ch-A 参考设置)，但 FMODD 远程指令无对应 j 值；需通过前面板设置。",
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_external_reference": "FMODD 2,0",
+        "set_internal_reference": "FMODD 2,1",
+        "set_internal_sweep_reference": "FMODD 2,2",
+        "query": "FMODD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "参考信号配置",
+      "labview_parameter_en": "External Ref Trigger",
+      "labview_parameter_cn": "外部参考信号触发方式设置",
+      "command": "RSLPD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = External 时使用。",
+      "set_syntax": "RSLPD i,j",
+      "query_syntax": "RSLPD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "外部参考触发方式", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "TTL Rising Edge", "ui_value_cn": "TTL 信号上升沿检测", "description_cn": "V1.5 指令表：j=0 设置 TTL 上升沿触发。低于 1 Hz 时必须使用 TTL 触发方式。"},
+        {"code": 1, "ui_value": "Sine Zero Crossing", "ui_value_cn": "Sine 信号过零检测", "description_cn": "V1.5 指令表：j=1 设置正弦波过零检测。", "is_screenshot_current_ch_b": true}
+      ],
+      "manual_note_cn": "说明书 4.2.3 提到前面板还有 TTL Neg 选项，但 RSLPD 远程指令只支持 j=0/1；远程方式不支持 TTL Neg。",
+      "revision_note_cn": "按 OE1022D用户使用文档V1.5.pdf，RSLPD 只列出 j=0 TTL Rising Edge 与 j=1 Sine Zero Crossing。",
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_ttl_rising_edge": "RSLPD 2,0",
+        "set_sine_zero_crossing": "RSLPD 2,1",
+        "query": "RSLPD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "参考信号配置",
+      "labview_parameter_en": "Int.Frequency",
+      "labview_parameter_cn": "内部参考频率设置",
+      "command": "FREQD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = Internal 时用于设置内部参考频率；查询时返回当前参考信号频率，可能是内部或外部参考频率。",
+      "set_syntax": "FREQD i,f",
+      "query_syntax": "FREQD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "f", "meaning_cn": "频率值，单位 Hz", "allowed_values": "1 mHz 到 102 kHz，最小分辨率 1 mHz"}
+      ],
+      "range": {"min_hz": 0.001, "max_hz": 102000, "resolution_hz": 0.001},
+      "range_note_cn": "命令列表写作 0-102 kHz；LabVIEW 面板表 11 写作 1 mHz 到 102 kHz。这里按面板可配置范围填写。",
+      "screenshot_current": {"ch_a_value_hz": 1.0, "ch_b_value_hz": 102000.0, "ch_b_field_state": "灰显(因 Ch-B 参考源 = 外部参考)"},
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_500_hz_internal_reference": "FREQD 2,500",
+        "set_1_khz_internal_reference": "FREQD 2,1000",
+        "set_10_khz_internal_reference": "FREQD 2,10E3",
+        "query": "FREQD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "参考信号配置",
+      "labview_parameter_en": "Phase",
+      "labview_parameter_cn": "参考相位设置",
+      "command": "PHASD",
+      "command_type": "set_or_query",
+      "set_syntax": "PHASD i,x",
+      "query_syntax": "PHASD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "x", "meaning_cn": "相位值，单位 degree", "allowed_values": "-180 到 +180，四舍五入到 0.01 degree"}
+      ],
+      "range": {"min_deg": -180, "max_deg": 180, "resolution_deg": 0.01},
+      "screenshot_current": {"ch_a_value_deg": 0.0, "ch_b_value_deg": 0.0},
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_0_deg": "PHASD 2,0",
+        "set_minus_90_deg": "PHASD 2,-90",
+        "query": "PHASD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "参考信号配置",
+      "labview_parameter_en": "Auto Phase",
+      "labview_parameter_cn": "自动相移设置",
+      "command": "APHSD",
+      "command_type": "action",
+      "set_syntax": "APHSD i",
+      "query_syntax": null,
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}}
+      ],
+      "values": [
+        {"ui_value": "Enable", "ui_value_cn": "开启/执行自动相移", "description_cn": "发送 APHSD i 等效于按下 Auto Phase；OE1022D 会调整参考相移，使测得的输入信号相位为 0 degree。"},
+        {"ui_value": "Disable", "ui_value_cn": "关闭/不执行", "description_cn": "没有独立的关闭指令；不发送 APHSD 即保持当前手动相位。"}
+      ],
+      "completion_and_check_cn": "自动相移需要一定时间；自动完成前不要重复发送 APHSD i。相位不稳定时该指令可能无效。完成后用 PHASD? i 查询当前相位偏移。",
+      "ch_b_examples": {
+        "run_auto_phase": "APHSD 2",
+        "check_phase_after_auto_phase": "PHASD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "内部扫频参考配置",
+      "labview_parameter_en": "Int.Sweep Type",
+      "labview_parameter_cn": "内部扫描类型设置",
+      "command": "SWTPD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = Int. Sweep 时使用。",
+      "set_syntax": "SWTPD i,j",
+      "query_syntax": "SWTPD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "内部扫频类型", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "Linear", "ui_value_cn": "线性扫频类型", "is_screenshot_current_ch_a": true, "is_screenshot_current_ch_b": true, "field_state": "Ch-A 与 Ch-B 均灰显"},
+        {"code": 1, "ui_value": "Log", "ui_value_cn": "对数扫频类型"}
+      ],
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_linear_sweep": "SWTPD 2,0",
+        "set_log_sweep": "SWTPD 2,1",
+        "query": "SWTPD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "内部扫频参考配置",
+      "labview_parameter_en": "Int.Sweep Start(Hz)",
+      "labview_parameter_cn": "内部扫频开始频率设置",
+      "command": "SLLMD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = Int. Sweep 时使用。",
+      "set_syntax": "SLLMD i,f",
+      "query_syntax": "SLLMD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "f", "meaning_cn": "Start 开始频率，单位 Hz", "allowed_values": "LabVIEW 表：1 mHz 到 102 kHz，最小分辨率 1 mHz"}
+      ],
+      "range": {"min_hz": 0.001, "max_hz": 102000, "resolution_hz": 0.001},
+      "range_note_cn": "命令列表写作 0-102 kHz；LabVIEW 面板表 11 写作 1 mHz 到 102 kHz。这里按面板可配置范围填写。",
+      "screenshot_current": {"ch_a_value_hz": 1000.0, "ch_b_value_hz": 1000.0, "field_state": "Ch-A 与 Ch-B 均灰显"},
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_start_100_hz": "SLLMD 2,100",
+        "set_start_1_khz": "SLLMD 2,1000",
+        "query": "SLLMD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "内部扫频参考配置",
+      "labview_parameter_en": "Int.Sweep Stop(Hz)",
+      "labview_parameter_cn": "内部扫频截止频率设置",
+      "command": "SULMD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = Int. Sweep 时使用。",
+      "set_syntax": "SULMD i,f",
+      "query_syntax": "SULMD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "f", "meaning_cn": "Stop 截止频率，单位 Hz", "allowed_values": "LabVIEW 表：1 mHz 到 102 kHz，最小分辨率 1 mHz"}
+      ],
+      "range": {"min_hz": 0.001, "max_hz": 102000, "resolution_hz": 0.001},
+      "range_note_cn": "命令列表写作 0-102 kHz；LabVIEW 面板表 11 写作 1 mHz 到 102 kHz。这里按面板可配置范围填写。",
+      "screenshot_current": {"ch_a_value_hz": 1000.0, "ch_b_value_hz": 0.001, "field_state": "Ch-A 与 Ch-B 均灰显"},
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_stop_2_khz": "SULMD 2,2000",
+        "set_stop_10_khz": "SULMD 2,10E3",
+        "query": "SULMD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "内部扫频参考配置",
+      "labview_parameter_en": "Int.Sweep Step(Hz) - Linear",
+      "labview_parameter_cn": "线性步进频率设置",
+      "command": "SSLLD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = Int. Sweep 且 Int.Sweep Type = Linear 时使用。",
+      "set_syntax": "SSLLD i,f",
+      "query_syntax": "SSLLD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "f", "meaning_cn": "线性扫频每步频率增量，单位 Hz", "allowed_values": "LabVIEW 表：1 mHz 到 102 kHz，最小分辨率 1 mHz"}
+      ],
+      "range": {"min_hz": 0.001, "max_hz": 102000, "resolution_hz": 0.001},
+      "range_note_cn": "命令列表写作 0-102 kHz；LabVIEW 面板表 11 写作 1 mHz 到 102 kHz。这里按面板可配置范围填写。",
+      "screenshot_current": {"ch_a_value_hz": 1000.0, "ch_b_value_hz": 0.001, "field_state": "Ch-A 与 Ch-B 均灰显"},
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_linear_step_1_hz": "SSLLD 2,1",
+        "set_linear_step_100_hz": "SSLLD 2,100",
+        "query": "SSLLD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "内部扫频参考配置",
+      "labview_parameter_en": "Int.Sweep Step(%) - Log",
+      "labview_parameter_cn": "对数步进百分比设置",
+      "command": "SSLGD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = Int. Sweep 且 Int.Sweep Type = Log 时使用。",
+      "set_syntax": "SSLGD i,x",
+      "query_syntax": "SSLGD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "x", "meaning_cn": "对数扫频步进百分比，单位 %", "allowed_values": "LabVIEW 表：0.001% 到 100%，最小分辨率 0.001%"}
+      ],
+      "range": {"min_percent": 0.001, "max_percent": 100, "resolution_percent": 0.001},
+      "range_note_cn": "命令列表写作 0-100%；LabVIEW 面板表 11 写作 0.001%-100%。这里按面板可配置范围填写。",
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_log_step_1_percent": "SSLGD 2,1",
+        "set_log_step_10_percent": "SSLGD 2,10",
+        "query": "SSLGD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "内部扫频参考配置",
+      "labview_parameter_en": "Linear Step Time(ms)",
+      "labview_parameter_cn": "扫频步进时间设置",
+      "command": "STLMD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = Int. Sweep 时使用；名称中的 Linear 来自 LabVIEW 面板，但命令表把它作为内部扫频 Time。",
+      "set_syntax": "STLMD i,j",
+      "query_syntax": "STLMD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "每步持续时间，单位 ms", "allowed_values": "1 ms 到 100 s，最小分辨率 1 ms；即 1 到 100000 ms"}
+      ],
+      "range": {"min_ms": 1, "max_ms": 100000, "resolution_ms": 1},
+      "screenshot_current": {"ch_a_value_ms": 1, "ch_b_value_ms": 1, "field_state": "Ch-A 与 Ch-B 均灰显"},
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "set_step_time_10_ms": "STLMD 2,10",
+        "set_step_time_1000_ms": "STLMD 2,1000",
+        "query": "STLMD? 2"
+      }
+    },
+    {
+      "ui_group_cn": "内部扫频参考配置",
+      "labview_parameter_en": "Int.Sweep Run Mode",
+      "labview_parameter_cn": "扫频运行模式设置",
+      "command": "SWRMD",
+      "command_type": "set_or_query",
+      "activation_condition_cn": "Reference Source = Int. Sweep 时使用。",
+      "set_syntax": "SWRMD i,j",
+      "query_syntax": "SWRMD? i",
+      "arguments": [
+        {"name": "i", "meaning_cn": "通道选择", "allowed_values": {"1": "Ch-A", "2": "Ch-B"}},
+        {"name": "j", "meaning_cn": "扫频执行模式", "allowed_values": "见 values"}
+      ],
+      "values": [
+        {"code": 0, "ui_value": "Stop", "ui_value_cn": "停止扫频", "is_screenshot_current_ch_a": true, "is_screenshot_current_ch_b": true, "field_state": "Ch-A 与 Ch-B 均灰显"},
+        {"code": 1, "ui_value": "Single", "ui_value_cn": "单次扫频"},
+        {"code": 2, "ui_value": "Loop", "ui_value_cn": "循环扫频"}
+      ],
+      "labview_apply_button_cn": "配置参考信号",
+      "ch_b_examples": {
+        "stop_sweep": "SWRMD 2,0",
+        "run_single_sweep": "SWRMD 2,1",
+        "run_loop_sweep": "SWRMD 2,2",
+        "query": "SWRMD? 2"
+      }
+    }
+  ],
+  "ch_b_quick_recipes": {
+    "external_reference_ttl_rising_phase_0": {
+      "description_cn": "Ch-B 使用外部 TTL 上升沿参考，参考相位设为 0 degree。",
+      "command_sequence": "FMODD 2,0;RSLPD 2,0;PHASD 2,0"
+    },
+    "external_reference_sine_zero_crossing_phase_0": {
+      "description_cn": "Ch-B 使用外部正弦过零参考，参考相位设为 0 degree。",
+      "command_sequence": "FMODD 2,0;RSLPD 2,1;PHASD 2,0"
+    },
+    "run_auto_phase_on_ch_b": {
+      "description_cn": "Ch-B 执行自动相移；完成后读取相位。",
+      "command_sequence": "APHSD 2;PHASD? 2",
+      "warning_cn": "APHSD 需要等待完成，建议紧接着立即重复发送；实际程序中应在 APHSD 2 后留等待时间再查询 PHASD? 2。"
+    },
+    "internal_reference_1_khz_phase_0": {
+      "description_cn": "Ch-B 使用内部参考 1 kHz，相位 0 degree。",
+      "command_sequence": "FMODD 2,1;FREQD 2,1000;PHASD 2,0"
+    },
+    "internal_linear_sweep_100_to_2000_hz_step_10_hz_100_ms_single": {
+      "description_cn": "Ch-B 内部线性扫频：100 Hz 到 2000 Hz，步进 10 Hz，每步 100 ms，单次扫频。",
+      "command_sequence": "FMODD 2,2;SWTPD 2,0;SLLMD 2,100;SULMD 2,2000;SSLLD 2,10;STLMD 2,100;SWRMD 2,1"
+    },
+    "internal_log_sweep_100_to_10000_hz_step_1_percent_100_ms_single": {
+      "description_cn": "Ch-B 内部对数扫频：100 Hz 到 10 kHz，步进 1%，每步 100 ms，单次扫频。",
+      "command_sequence": "FMODD 2,2;SWTPD 2,1;SLLMD 2,100;SULMD 2,10000;SSLGD 2,1;STLMD 2,100;SWRMD 2,1"
+    },
+    "query_all_reference_panel_values_ch_b": {
+      "description_cn": "查询 Ch-B 参考信号配置页相关参数。APHSD 为动作指令，无查询形式。",
+      "command_sequence": "FMODD? 2;RSLPD? 2;FREQD? 2;PHASD? 2;SWTPD? 2;SLLMD? 2;SULMD? 2;SSLLD? 2;SSLGD? 2;STLMD? 2;SWRMD? 2"
+    }
+  },
+  "implementation_notes_cn": [
+    "LabVIEW 的配置参考信号按钮对应一次写入该区域已修改参数；串口/USB 远程控制时可按 JSON 中 command_sequence 用分号连接多条命令。",
+    "设置外部参考时，FMODD 2,0 之后通常还要设置 RSLPD 2,0 或 RSLPD 2,1，并确认 Ch-B 的 PLL 锁定。",
+    "设置内部参考时，FREQD 2,f 才决定内部参考频率；外部参考模式下 FREQD? 2 可用于读取当前参考频率。",
+    "自动相移 APHSD 2 是一次性动作，不是保持开关；执行后通过 PHASD? 2 读取结果。",
+    "所有示例都默认使用 Ch-B，因此通道参数 i=2；如需 Ch-A，把第一个参数改为 1。",
+    "v2 新增：screenshot_current_values 字段记录了用户截图中 Ch-A 与 Ch-B 的实际显示值，以及所有内部扫频字段在 UI 上的灰显状态；远程指令对这些灰显项无限制。"
+  ]
+}

@@ -1,0 +1,239 @@
+# 真机验证命令与运行时基线
+
+本文是 rebuild 第一轮真机 bring-up 与 `hardware smoke` 的单一事实入口。它只回答三件事：
+
+- 这次 rebuild 已经真机验证过哪些命令
+- 这次 rebuild 已经真机验证过哪些链路
+- 下一阶段 runtime 应该直接继承哪些运行时边界
+
+## 产物来源
+
+本次基线来自以下真机产物：
+
+- `out/hardware_smoke/manual_scan/station_snapshot.json`
+- `out/hardware_smoke/manual_scan/hardware_smoke_events.jsonl`
+- `out/hardware_smoke/manual_scan/hardware_smoke_command_audit.jsonl`
+- `runs/manual_live_v4/summary.json`
+- `runs/manual_live_v5/summary.json`
+- `runs/manual_live_v5/points.jsonl`
+- `runs/manual_live_v5/quality.jsonl`
+- `runs/manual_live_v5/point_fields.jsonl`
+- `runs/manual_live_v5/events.jsonl`
+
+文档整理日期：
+
+- 真机 smoke 成功时间：`2026-06-10`
+- 最小 runtime 真机完成时间：`2026-06-11`
+- 文档收口时间：`2026-06-11`
+
+## 新增真机校正事实（2026-06-11）
+
+在厂商 LabVIEW 软件完成 OE1022D 通道 B PLL 配置并锁定之后，rebuild 侧只读快照确认：
+
+- `FMODD? 2 = 0`
+- `RSLPD? 2 = 2`
+- `FREQD? 2 = 4.99999e+02`
+- `*PLLD? 2 = 1`
+
+对应产物：
+
+- `out/hardware_state_snapshot/manual_after_labview/hardware_state_snapshot.json`
+
+这条事实的含义是：
+
+- 当前 `V1.5` 厂商 PDF 对 `RSLPD` 的 `0/1` 枚举说明不足以覆盖真实设备行为
+- rebuild 中凡是把 `RSLPD` 固定写成 `0/1` 的地方，都只能视为旧假设，不能再当成真值
+- 下一阶段实现必须允许“手册原文”与“真机观测”并存，直到完成受控 write-back 试验
+
+## 验证状态规则
+
+本文与命令规格文档统一使用以下状态：
+
+- `rebuild_smoke_verified`
+  - 已在本次 rebuild 真机 `station verify` 或 `hardware smoke` 中打通过
+- `legacy_verified_not_rechecked`
+  - 旧项目 / bring-up / 旧真机链路中验证过，但本次 rebuild 尚未重新真机打通
+- `allowed_not_yet_verified`
+  - 当前白名单允许进入后续实现，但本次 rebuild 尚未真机验证
+
+## station verify 已验证命令
+
+### SMB100A
+
+- `*IDN?`
+- 状态：`rebuild_smoke_verified`
+- 观察到的响应示例：
+  - `Rohde&Schwarz,SMB100A,1406.6000k02/101623,3.1.19.15-3.20.390.24`
+
+### OE1022D
+
+- `*IDN?`
+- 状态：`rebuild_smoke_verified`
+- 观察到的响应示例：
+  - `SSI LIA-OE1022D,SN:D6522078,Version:Ver6.3200831`
+
+### M8812
+
+- `*IDN?`
+- 状态：`rebuild_smoke_verified`
+- 观察到的响应示例：
+  - `MAYNUO,M8812,080020960220402020,V2.7`
+  - `MAYNUO,M8812,080020960220402022,V2.7`
+  - `MAYNUO,M8812,080020960220402003,V2.7`
+
+### CNI Laser
+
+- `output_off`
+- `echo readback`
+- 状态：`rebuild_smoke_verified`
+- 观察到的响应示例：
+  - `55 AA 03 00 03`
+
+## hardware smoke 已验证命令
+
+### SMB100A
+
+- `*IDN?`
+- `SYST:ERR?`
+- `OUTP?`
+- `FREQ?`
+- `POW?`
+- `SWE:FREQ:STEP?`
+- `SWE:FREQ:DWEL?`
+- 状态：以上全部 `rebuild_smoke_verified`
+
+### M8812
+
+逐轴都已真机打通以下序列：
+
+- `*IDN?`
+- `SYST:REM`
+- `CURR 0.00000`
+- `OUTP 0`
+- `MEAS:CURR?`
+- `CURR 0.01000`
+- `OUTP 1`
+- `MEAS:CURR?`
+- `OUTP 0`
+- `CURR 0.00000`
+- `SYST:LOC`
+- 状态：以上全部 `rebuild_smoke_verified`
+
+观察到的 10mA 微测回读：
+
+- `mag_x -> 0.01003 A`
+- `mag_y -> 0.01006 A`
+- `mag_z -> 0.00998 A`
+
+### OE1022D
+
+- `*IDN?`
+- `clear_input`
+- `RALL?`
+- 状态：
+  - `*IDN?` -> `rebuild_smoke_verified`
+  - `RALL?` -> `rebuild_smoke_verified`
+  - `clear_input` 是 transport 行为，不属于命令白名单，但属于本次真机已验证连接步骤
+
+观察到的单帧事实：
+
+- `payload_len = 15168`
+- `head = 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00`
+
+这里必须加一句纠偏：
+
+- `15168` 是早期 smoke 诊断路径里 `until_timeout` 风格读取观测到的长度
+- 当前 runtime collector 和最小 parser 已经用定长 `12288 bytes` 真机打通
+- 第一版 runtime 协议真值应以 `12288` 为准，不应把 `15168` 当作 `RALL?` 帧规范
+
+### CNI Laser
+
+- `55 AA 03 00 03`
+- echo `55 AA 03 00 03`
+- 状态：`rebuild_smoke_verified`
+
+## 已验证链路
+
+- `station verify`
+- `hardware smoke`
+- `RF + Mag + OE` 核心链路
+- `Laser OFF` 背景控制链路
+- 串口 hint 失败后自动扫描、probe、认领链路
+- `run execute` 最小 3-point runtime
+- `Maynuo baseline lock once -> OE run 级 collector -> point window segmentation`
+- `target_b_nt -> calibration -> target_current_a`
+- point 级最小 `RALL` 字段解析与 `point_fields.jsonl` 落盘
+
+## 最小 runtime 真机结果（2026-06-11）
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --out-dir runs/manual_live_v5`
+
+运行结果：
+
+- `summary.status = completed`
+- `points_passed = 3 / 3`
+- `frames_total = 677`
+- point 级 frame 数：
+  - `p0001 = 104`
+  - `p0002 = 104`
+  - `p0003 = 105`
+- 所有 point 的 `b_pll_locked_ratio = 1.0`
+- 所有 point 的 `last_b_ref_source_code = 0`
+- 所有 point 的 `last_b_ref_slope_code = 2`
+- `B-Freq` point 均值约 `499.999 Hz`
+
+run 结束后额外只读核验：
+
+- `OUTP? -> 0`
+- `FREQ:MODE? -> CW`
+- `SYST:ERR? -> 0,"No error"`
+
+这说明当前 runtime 已经真机证明：
+
+- point 内 RF 输出保持开启可工作
+- cleanup 后 RF output 已关闭
+- cleanup 后 RF frequency sweep 状态已退出到 `CW`
+- 最小 `RALL` parser 能在真实 point 窗口上稳定产出字段级数据
+
+## 明确未验证内容
+
+以下内容当前不得写成 `rebuild_smoke_verified`：
+
+- `OE1022D` 15 分钟以上 run 级 collector
+- `OE1022D` 30 分钟以上 run 级 collector
+- 更长时 point segmentation 稳定性
+- point 级 `Laser` 变量
+- point 级 `OE1022D` 配置变更
+- 磁场点笛卡尔乘积网格展开
+
+## 运行时基线
+
+下一阶段 runtime 必须直接继承以下结论：
+
+- 第一版 runtime 不是“所有设备都可调”，而是“磁场点 + SMB sweep 变量，其余设备按 profile 固定”
+- `OE1022D` 不是 point 级设备，而是 run 级固定观测器
+- `RALL?` 必须由单一 run 级 reader 线程持续执行
+- point 线程不直接碰 OE 串口，只从 ring buffer 按时间窗拉数据
+- `continuous raw + segment start/end ts + raw offset` 才是最终事实来源
+
+## 当前参数归属结论
+
+### point / run 允许变化
+
+- `target_b_nt`
+- `SMB100A start/stop/step/dwell/power`
+
+### station / profile 固定
+
+- `OE1022D` 全部 setup 配置
+- `M8812` 电压、保护阈值、DTR、cleanup 顺序
+- `Laser` 默认功率、默认开关策略、emergency off
+
+### run 固定
+
+- acquisition window 默认值
+- settle policy
+- failure policy
+- `SMB100A` 默认 sweep mode / trigger mode
