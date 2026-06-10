@@ -32,6 +32,7 @@
 | 查询输出 | `smb100a_query_output` | `OUTP?` | read_only | `rebuild_smoke_verified` |
 | 设置频率 | `smb100a_set_frequency_hz` | `FREQ <hz>` | operational | `legacy_verified_not_rechecked` |
 | 设置频率模式 | `smb100a_set_frequency_mode` | `FREQ:MODE CW|FIX|SWE` | operational | `rebuild_smoke_verified` |
+| 查询频率模式 | `smb100a_query_frequency_mode` | `FREQ:MODE?` | read_only | `legacy_verified_not_rechecked` |
 | 查询频率 | `smb100a_query_frequency` | `FREQ?` | read_only | `rebuild_smoke_verified` |
 | 设置功率 | `smb100a_set_power_dbm` | `POW <dbm>dBm` | operational | `rebuild_smoke_verified` |
 | 查询功率 | `smb100a_query_power` | `POW?` | read_only | `rebuild_smoke_verified` |
@@ -73,6 +74,8 @@
 - `SWE:OVOL:STAR 0V` / `SWE:OVOL:STOP 3V` 会触发 `-103,"Invalid separator;V"`
 - 当前实验室真机接受的是不带 `V` 后缀的 `SWE:OVOL:STAR 0` / `SWE:OVOL:STOP 3`
 - point 内 `RF ON` 与 `frequency sweep active` 不是同一件事，runtime 必须显式管理 `OUTP` 与 `FREQ:MODE`
+- `2026-06-11` 的 rebuild 真机短 run 已证明：`*OPC?` 在当前实验室 SMB100A 上可能数毫秒内返回，不能单独当作 point 结束信号
+- 当前 runtime 已切到 hybrid 路径：先观测 `*OPC?`，若过早返回，则退回到基于 `start/stop/step/dwell` 的 sweep 时长估算 + guard
 
 ## OE1022D 第一版命令
 

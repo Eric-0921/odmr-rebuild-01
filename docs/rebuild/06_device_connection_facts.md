@@ -11,7 +11,7 @@
 
 本次 rebuild 真机 smoke 已经证明：
 
-- 串口 hint 失败后，自动扫描 + probe + 认领链路可用
+- 串口设备可以通过“先枚举当前串口池，再按身份 probe 认领”的方式稳定绑定
 - `station verify` 和 `hardware smoke` 已经能覆盖 `RF + Mag + OE + Laser OFF`
 - `run execute` 也已经再次证明：实际运行应信当次 probe/identity 认领结果，不应信旧 hint 端口
 
@@ -38,6 +38,12 @@
 - M8812：协议层 `*IDN?` 第 3 字段 SN 严格匹配
 - CNI Laser：无稳定 `*IDN?`，依赖协议帧回显、USB 信息和人工 claim
 
+当前代码基线已经进一步收紧为：
+
+- `station verify` / `run execute` 每次都先枚举当前串口池
+- hint 只影响候选排序
+- `resolved_spec` 和 `station_snapshot.json` 必须写出本轮实际认领端口
+
 ### 本次 rebuild 真机已验证结果
 
 - 验证产物：
@@ -52,6 +58,9 @@
   - `15168 bytes`
 - 当前最小 runtime `run execute` 中，定长 `RALL?` 真值帧：
   - `12288 bytes`
+- 当前 station snapshot 新字段：
+  - `transport_hint`：原始配置 hint
+  - `resolved_transport`：本轮真实认领到的端口
 
 这两个数字并不矛盾，原因必须写清楚：
 

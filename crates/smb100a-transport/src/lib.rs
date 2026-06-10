@@ -12,7 +12,10 @@
 //! - runtime 生命周期
 
 use device_transport::{query_ascii_line, write_command, LineTransportOptions, Result};
-use smb100a_commands::{smb100a_query_error_next, smb100a_query_idn, smb100a_query_output};
+use smb100a_commands::{
+    smb100a_query_error_next, smb100a_query_frequency_mode, smb100a_query_idn,
+    smb100a_query_operation_complete, smb100a_query_output,
+};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
@@ -89,6 +92,14 @@ impl Smb100aTransport {
 
     pub fn query_output(&mut self) -> Result<String> {
         self.query(smb100a_query_output())
+    }
+
+    pub fn query_frequency_mode(&mut self) -> Result<String> {
+        self.query(smb100a_query_frequency_mode())
+    }
+
+    pub fn query_operation_complete(&mut self) -> Result<String> {
+        self.query(smb100a_query_operation_complete())
     }
 }
 

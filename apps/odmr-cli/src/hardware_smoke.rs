@@ -1237,7 +1237,7 @@ mod tests {
 
     fn successful_station_snapshot(spec: &StationSpec) -> StationSnapshot {
         StationSnapshot {
-            schema_version: 1,
+            schema_version: 2,
             station_id: spec.station_id.clone(),
             devices_total: spec.devices.len(),
             devices_verified: spec.devices.len(),
@@ -1251,6 +1251,7 @@ mod tests {
                     kind: device.kind.clone(),
                     required: device.required,
                     transport_hint: device.transport_hint.clone(),
+                    resolved_transport: Some(device.transport_hint.clone()),
                     identity_observed: Some("ok".to_string()),
                     verification_method: "fake".to_string(),
                     verification_status: "verified".to_string(),

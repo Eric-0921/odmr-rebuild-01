@@ -10,20 +10,36 @@
 
 本次基线来自以下真机产物：
 
+- `out/station_snapshot_live.json`
+- `out/hardware_verify_mag_lock/manual_live/mag_verify_summary.json`
+- `out/hardware_verify_mag_lock/manual_live/mag_zero_lock_snapshot.json`
+- `out/hardware_verify_mag_lock/manual_live/mag_verify_points.jsonl`
 - `out/hardware_smoke/manual_scan/station_snapshot.json`
 - `out/hardware_smoke/manual_scan/hardware_smoke_events.jsonl`
 - `out/hardware_smoke/manual_scan/hardware_smoke_command_audit.jsonl`
+- `runs/grid_2d_raster_small_live/summary.json`
+- `runs/grid_2d_raster_small_live/points.jsonl`
+- `runs/grid_2d_raster_small_live/segments.jsonl`
+- `runs/grid_2d_raster_small_live/quality.jsonl`
+- `runs/grid_2d_raster_small_live/point_fields.jsonl`
+- `runs/grid_2d_raster_small_live/events.jsonl`
 - `runs/manual_live_v4/summary.json`
 - `runs/manual_live_v5/summary.json`
 - `runs/manual_live_v5/points.jsonl`
 - `runs/manual_live_v5/quality.jsonl`
 - `runs/manual_live_v5/point_fields.jsonl`
 - `runs/manual_live_v5/events.jsonl`
+- `runs/x_axis_1d_bounce_15min_live/summary.json`
+- `runs/x_axis_1d_bounce_15min_live/events.jsonl`
+- `runs/x_axis_1d_bounce_15min_live/quality.jsonl`
 
 文档整理日期：
 
 - 真机 smoke 成功时间：`2026-06-10`
 - 最小 runtime 真机完成时间：`2026-06-11`
+- 零偏锁定单独验证时间：`2026-06-11`
+- 2D 小网格真机完成时间：`2026-06-11`
+- 15 分钟 1D 长跑完成时间：`2026-06-11`
 - 文档收口时间：`2026-06-11`
 
 ## 新增真机校正事实（2026-06-11）
@@ -156,19 +172,41 @@
 
 - `station verify`
 - `hardware smoke`
+- `hardware verify-mag-lock`
 - `RF + Mag + OE` 核心链路
 - `Laser OFF` 背景控制链路
+- `Laser ON background` runtime 链路
 - 串口 hint 失败后自动扫描、probe、认领链路
 - `run execute` 最小 3-point runtime
+- `run execute` 2D 小网格 runtime
 - `Maynuo baseline lock once -> OE run 级 collector -> point window segmentation`
 - `target_b_nt -> calibration -> target_current_a`
 - point 级最小 `RALL` 字段解析与 `point_fields.jsonl` 落盘
+
+## 零偏锁定单独验证结果（2026-06-11）
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- hardware verify-mag-lock --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/mag_zero_lock_verify.json --out-dir out/hardware_verify_mag_lock/manual_live`
+
+运行结果：
+
+- `summary.status = completed`
+- `points_passed = 4 / 4`
+- `baseline_current_a = [0.00007, 0.00009, 0.00010] A`
+- `max_abs_error_a <= 0.00012 A`
+
+这说明当前 rebuild 已经真机证明：
+
+- “零场锁定”在第一版里的真实语义是零偏电流锁定
+- 后续 point 电流采用 `locked_zero_offset_current_a + delta_current_a`
+- 三轴非负目标电流在当前容差内可复现
 
 ## 最小 runtime 真机结果（2026-06-11）
 
 真机运行命令：
 
-- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --out-dir runs/manual_live_v5`
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/manual_live_v5`
 
 运行结果：
 
@@ -197,16 +235,65 @@ run 结束后额外只读核验：
 - cleanup 后 RF frequency sweep 状态已退出到 `CW`
 - 最小 `RALL` parser 能在真实 point 窗口上稳定产出字段级数据
 
+## 2D 小网格真机结果（2026-06-11）
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/grid_2d_raster_small.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/grid_2d_raster_small_live`
+
+运行结果：
+
+- `summary.status = completed`
+- `points_passed = 9 / 9`
+- `points / segments / point_fields / quality = 9 / 9 / 9 / 9`
+- `summary.frames_total = 1666`
+- `quality.frames_total_sum = 264`
+- `RALL` 实测点速率约 `1030.5 ~ 1065.9 pts/s`，平均 `1042.5 pts/s`
+- `Laser` 在整个 run 期间保持 `on_background`
+
+这说明当前 runtime 已经真机证明：
+
+- 正向 2D 小网格 point 规划可展开并执行
+- collector 单实例和 point segmentation 在小网格下稳定
+- 复跑同一个 `--out-dir` 后，artifact 会被正确重建，不再静默 append 旧内容
+
+## 15 分钟 1D 长跑结果（2026-06-11）
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/x_axis_1d_bounce_15min_live`
+
+运行结果：
+
+- `summary.status = completed_with_failed_points`
+- `points_passed = 103 / 104`
+- `points_failed = 1 / 104`
+- `summary.frames_total = 18725`
+- `quality_status` 统计：
+  - `passed = 129`
+  - `failed_min_frames = 1`
+- 明确坏点：
+  - `p000060 -> frames_total = 12`
+- collector 最终 `timeout_count = 4`
+- collector 稳态点速率约 `~1015 pts/s`
+
+必须明确的校正说明：
+
+- 这次长跑是在发现“当前磁场电源第一版不支持负输出”之前启动的
+- 因此它主要用于验证 `collector / sweep / segmentation / cleanup` 的长时稳定性
+- 不应用它来宣称“负磁场点的电流映射已经有效”
+- 同时，这个目录里的 JSONL 曾受旧版 append 语义污染；当前代码已修复，但该目录不再作为“文件条数真值”来源
+
 ## 明确未验证内容
 
 以下内容当前不得写成 `rebuild_smoke_verified`：
 
-- `OE1022D` 15 分钟以上 run 级 collector
+- “非负网格条件下”的 15 分钟以上 run 级 collector
 - `OE1022D` 30 分钟以上 run 级 collector
 - 更长时 point segmentation 稳定性
 - point 级 `Laser` 变量
 - point 级 `OE1022D` 配置变更
-- 磁场点笛卡尔乘积网格展开
+- 3D 真机网格运行
 
 ## 运行时基线
 
@@ -215,8 +302,9 @@ run 结束后额外只读核验：
 - 第一版 runtime 不是“所有设备都可调”，而是“磁场点 + SMB sweep 变量，其余设备按 profile 固定”
 - `OE1022D` 不是 point 级设备，而是 run 级固定观测器
 - `RALL?` 必须由单一 run 级 reader 线程持续执行
-- point 线程不直接碰 OE 串口，只从 ring buffer 按时间窗拉数据
-- `continuous raw + segment start/end ts + raw offset` 才是最终事实来源
+- point 线程不直接碰 OE 串口；point 完整帧序列按 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切恢复
+- ring buffer 只保留最近窗口观察和 collector 健康摘要，不再决定 point 完整性
+- `continuous raw + frame index + segment boundary` 才是最终事实来源
 
 ## 当前参数归属结论
 

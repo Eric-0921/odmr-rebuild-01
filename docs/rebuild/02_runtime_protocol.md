@@ -3,6 +3,7 @@
 本文定义第一版 runtime 的生命周期和状态约束。重点是保证采集流连续、point 语义清楚、失败可追溯。
 
 第一版 runtime 不是“所有设备都可调”，而是“磁场点 + SMB sweep 变量，其余设备按 profile 固定”。
+当前“零场锁定”语义是旧系统兼容的零偏电流锁定，不是物理零磁场已证明。
 
 ## Runtime 状态
 
@@ -65,7 +66,6 @@ CleanupFailed
 
 ### run fixed
 
-- acquisition window 默认值
 - settle policy
 - failure policy
 - `SMB100A` 默认 sweep mode / trigger mode
@@ -94,9 +94,10 @@ OE1022D collector 是 run 级单实例。
 - 打 monotonic timestamp 和 wall timestamp。
 - 分配连续 frame sequence。
 - 写入 raw log。
+- 写入 `raw/oe1022d.frames.idx.jsonl`。
 - 更新 ring buffer。
 - 报告 timeout、parse error、duplicate、last frame age。
-- 提供基于时间戳和 raw offset 的 point 窗口拉取基础。
+- 提供 committed cursor，作为 point durable 边界记录基础。
 
 约束：
 
@@ -105,33 +106,44 @@ OE1022D collector 是 run 级单实例。
 - raw writer / health consumer 必须持续 drain。
 - stop 必须包含 request、observed、port close、thread joined 四个阶段。
 - `Drop` 不等于线程已经退出。
-- 最小 `RALL` 字段解析不在 collector 线程执行，而在 point 从 ring buffer 拉窗口之后执行。
+- 最小 `RALL` 字段解析不在 collector 线程执行，而在 point 从 `raw + frames.idx + segments` 回切之后执行。
 - ring buffer 只是即时消费层，不是最终事实层。
-- ring buffer 容量必须覆盖最大 point acquisition window 再加一段 guard margin。
-- 如果做不到上述容量约束，就不能声称支持“point 主动拉窗口”。
+- ring buffer 容量仍按 `estimated_sweep_duration_ms / poll_interval_ms + guard` 动态估算，但只服务观察体验，不再承担 point 保真。
+- point 真值边界必须取 committed cursor，不能取 ring cursor。
 
 ## Point 执行协议
 
 每个 point 的执行顺序：
 
 1. 写 `point_prepare_started`。
-2. 将 `target_b_nt` 通过 calibration 转换为三轴电流。
-3. 设置三台 M8812 目标电流。
+2. 将 `target_b_nt` 通过 calibration 转换为 `delta_current_a`。
+3. 用 `locked_zero_offset_current_a + delta_current_a` 计算三台 M8812 目标电流。
 4. 等待 M8812 readback 或 settle policy 达标。
 5. 配置 SMB100A sweep 和功率。
-6. readback 校验 SMB100A 关键参数。
+6. readback 校验 `OUTP ON` 与 `FREQ:MODE SWE` 等关键参数。
 7. 写 `point_stable`。
 8. 记录 segment start timestamp 和 raw offset。
-9. 执行 acquisition window 或 sweep。
-10. 记录 segment end timestamp 和 raw offset。
-11. 从 ring buffer 按 `[start_ts, end_ts]` 主动拉取 point 时间窗。
-12. 把窗口内每帧解析成 `20 x 50` double matrix，并抽出当前关心字段。
-13. 计算 quality 和即时摘要。
-14. 写 `point_completed` 或 `point_failed`。
+9. 发送 `SWE:FREQ:EXEC`。
+10. 先观察 `*OPC?` 的实际等待时长；若明显早于基于 `start/stop/step/dwell` 的 sweep 估算时长，则退回到“估算时长 + guard”。
+11. 记录 segment end timestamp 和 raw offset。
+12. 先把 `segment_start/end + frame_seq/raw_offset` 写入 `segments.jsonl`。
+13. 再按 committed `frame_seq/raw_offset` 从 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl` 回切 point 帧序列。
+14. 把窗口内每帧解析成 `20 x 50` double matrix，并抽出当前关心字段。
+15. 计算 quality 和即时摘要。
+16. 写 `point_completed` 或 `point_failed`。
 
 point 失败不必默认终止整个 run。是否继续由 plan 中的 failure policy 决定。但 point 失败必须显式进入 artifact。
 
 旧讨论中的 “step” 在第一版 runtime 中只作为 point 执行阶段的兼容说法，不是独立采集生命周期对象。
+
+硬规则：
+
+- `1 point = 1 SMB100A frequency sweep`
+- `acquisition_window_ms` 只保留给旧样例兼容，不再作为 sweep-driven point 的真值边界
+- point 真实边界必须由 `sweep_started -> sweep_completed` 定义
+- 当前实验室真机上，`*OPC?` 可能在数毫秒内返回，不能单独当作 sweep 结束信号
+- `fixed_total_points` 的估时必须包含每 point 的 SMB 重配置 settle 开销，不能只算 sweep 本体时长
+- 当前磁场电源第一版只支持非负目标电流；如果 `locked_zero_offset_current_a + delta_current_a` 算出负值，runtime 必须直接报错
 
 ## Settle 协议
 
@@ -180,6 +192,7 @@ point 失败不必默认终止整个 run。是否继续由 plan 中的 failure p
 - 运行时直接发送未列入命令白名单的 SCPI。
 - 为了“手册可能支持”而发送未经验证命令。
 - 在 error queue 非空时继续把 point 标为成功。
+- 在 point 内关闭 RF output 但继续把同一个 sweep 视为有效采集窗口。
 
 ## M8812 协议
 
@@ -225,6 +238,12 @@ point 失败不必默认终止整个 run。是否继续由 plan 中的 failure p
 - emergency off。
 
 point 级 laser 变量后置，除非当前科学目标明确要求扫描 laser。
+
+当前推荐主路径是 `on_background`：
+
+- run 打开阶段设功率并开启输出
+- point 期间保持不变
+- run 结束统一关闭
 
 ## Run 结束协议
 

@@ -1,5 +1,5 @@
 {
-  "run_id": "minimal_3point_runtime",
+  "run_id": "mag_zero_lock_verify",
   "operator": "local",
   "acquisition_window_ms": 0,
   "point_settle_ms": 1000,
@@ -14,10 +14,10 @@
     "output_enabled": true
   },
   "quality_thresholds": {
-    "min_frames": 10,
-    "max_timeout_count": 2,
-    "max_duplicate_ratio": 0.3,
-    "max_last_frame_age_ms": 500
+    "min_frames": 0,
+    "max_timeout_count": 0,
+    "max_duplicate_ratio": 1.0,
+    "max_last_frame_age_ms": 0
   },
   "points": [
     {
@@ -26,17 +26,15 @@
     },
     {
       "point_id": "p0002",
-      "target_b_nt": [10.0, 0.0, 0.0],
-      "smb_override": {
-        "power_dbm": -20.0
-      }
+      "target_b_nt": [10.0, 0.0, 0.0]
     },
     {
       "point_id": "p0003",
-      "target_b_nt": [0.0, 10.0, 0.0],
-      "smb_override": {
-        "power_dbm": -15.0
-      }
+      "target_b_nt": [0.0, 10.0, 0.0]
+    },
+    {
+      "point_id": "p0004",
+      "target_b_nt": [0.0, 0.0, 10.0]
     }
   ]
 }

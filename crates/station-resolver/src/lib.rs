@@ -2,13 +2,11 @@
 //!
 //! 第一版目标很收敛：
 //! - 读取 station 规格
-//! - 用明确的 transport hint 逐台核验身份
-//! - 产出 station snapshot
+//! - 对串口池做 identity-first 认领
+//! - 产出 station snapshot 与当次 resolved_spec
 //!
 //! 第一版不负责：
-//! - 大范围自动 discover
-//! - 网络扫描
-//! - 串口全枚举
+//! - 大范围网络扫描
 //! - 运行时 preflight
 
 use cni_laser_transport::{CniLaserTransport, CniLaserTransportConfig};
@@ -123,6 +121,8 @@ pub struct DeviceSnapshot {
     pub kind: DeviceKind,
     pub required: bool,
     pub transport_hint: TransportHint,
+    #[serde(default)]
+    pub resolved_transport: Option<TransportHint>,
     pub identity_observed: Option<String>,
     pub verification_method: String,
     pub verification_status: String,
@@ -153,39 +153,7 @@ pub struct StationResolveResult {
 }
 
 pub fn verify_station(spec: &StationSpec) -> StationSnapshot {
-    let mut devices = Vec::with_capacity(spec.devices.len());
-    let mut devices_verified = 0_usize;
-    let mut devices_failed = 0_usize;
-    let mut required_failures = 0_usize;
-
-    for device in &spec.devices {
-        let snapshot = match device.kind {
-            DeviceKind::Smb100a => verify_smb100a(device),
-            DeviceKind::Oe1022d => verify_oe1022d(device),
-            DeviceKind::M8812 => verify_m8812(device),
-            DeviceKind::CniLaser => verify_cni_laser(device),
-        };
-
-        if snapshot.verification_status == "verified" {
-            devices_verified += 1;
-        } else {
-            devices_failed += 1;
-            if snapshot.required {
-                required_failures += 1;
-            }
-        };
-        devices.push(snapshot);
-    }
-
-    StationSnapshot {
-        schema_version: 1,
-        station_id: spec.station_id.clone(),
-        devices_total: devices.len(),
-        devices_verified,
-        devices_failed,
-        required_failures,
-        devices,
-    }
+    resolve_station(spec).snapshot
 }
 
 pub fn resolve_station(spec: &StationSpec) -> StationResolveResult {
@@ -222,7 +190,7 @@ pub fn resolve_station(spec: &StationSpec) -> StationResolveResult {
     StationResolveResult {
         resolved_spec,
         snapshot: StationSnapshot {
-            schema_version: 1,
+            schema_version: 2,
             station_id: spec.station_id.clone(),
             devices_total: devices.len(),
             devices_verified,
@@ -396,32 +364,12 @@ fn verify_serial_with_scan(
     available_serial_ports: &[String],
     claimed_serial_ports: &mut HashSet<String>,
 ) -> DeviceSnapshot {
-    let configured_port = serial_port_path(device).unwrap_or_default();
-    let direct_snapshot = verify_device_without_scan(device);
-    if direct_snapshot.verification_status == "verified" {
-        return direct_snapshot;
-    }
-
-    let mut scan_failures = Vec::new();
-    for candidate_port in available_serial_ports {
-        if candidate_port == &configured_port || claimed_serial_ports.contains(candidate_port) {
-            continue;
-        }
-
-        let mut candidate_device = device.clone();
-        set_serial_port_path(&mut candidate_device, candidate_port.clone());
-        let candidate_snapshot = verify_device_without_scan(&candidate_device);
-        if candidate_snapshot.verification_status == "verified" {
-            *device = candidate_device;
-            return candidate_snapshot;
-        }
-
-        if let Some(message) = candidate_snapshot.error_message {
-            scan_failures.push(format!("{candidate_port}: {message}"));
-        }
-    }
-
-    enrich_failed_snapshot(direct_snapshot, &configured_port, &scan_failures)
+    resolve_serial_device_with(
+        device,
+        available_serial_ports,
+        claimed_serial_ports,
+        verify_device_without_scan,
+    )
 }
 
 fn verify_device_without_scan(device: &DeviceSpec) -> DeviceSnapshot {
@@ -451,6 +399,61 @@ fn list_available_serial_ports() -> Vec<String> {
     out
 }
 
+fn resolve_serial_device_with<F>(
+    device: &mut DeviceSpec,
+    available_serial_ports: &[String],
+    claimed_serial_ports: &mut HashSet<String>,
+    verify_fn: F,
+) -> DeviceSnapshot
+where
+    F: Fn(&DeviceSpec) -> DeviceSnapshot,
+{
+    let configured_port = serial_port_path(device).unwrap_or_default();
+    let candidate_ports = order_candidate_serial_ports(available_serial_ports, &configured_port);
+    let mut scan_failures = Vec::new();
+
+    for candidate_port in candidate_ports {
+        if claimed_serial_ports.contains(&candidate_port) {
+            scan_failures.push(format!("{candidate_port}: already claimed"));
+            continue;
+        }
+
+        let mut candidate_device = device.clone();
+        set_serial_port_path(&mut candidate_device, candidate_port.clone());
+        let candidate_snapshot = verify_fn(&candidate_device);
+        if candidate_snapshot.verification_status == "verified" {
+            *device = candidate_device;
+            return candidate_snapshot;
+        }
+
+        if let Some(message) = candidate_snapshot.error_message {
+            scan_failures.push(format!("{candidate_port}: {message}"));
+        }
+    }
+
+    build_failed_snapshot(
+        device,
+        "serial_identity_scan",
+        enrich_scan_failure_message(&configured_port, &scan_failures),
+    )
+}
+
+fn order_candidate_serial_ports(
+    available_serial_ports: &[String],
+    configured_port: &str,
+) -> Vec<String> {
+    let mut ordered = available_serial_ports.to_vec();
+    if configured_port.is_empty() {
+        return ordered;
+    }
+
+    if let Some(position) = ordered.iter().position(|port| port == configured_port) {
+        let hint_port = ordered.remove(position);
+        ordered.insert(0, hint_port);
+    }
+    ordered
+}
+
 fn serial_port_priority(port: &str) -> u8 {
     if port.starts_with("/dev/cu.") {
         0
@@ -477,24 +480,18 @@ fn set_serial_port_path(device: &mut DeviceSpec, port_path: String) {
     }
 }
 
-fn enrich_failed_snapshot(
-    mut snapshot: DeviceSnapshot,
-    configured_port: &str,
-    scan_failures: &[String],
-) -> DeviceSnapshot {
-    let direct_message = snapshot
-        .error_message
-        .take()
-        .unwrap_or_else(|| "未知错误".to_string());
+fn enrich_scan_failure_message(configured_port: &str, scan_failures: &[String]) -> String {
+    let hint = if configured_port.is_empty() {
+        "无 hint".to_string()
+    } else {
+        format!("hint={configured_port}")
+    };
     let scan_summary = if scan_failures.is_empty() {
         "未找到可用串口候选".to_string()
     } else {
-        format!("扫描候选失败: {}", scan_failures.join(" | "))
+        format!("候选探测失败: {}", scan_failures.join(" | "))
     };
-    snapshot.error_message = Some(format!(
-        "配置端口失败: {configured_port}: {direct_message}; {scan_summary}"
-    ));
-    snapshot
+    format!("identity-first 串口认领失败: {hint}; {scan_summary}")
 }
 
 fn sanitize_ascii_observed(observed: &str) -> String {
@@ -527,6 +524,7 @@ fn build_verified_snapshot(
         kind: device.kind.clone(),
         required: device.required,
         transport_hint: device.transport_hint.clone(),
+        resolved_transport: Some(device.transport_hint.clone()),
         identity_observed: Some(observed),
         verification_method: verification_method.to_string(),
         verification_status: "verified".to_string(),
@@ -544,6 +542,7 @@ fn build_failed_snapshot(
         kind: device.kind.clone(),
         required: device.required,
         transport_hint: device.transport_hint.clone(),
+        resolved_transport: None,
         identity_observed: None,
         verification_method: verification_method.to_string(),
         verification_status: "failed".to_string(),
@@ -623,5 +622,101 @@ mod tests {
         assert_eq!(snapshot.verification_status, "failed");
         assert!(!snapshot.required);
         assert_eq!(snapshot.error_message.as_deref(), Some("boom"));
+    }
+
+    #[test]
+    fn candidate_order_uses_hint_only_for_sorting() {
+        let ports = vec![
+            "/dev/cu.usbserial-b".to_string(),
+            "/dev/cu.usbserial-a".to_string(),
+        ];
+        let ordered = order_candidate_serial_ports(&ports, "/dev/cu.usbserial-a");
+        assert_eq!(
+            ordered,
+            vec![
+                "/dev/cu.usbserial-a".to_string(),
+                "/dev/cu.usbserial-b".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn identity_scan_can_rebind_when_hint_is_wrong() {
+        let mut device = DeviceSpec {
+            device_id: "mag_x".to_string(),
+            kind: DeviceKind::M8812,
+            required: true,
+            transport_hint: TransportHint::SerialPort {
+                port_path: "/dev/cu.wrong".to_string(),
+                baud_rate: 9600,
+            },
+            identity: None,
+        };
+        let ports = vec!["/dev/cu.wrong".to_string(), "/dev/cu.correct".to_string()];
+        let mut claimed = HashSet::new();
+
+        let snapshot = resolve_serial_device_with(&mut device, &ports, &mut claimed, |candidate| {
+            match serial_port_path(candidate).as_deref() {
+                Some("/dev/cu.correct") => build_verified_snapshot(
+                    candidate,
+                    "MAYNUO,M8812,080020960220402020,V2.7".to_string(),
+                    "serial_idn_query",
+                ),
+                _ => build_failed_snapshot(
+                    candidate,
+                    "serial_idn_query",
+                    "mock mismatch".to_string(),
+                ),
+            }
+        });
+
+        assert_eq!(snapshot.verification_status, "verified");
+        assert_eq!(
+            serial_port_path(&device).as_deref(),
+            Some("/dev/cu.correct")
+        );
+        assert_eq!(
+            snapshot.resolved_transport,
+            Some(TransportHint::SerialPort {
+                port_path: "/dev/cu.correct".to_string(),
+                baud_rate: 9600,
+            })
+        );
+    }
+
+    #[test]
+    fn claimed_port_is_not_reused_for_second_device() {
+        let ports = vec!["/dev/cu.shared".to_string(), "/dev/cu.other".to_string()];
+        let mut claimed = vec!["/dev/cu.shared".to_string()]
+            .into_iter()
+            .collect::<HashSet<_>>();
+        let mut device = DeviceSpec {
+            device_id: "mag_y".to_string(),
+            kind: DeviceKind::M8812,
+            required: true,
+            transport_hint: TransportHint::SerialPort {
+                port_path: "/dev/cu.shared".to_string(),
+                baud_rate: 9600,
+            },
+            identity: None,
+        };
+
+        let snapshot = resolve_serial_device_with(&mut device, &ports, &mut claimed, |candidate| {
+            match serial_port_path(candidate).as_deref() {
+                Some("/dev/cu.other") => build_verified_snapshot(
+                    candidate,
+                    "MAYNUO,M8812,080020960220402022,V2.7".to_string(),
+                    "serial_idn_query",
+                ),
+                _ => build_failed_snapshot(
+                    candidate,
+                    "serial_idn_query",
+                    "mock mismatch".to_string(),
+                ),
+            }
+        });
+
+        assert_eq!(serial_port_path(&device).as_deref(), Some("/dev/cu.other"));
+        assert_eq!(snapshot.verification_status, "verified");
     }
 }

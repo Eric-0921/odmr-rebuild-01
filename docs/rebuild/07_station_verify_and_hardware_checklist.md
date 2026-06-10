@@ -31,9 +31,20 @@ cargo run -p odmr-cli -- \
   run execute \
   --station configs/stations/lab_a.json \
   --calibration configs/calibrations/main.json \
+  --plan configs/plans/x_axis_1d_bounce_15min.json \
+  --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json \
+  --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json \
+  --laser-profile configs/profiles/cni_laser_run_on_background.json \
+  --out-dir runs/x_axis_1d_bounce_15min
+
+cargo run -p odmr-cli -- \
+  run execute \
+  --station configs/stations/lab_a.json \
+  --calibration configs/calibrations/main.json \
   --plan configs/plans/minimal_3point_runtime.json \
   --smb-profile configs/profiles/smb100a_run_pll_default.json \
   --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json \
+  --laser-profile configs/profiles/cni_laser_run_on_background.json \
   --out-dir runs/manual
 ```
 
@@ -45,8 +56,9 @@ cargo run -p odmr-cli -- \
 串口路径规则：
 
 - `station.json` 里的串口路径只当 hint，不当真值
-- `station verify` 会先尝试 hint
-- hint 失败后会自动枚举当前串口，并按设备类型逐个发送 probe 指令
+- `station verify` / `run execute` 每次都会先枚举当前串口池
+- hint 只用于候选排序，不再作为“先直连再回退”的真值
+- runtime 会按设备类型逐个发送 probe 指令完成 identity-first 认领
 - 命中后 snapshot 里会写出这次实际绑定到的端口
 - 真机 run 应优先复用这次实际绑定结果，而不是继续相信旧的静态 hint
 
@@ -68,9 +80,7 @@ cargo run -p odmr-cli -- \
 
 ### OE1022D
 
-- 使用 `serial_port` hint
-- 打开指定串口
-- 失败时扫描当前串口候选
+- 扫描当前串口候选，hint 只用于排序
 - 发送 `*IDN?`
 - 在 smoke 中执行：
   - `port.clear(Input)`
@@ -79,9 +89,7 @@ cargo run -p odmr-cli -- \
 
 ### M8812
 
-- 使用 `serial_port` hint
-- 打开指定串口
-- 失败时扫描当前串口候选
+- 扫描当前串口候选，hint 只用于排序
 - 发送 `*IDN?`
 - 在 smoke 中逐轴执行：
   - `SYST:REM`
@@ -98,9 +106,7 @@ cargo run -p odmr-cli -- \
 
 ### CNI Laser
 
-- 使用 `serial_port` hint
-- 打开指定串口
-- 失败时扫描当前串口候选
+- 扫描当前串口候选，hint 只用于排序
 - 发送 `Laser Off` 帧
 - 读取固定长度 echo
 - 用 echo 作为第一版最小验证
@@ -108,11 +114,15 @@ cargo run -p odmr-cli -- \
 ## station verify 当前不做什么
 
 - 不做网络扫描
-- 不做自动 claim
 - 不做 preflight
 - 不做 error queue drain
 - 不做 output 状态校验
 - 不做 cleanup 编排
+
+注意：
+
+- station verify 现在已经做“当前串口池内的自动认领”
+- 它仍然不做的是更大范围的推断式 discover、网络侧自动摸索和运行期 cleanup
 
 这些是下一阶段工作，不属于当前最小设备连接链。
 
@@ -136,18 +146,26 @@ cargo run -p odmr-cli -- \
 - 逐 point 执行：
   - `target_b_nt -> calibration -> target_current_a`
   - `SMB100A` sweep 配置
-  - ring buffer 时间窗拉取
+  - `SWE:FREQ:EXEC + *OPC?`
+  - 基于 `sweep_started/sweep_completed` 的 segment 边界记录
+  - 再按 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切 point 窗口
   - 最小 `RALL` 字段解析
 - cleanup 后确认：
   - `OUTP? -> 0`
   - `FREQ:MODE? -> CW`
   - `SYST:ERR? -> 0,"No error"`
 
-当前已经真机证明：
+当前代码已经切到的新基线：
 
 - collector 不是“设备一连上就启动”，而是 `run execute` 启动后才创建
-- point 内 RF 输出保持开启可工作
-- 程序结束时 RF output 与 RF frequency sweep state 可一起退出
+- point 语义已经改成 `1 point = 1 sweep`
+- `*OPC?` 已在 rebuild 真机短 run 中被证伪：它会过早返回，不能单独当 point 结束信号
+- runtime 现已改成 `*OPC?` + sweep duration fallback
+- 程序结束时 RF output 与 RF frequency sweep state 会一起退出
+
+还未在本轮 rebuild 真机重验的部分：
+
+- `cartesian_grid` 1D X 轴往返长跑的 15 分钟 acceptance
 
 ## 实验室前准备
 

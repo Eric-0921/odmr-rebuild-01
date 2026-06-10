@@ -83,11 +83,10 @@ Plan 描述本次 run 要测哪些 point。
 - run metadata。
 - RF sweep 默认参数。
 - laser 默认参数。
-- point list。
-- acquisition window。
+- point list 或高层 `cartesian_grid`。
 - quality thresholds。
 
-第一版 plan 可以手写。plan generator 后置。
+第一版 plan 可以手写。高层 `cartesian_grid` 只负责在运行前展开成显式 points；runtime 本体不直接理解网格语义。plan generator 后置。
 
 ## 参数归属矩阵
 
@@ -115,7 +114,6 @@ Plan 描述本次 run 要测哪些 point。
 
 ### run fixed
 
-- acquisition window 默认值
 - settle policy
 - failure policy
 - `SMB100A` 默认 sweep mode / trigger mode
@@ -168,9 +166,11 @@ Artifact 是 run 的事实记录。
 OE1022D serial
   -> OE collector producer
   -> raw writer
+  -> frames.idx writer
   -> ring buffer
   -> segment indexer
-point window puller
+point raw replay
+  -> raw/frames.idx segment replay
   -> minimal RALL parser
   -> point field extractor
   -> point quality evaluator
@@ -180,9 +180,10 @@ point window puller
 
 - OE1022D 串口只有一个 producer 读取。
 - collector 不知道当前 point。
-- collector 只负责 `RALL?`、raw、timestamp、ring buffer，不在采集线程里做字段级解析。
+- collector 只负责 `RALL?`、raw、frames.idx、timestamp、ring buffer，不在采集线程里做字段级解析。
 - segmenter 负责把 frame offset 和时间窗归属给 point。
-- point 线程只从 ring buffer 按时间窗主动拉窗口做即时标注或摘要。
+- point 真值窗口来自 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 的回切恢复。
+- ring buffer 只负责最近窗口观察、CLI 摘要和 collector 健康状态，不再承担 point 完整性保真。
 - viewer 只能订阅 ring buffer 或 artifact tail。
 - raw writer 是最终事实来源，不依赖 viewer 存活。
 
@@ -207,26 +208,24 @@ point loop 内部顺序：
 2. 设置 M8812 输出目标。
 3. 等待 settle/readback 达标。
 4. 配置 SMB100A sweep。
-5. 记录 `point_started`。
+5. 确认 `OUTP ON` 与 `FREQ:MODE SWE`。
 6. 记录 segment 起点。
-7. 执行 RF sweep 或 acquisition window。
+7. 发送 `SWE:FREQ:EXEC` 并用 `*OPC?` 等待单次 sweep 完成。
 8. 记录 segment 终点。
-9. 从 ring buffer 按 `[segment_start, segment_end]` 主动拉取 point 时间窗。
+9. 先写 `segments.jsonl`，再按 committed `frame_seq/raw_offset` 从 `raw + frames.idx` 回切 point 时间窗。
 10. 计算 point quality 和 point 摘要。
 11. 记录 `point_completed` 或 `point_failed`。
 
 ## CLI 边界
 
 ```bash
-odmr station discover
-odmr station claim --device mag_x --port /dev/cu.xxx
 odmr station verify --station configs/stations/lab_a.json
 odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/test.json
 odmr run watch --run runs/<run_id>
 odmr run replay --run runs/<run_id>
 ```
 
-`execute` 必须依赖 `verify` 结果。设备解析不唯一时必须失败，不允许猜。
+`execute` 必须依赖 `verify` 结果。设备解析不唯一时必须失败，不允许猜。串口设备一律走“先枚举当前串口池，再按身份认领”的路径，hint 只用于候选排序。
 
 ## 失败模型
 

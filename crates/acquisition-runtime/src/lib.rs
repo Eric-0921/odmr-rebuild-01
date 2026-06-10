@@ -10,6 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Smb100aFixedProfile {
@@ -93,6 +94,10 @@ impl SmbSweepDefaults {
                 .unwrap_or(self.rf_output_enabled),
         }
     }
+
+    pub fn estimate(&self) -> Result<SweepEstimate, SweepEstimateError> {
+        self.apply_override(None).estimate()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -110,6 +115,45 @@ pub struct ResolvedSmbSweep {
     pub output_voltage_stop_v: f64,
     pub rf_output_enabled: bool,
 }
+
+impl ResolvedSmbSweep {
+    pub fn estimate(&self) -> Result<SweepEstimate, SweepEstimateError> {
+        if self.step_hz <= 0.0 {
+            return Err(SweepEstimateError::InvalidStepHz(self.step_hz));
+        }
+
+        let span_hz = (self.stop_hz - self.start_hz).abs();
+        let step_count = (span_hz / self.step_hz).round() as u64;
+        let sweep_points = step_count.saturating_add(1);
+        Ok(SweepEstimate {
+            sweep_points,
+            sweep_duration_ms: sweep_points.saturating_mul(self.dwell_ms),
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SweepEstimate {
+    pub sweep_points: u64,
+    pub sweep_duration_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SweepEstimateError {
+    InvalidStepHz(f64),
+}
+
+impl fmt::Display for SweepEstimateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidStepHz(step_hz) => {
+                write!(f, "SMB sweep step_hz 必须大于 0，当前为 {step_hz}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SweepEstimateError {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct SmbSweepOverride {
@@ -148,6 +192,12 @@ pub struct Smb100aRunProfile {
     pub default_sweep: SmbSweepDefaults,
 }
 
+impl Smb100aRunProfile {
+    pub fn estimated_point_configuration_ms(&self) -> u64 {
+        13_u64.saturating_mul(self.command_settle_ms)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Oe1022dFixedProfile {
     pub channel: u8,
@@ -184,6 +234,30 @@ pub struct Oe1022dRunProfile {
     pub command_settle_ms: u64,
     pub fixed: Oe1022dFixedProfile,
     pub collector: CollectorConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LaserBackgroundMode {
+    OnBackground,
+    OffBackground,
+}
+
+impl LaserBackgroundMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::OnBackground => "on_background",
+            Self::OffBackground => "off_background",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LaserRunProfile {
+    pub profile_id: String,
+    pub mode: LaserBackgroundMode,
+    pub power_mw: u16,
+    pub settle_ms: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -247,16 +321,278 @@ pub struct RunPointPlan {
     pub smb_override: Option<SmbSweepOverride>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanSourceKind {
+    ExplicitPoints,
+    CartesianGrid,
+}
+
+impl PlanSourceKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::ExplicitPoints => "explicit_points",
+            Self::CartesianGrid => "cartesian_grid",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CartesianGridAxesNt {
+    pub x: Vec<f64>,
+    pub y: Vec<f64>,
+    pub z: Vec<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CartesianGridCycleMode {
+    Raster,
+    #[serde(rename = "bounce_1d_x")]
+    Bounce1dX,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CartesianGridStopCondition {
+    FixedTotalPoints { total_points: usize },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CartesianGridPointSource {
+    pub axes_nt: CartesianGridAxesNt,
+    #[serde(default = "default_cartesian_order")]
+    pub order: Vec<String>,
+    pub cycle_mode: CartesianGridCycleMode,
+    pub stop_condition: CartesianGridStopCondition,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PointSource {
+    CartesianGrid {
+        axes_nt: CartesianGridAxesNt,
+        #[serde(default = "default_cartesian_order")]
+        order: Vec<String>,
+        cycle_mode: CartesianGridCycleMode,
+        stop_condition: CartesianGridStopCondition,
+    },
+}
+
+impl PointSource {
+    fn into_cartesian_grid(self) -> CartesianGridPointSource {
+        match self {
+            Self::CartesianGrid {
+                axes_nt,
+                order,
+                cycle_mode,
+                stop_condition,
+            } => CartesianGridPointSource {
+                axes_nt,
+                order,
+                cycle_mode,
+                stop_condition,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RunPlanResolveError {
+    EmptyPointPlan,
+    InvalidCartesianOrder(Vec<String>),
+    MissingAxisValues(&'static str),
+    Bounce1dXRequiresSingletonYZ { y_len: usize, z_len: usize },
+    FixedTotalPointsMustBePositive,
+    SweepEstimate(SweepEstimateError),
+}
+
+impl fmt::Display for RunPlanResolveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyPointPlan => write!(f, "plan 没有可执行 point"),
+            Self::InvalidCartesianOrder(order) => {
+                write!(
+                    f,
+                    "cartesian_grid.order 目前只支持 [\"x\", \"y\", \"z\"]，当前为 {order:?}"
+                )
+            }
+            Self::MissingAxisValues(axis) => {
+                write!(f, "cartesian_grid 轴 {axis} 没有任何取值")
+            }
+            Self::Bounce1dXRequiresSingletonYZ { y_len, z_len } => write!(
+                f,
+                "bounce_1d_x 只允许 y/z 单元素，当前 y_len={y_len}, z_len={z_len}"
+            ),
+            Self::FixedTotalPointsMustBePositive => {
+                write!(f, "fixed_total_points 必须大于 0")
+            }
+            Self::SweepEstimate(err) => err.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for RunPlanResolveError {}
+
+impl From<SweepEstimateError> for RunPlanResolveError {
+    fn from(value: SweepEstimateError) -> Self {
+        Self::SweepEstimate(value)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ResolvedRunPlan {
+    pub source_kind: PlanSourceKind,
+    pub declared_point_count: usize,
+    pub resolved_point_count: usize,
+    #[serde(default)]
+    pub fixed_total_points: Option<usize>,
+    #[serde(default)]
+    pub cycle_mode: Option<CartesianGridCycleMode>,
+    #[serde(default)]
+    pub estimated_sweep: Option<SweepEstimate>,
+    #[serde(default)]
+    pub estimated_point_duration_ms: Option<u64>,
+    #[serde(default)]
+    pub estimated_run_duration_ms: Option<u64>,
+    pub points: Vec<RunPointPlan>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AcquisitionRunPlan {
     pub run_id: String,
     pub operator: String,
+    #[serde(default)]
     pub acquisition_window_ms: u64,
     pub point_settle_ms: u64,
     pub failure_policy: String,
     pub mag_baseline_policy: MagBaselinePolicy,
     pub quality_thresholds: RunQualityThresholds,
+    #[serde(default)]
+    pub point_source: Option<PointSource>,
+    #[serde(default)]
     pub points: Vec<RunPointPlan>,
+}
+
+impl AcquisitionRunPlan {
+    pub fn resolve_points(
+        &self,
+        smb_profile: &Smb100aRunProfile,
+    ) -> Result<ResolvedRunPlan, RunPlanResolveError> {
+        if let Some(point_source) = self.point_source.clone() {
+            let point_source = point_source.into_cartesian_grid();
+            validate_cartesian_order(&point_source.order)?;
+            validate_axis_values(&point_source.axes_nt)?;
+
+            let base_points = match point_source.cycle_mode {
+                CartesianGridCycleMode::Raster => build_raster_points(&point_source.axes_nt),
+                CartesianGridCycleMode::Bounce1dX => {
+                    build_bounce_1d_x_points(&point_source.axes_nt)?
+                }
+            };
+
+            let fixed_total_points = match point_source.stop_condition {
+                CartesianGridStopCondition::FixedTotalPoints { total_points } => {
+                    if total_points == 0 {
+                        return Err(RunPlanResolveError::FixedTotalPointsMustBePositive);
+                    }
+                    total_points
+                }
+            };
+
+            let resolved_points = repeat_points_to_total(&base_points, fixed_total_points);
+            let estimated_sweep = smb_profile.default_sweep.estimate()?;
+            let estimated_point_duration_ms = estimated_sweep
+                .sweep_duration_ms
+                .saturating_add(self.point_settle_ms)
+                .saturating_add(smb_profile.estimated_point_configuration_ms());
+            let estimated_run_duration_ms =
+                estimated_point_duration_ms.saturating_mul(fixed_total_points as u64);
+
+            return Ok(ResolvedRunPlan {
+                source_kind: PlanSourceKind::CartesianGrid,
+                declared_point_count: base_points.len(),
+                resolved_point_count: resolved_points.len(),
+                fixed_total_points: Some(fixed_total_points),
+                cycle_mode: Some(point_source.cycle_mode),
+                estimated_sweep: Some(estimated_sweep),
+                estimated_point_duration_ms: Some(estimated_point_duration_ms),
+                estimated_run_duration_ms: Some(estimated_run_duration_ms),
+                points: resolved_points,
+            });
+        }
+
+        if self.points.is_empty() {
+            return Err(RunPlanResolveError::EmptyPointPlan);
+        }
+
+        Ok(ResolvedRunPlan {
+            source_kind: PlanSourceKind::ExplicitPoints,
+            declared_point_count: self.points.len(),
+            resolved_point_count: self.points.len(),
+            fixed_total_points: None,
+            cycle_mode: None,
+            estimated_sweep: None,
+            estimated_point_duration_ms: None,
+            estimated_run_duration_ms: None,
+            points: self.points.clone(),
+        })
+    }
+
+    pub fn resolve_points_without_smb_profile(
+        &self,
+    ) -> Result<ResolvedRunPlan, RunPlanResolveError> {
+        if let Some(point_source) = self.point_source.clone() {
+            let point_source = point_source.into_cartesian_grid();
+            validate_cartesian_order(&point_source.order)?;
+            validate_axis_values(&point_source.axes_nt)?;
+
+            let base_points = match point_source.cycle_mode {
+                CartesianGridCycleMode::Raster => build_raster_points(&point_source.axes_nt),
+                CartesianGridCycleMode::Bounce1dX => {
+                    build_bounce_1d_x_points(&point_source.axes_nt)?
+                }
+            };
+
+            let fixed_total_points = match point_source.stop_condition {
+                CartesianGridStopCondition::FixedTotalPoints { total_points } => {
+                    if total_points == 0 {
+                        return Err(RunPlanResolveError::FixedTotalPointsMustBePositive);
+                    }
+                    total_points
+                }
+            };
+
+            let resolved_points = repeat_points_to_total(&base_points, fixed_total_points);
+            return Ok(ResolvedRunPlan {
+                source_kind: PlanSourceKind::CartesianGrid,
+                declared_point_count: base_points.len(),
+                resolved_point_count: resolved_points.len(),
+                fixed_total_points: Some(fixed_total_points),
+                cycle_mode: Some(point_source.cycle_mode),
+                estimated_sweep: None,
+                estimated_point_duration_ms: None,
+                estimated_run_duration_ms: None,
+                points: resolved_points,
+            });
+        }
+
+        if self.points.is_empty() {
+            return Err(RunPlanResolveError::EmptyPointPlan);
+        }
+
+        Ok(ResolvedRunPlan {
+            source_kind: PlanSourceKind::ExplicitPoints,
+            declared_point_count: self.points.len(),
+            resolved_point_count: self.points.len(),
+            fixed_total_points: None,
+            cycle_mode: None,
+            estimated_sweep: None,
+            estimated_point_duration_ms: None,
+            estimated_run_duration_ms: None,
+            points: self.points.clone(),
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -271,18 +607,50 @@ pub struct RunManifest {
     pub status: String,
     pub smb_profile_id: String,
     pub oe_profile_id: String,
+    pub laser_profile_id: String,
+    pub plan_source_kind: String,
+    pub resolved_point_count: usize,
+    #[serde(default)]
+    pub estimated_run_duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PlanSnapshot {
+    pub schema_version: u32,
+    pub run_id: String,
+    pub source_kind: String,
+    pub declared_point_count: usize,
+    pub resolved_point_count: usize,
+    #[serde(default)]
+    pub fixed_total_points: Option<usize>,
+    #[serde(default)]
+    pub cycle_mode: Option<CartesianGridCycleMode>,
+    #[serde(default)]
+    pub estimated_sweep: Option<SweepEstimate>,
+    #[serde(default)]
+    pub estimated_point_duration_ms: Option<u64>,
+    #[serde(default)]
+    pub estimated_run_duration_ms: Option<u64>,
+    pub source_plan: AcquisitionRunPlan,
+    pub resolved_points: Vec<RunPointPlan>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BaselineAxisSnapshot {
     pub axis: String,
-    pub baseline_setpoint_a: f64,
-    pub measured_current_a: Vec<f64>,
+    #[serde(alias = "baseline_setpoint_a")]
+    pub zero_offset_setpoint_a: f64,
+    #[serde(alias = "measured_current_a")]
+    pub zero_offset_measured_samples_a: Vec<f64>,
+    #[serde(default)]
+    pub locked_zero_offset_current_a: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct BaselineSnapshot {
     pub schema_version: u32,
+    #[serde(default = "default_baseline_mode")]
+    pub mode: String,
     pub baseline_locked_at: String,
     pub settle_ms: u64,
     pub readback_samples: u32,
@@ -294,7 +662,9 @@ impl BaselineSnapshot {
     pub fn baseline_current_a(&self) -> [f64; 3] {
         let mut out = [0.0_f64; 3];
         for (index, axis) in self.axes.iter().take(3).enumerate() {
-            out[index] = axis.baseline_setpoint_a;
+            out[index] = axis
+                .locked_zero_offset_current_a
+                .unwrap_or(axis.zero_offset_setpoint_a);
         }
         out
     }
@@ -354,6 +724,10 @@ pub struct QualityRecord {
     pub timeout_count: usize,
     pub last_frame_age_ms: u64,
     pub min_frames: usize,
+    #[serde(default)]
+    pub estimated_frames_expected: Option<usize>,
+    #[serde(default)]
+    pub frame_coverage_ratio: Option<f64>,
     pub quality_status: String,
 }
 
@@ -685,6 +1059,94 @@ fn mean(values: &[f64]) -> f64 {
     values.iter().sum::<f64>() / values.len() as f64
 }
 
+fn default_cartesian_order() -> Vec<String> {
+    vec!["x".to_string(), "y".to_string(), "z".to_string()]
+}
+
+fn default_baseline_mode() -> String {
+    "legacy_zero_offset_lock".to_string()
+}
+
+fn validate_cartesian_order(order: &[String]) -> Result<(), RunPlanResolveError> {
+    let expected = default_cartesian_order();
+    if order == expected {
+        Ok(())
+    } else {
+        Err(RunPlanResolveError::InvalidCartesianOrder(order.to_vec()))
+    }
+}
+
+fn validate_axis_values(axes: &CartesianGridAxesNt) -> Result<(), RunPlanResolveError> {
+    if axes.x.is_empty() {
+        return Err(RunPlanResolveError::MissingAxisValues("x"));
+    }
+    if axes.y.is_empty() {
+        return Err(RunPlanResolveError::MissingAxisValues("y"));
+    }
+    if axes.z.is_empty() {
+        return Err(RunPlanResolveError::MissingAxisValues("z"));
+    }
+    Ok(())
+}
+
+fn build_raster_points(axes: &CartesianGridAxesNt) -> Vec<RunPointPlan> {
+    let mut points = Vec::with_capacity(axes.x.len() * axes.y.len() * axes.z.len());
+    let mut next_index = 1_usize;
+
+    for z in &axes.z {
+        for y in &axes.y {
+            for x in &axes.x {
+                points.push(RunPointPlan {
+                    point_id: format!("p{next_index:06}"),
+                    target_b_nt: [*x, *y, *z],
+                    smb_override: None,
+                });
+                next_index += 1;
+            }
+        }
+    }
+
+    points
+}
+
+fn build_bounce_1d_x_points(
+    axes: &CartesianGridAxesNt,
+) -> Result<Vec<RunPointPlan>, RunPlanResolveError> {
+    if axes.y.len() != 1 || axes.z.len() != 1 {
+        return Err(RunPlanResolveError::Bounce1dXRequiresSingletonYZ {
+            y_len: axes.y.len(),
+            z_len: axes.z.len(),
+        });
+    }
+
+    let mut x_values = axes.x.clone();
+    if axes.x.len() > 1 {
+        x_values.extend(axes.x[1..axes.x.len() - 1].iter().rev().copied());
+    }
+
+    let y = axes.y[0];
+    let z = axes.z[0];
+    Ok(x_values
+        .into_iter()
+        .enumerate()
+        .map(|(index, x)| RunPointPlan {
+            point_id: format!("p{:06}", index + 1),
+            target_b_nt: [x, y, z],
+            smb_override: None,
+        })
+        .collect())
+}
+
+fn repeat_points_to_total(base_points: &[RunPointPlan], total_points: usize) -> Vec<RunPointPlan> {
+    let mut resolved = Vec::with_capacity(total_points);
+    for index in 0..total_points {
+        let mut point = base_points[index % base_points.len()].clone();
+        point.point_id = format!("p{:06}", index + 1);
+        resolved.push(point);
+    }
+    resolved
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CollectorCursor {
     pub next_frame_seq: u64,
@@ -762,6 +1224,7 @@ pub fn compute_quality_record(
     frames: &[CollectorFrame],
     thresholds: &RunQualityThresholds,
     timeout_count: usize,
+    estimated_frames_expected: Option<usize>,
 ) -> QualityRecord {
     let frames_total = frames.len();
     let duplicate_count = frames
@@ -778,6 +1241,13 @@ pub fn compute_quality_record(
         .last()
         .map(|frame| segment_end_monotonic_ns.saturating_sub(frame.monotonic_ns) / 1_000_000)
         .unwrap_or(u64::MAX);
+    let frame_coverage_ratio = estimated_frames_expected.map(|expected| {
+        if expected == 0 {
+            0.0
+        } else {
+            frames_total as f64 / expected as f64
+        }
+    });
 
     let quality_status = if frames_total == 0 {
         "failed_no_frames".to_string()
@@ -804,6 +1274,8 @@ pub fn compute_quality_record(
         timeout_count,
         last_frame_age_ms,
         min_frames: thresholds.min_frames,
+        estimated_frames_expected,
+        frame_coverage_ratio,
         quality_status,
     }
 }
@@ -829,6 +1301,27 @@ mod tests {
         }
     }
 
+    fn sample_profile() -> Smb100aRunProfile {
+        Smb100aRunProfile {
+            profile_id: "test".to_string(),
+            command_settle_ms: 500,
+            error_check_after_write: true,
+            fixed: Smb100aFixedProfile {
+                modulation_enabled: true,
+                fm_enabled: true,
+                fm_source: "INT".to_string(),
+                fm_mode: "HDEV".to_string(),
+                fm_deviation_hz: 4.0e6,
+                lf_output_enabled: true,
+                lf_voltage_mv: 137.0,
+                lf_frequency_hz: 500.0,
+                lf_shape: "SQU".to_string(),
+                lf_source_impedance: "LOW".to_string(),
+            },
+            default_sweep: sample_defaults(),
+        }
+    }
+
     #[test]
     fn smb_override_only_changes_whitelisted_fields() {
         let defaults = sample_defaults();
@@ -846,6 +1339,187 @@ mod tests {
     }
 
     #[test]
+    fn sweep_estimate_counts_inclusive_points() {
+        let estimate = sample_defaults().estimate().unwrap();
+        assert_eq!(estimate.sweep_points, 201);
+        assert_eq!(estimate.sweep_duration_ms, 100500);
+    }
+
+    #[test]
+    fn explicit_plan_resolves_without_grid_expansion() {
+        let plan = AcquisitionRunPlan {
+            run_id: "run_explicit".to_string(),
+            operator: "local".to_string(),
+            acquisition_window_ms: 5000,
+            point_settle_ms: 1000,
+            failure_policy: "continue".to_string(),
+            mag_baseline_policy: MagBaselinePolicy {
+                baseline_current_a: [0.0, 0.0, 0.0],
+                settle_ms: 1000,
+                readback_samples: 3,
+                settle_tolerance_a: 0.001,
+                voltage_v: Some(75.0),
+                voltage_protection_v: Some(75.0),
+                output_enabled: true,
+            },
+            quality_thresholds: RunQualityThresholds {
+                min_frames: 1,
+                max_timeout_count: 0,
+                max_duplicate_ratio: 1.0,
+                max_last_frame_age_ms: 1000,
+            },
+            point_source: None,
+            points: vec![RunPointPlan {
+                point_id: "p0001".to_string(),
+                target_b_nt: [1.0, 2.0, 3.0],
+                smb_override: None,
+            }],
+        };
+
+        let resolved = plan.resolve_points(&sample_profile()).unwrap();
+        assert_eq!(resolved.source_kind, PlanSourceKind::ExplicitPoints);
+        assert_eq!(resolved.resolved_point_count, 1);
+        assert_eq!(resolved.points[0].target_b_nt, [1.0, 2.0, 3.0]);
+    }
+
+    #[test]
+    fn cartesian_grid_can_resolve_without_smb_profile() {
+        let plan = AcquisitionRunPlan {
+            run_id: "run_grid_no_smb".to_string(),
+            operator: "local".to_string(),
+            acquisition_window_ms: 0,
+            point_settle_ms: 1000,
+            failure_policy: "continue".to_string(),
+            mag_baseline_policy: sample_cartesian_plan(
+                CartesianGridCycleMode::Bounce1dX,
+                CartesianGridStopCondition::FixedTotalPoints { total_points: 1 },
+            )
+            .mag_baseline_policy,
+            quality_thresholds: RunQualityThresholds {
+                min_frames: 1,
+                max_timeout_count: 0,
+                max_duplicate_ratio: 1.0,
+                max_last_frame_age_ms: 1000,
+            },
+            point_source: Some(PointSource::CartesianGrid {
+                axes_nt: CartesianGridAxesNt {
+                    x: vec![-10.0, 0.0, 10.0],
+                    y: vec![-10.0, 0.0, 10.0],
+                    z: vec![0.0],
+                },
+                order: default_cartesian_order(),
+                cycle_mode: CartesianGridCycleMode::Raster,
+                stop_condition: CartesianGridStopCondition::FixedTotalPoints { total_points: 9 },
+            }),
+            points: Vec::new(),
+        };
+
+        let resolved = plan.resolve_points_without_smb_profile().unwrap();
+        assert_eq!(resolved.source_kind, PlanSourceKind::CartesianGrid);
+        assert_eq!(resolved.declared_point_count, 9);
+        assert_eq!(resolved.resolved_point_count, 9);
+        assert_eq!(resolved.estimated_sweep, None);
+        assert_eq!(
+            resolved.points.first().unwrap().target_b_nt,
+            [-10.0, -10.0, 0.0]
+        );
+        assert_eq!(
+            resolved.points.last().unwrap().target_b_nt,
+            [10.0, 10.0, 0.0]
+        );
+    }
+
+    #[test]
+    fn bounce_1d_x_expansion_repeats_forward_and_backward() {
+        let plan = sample_cartesian_plan(
+            CartesianGridCycleMode::Bounce1dX,
+            CartesianGridStopCondition::FixedTotalPoints { total_points: 6 },
+        );
+        let resolved = plan.resolve_points(&sample_profile()).unwrap();
+        let values = resolved
+            .points
+            .iter()
+            .map(|point| point.target_b_nt[0])
+            .collect::<Vec<_>>();
+        assert_eq!(resolved.source_kind, PlanSourceKind::CartesianGrid);
+        assert_eq!(values, vec![-10.0, 0.0, 10.0, 0.0, -10.0, 0.0]);
+        assert_eq!(resolved.estimated_point_duration_ms, Some(107500));
+    }
+
+    #[test]
+    fn raster_cartesian_expansion_keeps_x_fastest() {
+        let plan = AcquisitionRunPlan {
+            run_id: "run_raster".to_string(),
+            operator: "local".to_string(),
+            acquisition_window_ms: 0,
+            point_settle_ms: 1000,
+            failure_policy: "continue".to_string(),
+            mag_baseline_policy: sample_cartesian_plan(
+                CartesianGridCycleMode::Bounce1dX,
+                CartesianGridStopCondition::FixedTotalPoints { total_points: 1 },
+            )
+            .mag_baseline_policy,
+            quality_thresholds: RunQualityThresholds {
+                min_frames: 1,
+                max_timeout_count: 0,
+                max_duplicate_ratio: 1.0,
+                max_last_frame_age_ms: 1000,
+            },
+            point_source: Some(PointSource::CartesianGrid {
+                axes_nt: CartesianGridAxesNt {
+                    x: vec![1.0, 2.0],
+                    y: vec![10.0, 20.0],
+                    z: vec![100.0],
+                },
+                order: default_cartesian_order(),
+                cycle_mode: CartesianGridCycleMode::Raster,
+                stop_condition: CartesianGridStopCondition::FixedTotalPoints { total_points: 4 },
+            }),
+            points: Vec::new(),
+        };
+
+        let resolved = plan.resolve_points(&sample_profile()).unwrap();
+        let targets = resolved
+            .points
+            .iter()
+            .map(|point| point.target_b_nt)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            targets,
+            vec![
+                [1.0, 10.0, 100.0],
+                [2.0, 10.0, 100.0],
+                [1.0, 20.0, 100.0],
+                [2.0, 20.0, 100.0]
+            ]
+        );
+    }
+
+    #[test]
+    fn bounce_1d_x_rejects_multi_value_y_or_z() {
+        let mut plan = sample_cartesian_plan(
+            CartesianGridCycleMode::Bounce1dX,
+            CartesianGridStopCondition::FixedTotalPoints { total_points: 4 },
+        );
+        plan.point_source = Some(PointSource::CartesianGrid {
+            axes_nt: CartesianGridAxesNt {
+                x: vec![-10.0, 0.0, 10.0],
+                y: vec![0.0, 10.0],
+                z: vec![0.0],
+            },
+            order: default_cartesian_order(),
+            cycle_mode: CartesianGridCycleMode::Bounce1dX,
+            stop_condition: CartesianGridStopCondition::FixedTotalPoints { total_points: 4 },
+        });
+
+        let err = plan.resolve_points(&sample_profile()).unwrap_err();
+        assert!(matches!(
+            err,
+            RunPlanResolveError::Bounce1dXRequiresSingletonYZ { .. }
+        ));
+    }
+
+    #[test]
     fn calibration_maps_target_b_to_target_current() {
         let calibration = CalibrationProfile {
             calibration_id: "diag_1ma_per_nt".to_string(),
@@ -858,6 +1532,58 @@ mod tests {
 
         assert_eq!(delta, [0.01, 0.02, 0.03]);
         assert_eq!(target, [0.11, 0.22, 0.32999999999999996]);
+    }
+
+    #[test]
+    fn baseline_snapshot_prefers_locked_zero_offset_current() {
+        let snapshot = BaselineSnapshot {
+            schema_version: 1,
+            mode: "legacy_zero_offset_lock".to_string(),
+            baseline_locked_at: "1.000Z".to_string(),
+            settle_ms: 1000,
+            readback_samples: 3,
+            settle_tolerance_a: 0.002,
+            axes: vec![
+                BaselineAxisSnapshot {
+                    axis: "mag_x".to_string(),
+                    zero_offset_setpoint_a: 0.0,
+                    zero_offset_measured_samples_a: vec![0.001, 0.0011, 0.0009],
+                    locked_zero_offset_current_a: Some(0.001),
+                },
+                BaselineAxisSnapshot {
+                    axis: "mag_y".to_string(),
+                    zero_offset_setpoint_a: 0.0,
+                    zero_offset_measured_samples_a: vec![0.002, 0.0021, 0.0019],
+                    locked_zero_offset_current_a: Some(0.002),
+                },
+                BaselineAxisSnapshot {
+                    axis: "mag_z".to_string(),
+                    zero_offset_setpoint_a: 0.0,
+                    zero_offset_measured_samples_a: vec![0.003, 0.0031, 0.0029],
+                    locked_zero_offset_current_a: Some(0.003),
+                },
+            ],
+        };
+
+        assert_eq!(snapshot.baseline_current_a(), [0.001, 0.002, 0.003]);
+    }
+
+    #[test]
+    fn laser_run_profile_parses_from_json() {
+        let profile: LaserRunProfile = serde_json::from_str(
+            r#"{
+                "profile_id": "laser_on",
+                "mode": "on_background",
+                "power_mw": 50,
+                "settle_ms": 1000
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(profile.profile_id, "laser_on");
+        assert_eq!(profile.mode, LaserBackgroundMode::OnBackground);
+        assert_eq!(profile.power_mw, 50);
+        assert_eq!(profile.settle_ms, 1000);
     }
 
     #[test]
@@ -883,7 +1609,7 @@ mod tests {
             max_last_frame_age_ms: 100,
         };
 
-        let quality = compute_quality_record("run_1", "p1", "seg1", 10, &[], &thresholds, 0);
+        let quality = compute_quality_record("run_1", "p1", "seg1", 10, &[], &thresholds, 0, None);
         assert_eq!(quality.quality_status, "failed_no_frames");
     }
 
@@ -914,11 +1640,21 @@ mod tests {
             },
         ];
 
-        let quality =
-            compute_quality_record("run_1", "p1", "seg1", 20_000_000, &frames, &thresholds, 0);
+        let quality = compute_quality_record(
+            "run_1",
+            "p1",
+            "seg1",
+            20_000_000,
+            &frames,
+            &thresholds,
+            0,
+            Some(4),
+        );
         assert_eq!(quality.quality_status, "passed");
         assert_eq!(quality.frames_total, 2);
         assert_eq!(quality.frames_unique, 2);
+        assert_eq!(quality.estimated_frames_expected, Some(4));
+        assert_eq!(quality.frame_coverage_ratio, Some(0.5));
     }
 
     #[test]
@@ -983,6 +1719,45 @@ mod tests {
         assert_eq!(record.b_noise_mv.first().copied(), Some(0.25));
         assert_eq!(record.aux_adc1_v.first().copied(), Some(3.1));
         assert_eq!(record.b_pll_locked_ratio, 1.0);
+    }
+
+    fn sample_cartesian_plan(
+        cycle_mode: CartesianGridCycleMode,
+        stop_condition: CartesianGridStopCondition,
+    ) -> AcquisitionRunPlan {
+        AcquisitionRunPlan {
+            run_id: "run_grid".to_string(),
+            operator: "local".to_string(),
+            acquisition_window_ms: 0,
+            point_settle_ms: 500,
+            failure_policy: "continue".to_string(),
+            mag_baseline_policy: MagBaselinePolicy {
+                baseline_current_a: [0.0, 0.0, 0.0],
+                settle_ms: 1000,
+                readback_samples: 3,
+                settle_tolerance_a: 0.001,
+                voltage_v: Some(75.0),
+                voltage_protection_v: Some(75.0),
+                output_enabled: true,
+            },
+            quality_thresholds: RunQualityThresholds {
+                min_frames: 1,
+                max_timeout_count: 0,
+                max_duplicate_ratio: 1.0,
+                max_last_frame_age_ms: 1000,
+            },
+            point_source: Some(PointSource::CartesianGrid {
+                axes_nt: CartesianGridAxesNt {
+                    x: vec![-10.0, 0.0, 10.0],
+                    y: vec![0.0],
+                    z: vec![0.0],
+                },
+                order: default_cartesian_order(),
+                cycle_mode,
+                stop_condition,
+            }),
+            points: Vec::new(),
+        }
     }
 
     fn write_f64(bytes: &mut [u8], offset: usize, value: f64) {

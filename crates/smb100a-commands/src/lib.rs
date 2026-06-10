@@ -60,6 +60,11 @@ pub fn smb100a_query_frequency() -> &'static str {
     "FREQ?"
 }
 
+/// `FREQ:MODE?`：查询当前 RF 频率模式。
+pub fn smb100a_query_frequency_mode() -> &'static str {
+    "FREQ:MODE?"
+}
+
 /// `POW <value>dBm`：设置 RF 功率，内部统一用 dBm。
 pub fn smb100a_set_power_dbm(dbm: f64) -> String {
     format!("POW {dbm}dBm")
@@ -247,6 +252,7 @@ mod tests {
         assert_eq!(smb100a_set_frequency_hz(2.87e9), "FREQ 2870000000");
         assert_eq!(smb100a_set_frequency_mode("CW"), "FREQ:MODE CW");
         assert_eq!(smb100a_set_frequency_mode("SWE"), "FREQ:MODE SWE");
+        assert_eq!(smb100a_query_frequency_mode(), "FREQ:MODE?");
         assert_eq!(smb100a_set_power_dbm(-30.0), "POW -30dBm");
     }
 
