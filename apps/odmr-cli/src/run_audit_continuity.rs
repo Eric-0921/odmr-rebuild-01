@@ -3,13 +3,15 @@
 //! 这条命令只读取已落盘 artifact，不参与实时链路。
 //! 当前目标很收敛：
 //! - 基于 `segments.jsonl` 按 segment 审计连续性
-//! - 读取 `raw/oe1022d.frames.parsed.jsonl` 的 RALL 字段
+//! - 优先读取 `raw/oe1022d.frames.parsed.jsonl`，否则从 `raw + frames.idx` 现算 RALL 字段
 //! - 利用 B 通道 X/Y/Freq 字段和帧间时间戳判断是否存在疑似漏窗
 
-use acquisition_runtime::{ParsedFrameRecord, SegmentRecord};
+use acquisition_runtime::{
+    parse_rall_frame_full, FrameIndexRecord, ParsedFrameRecord, SegmentRecord,
+};
 use serde::Serialize;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 const DEFAULT_FRAME_GAP_MS: f64 = 50.0;
@@ -22,12 +24,15 @@ const B_FREQ_INDEX: usize = 10;
 
 pub fn run_audit_continuity(run_dir: &Path, out_path: Option<&Path>) -> Result<PathBuf, String> {
     let parsed_path = run_dir.join("raw/oe1022d.frames.parsed.jsonl");
+    let raw_path = run_dir.join("raw/oe1022d.rall");
+    let index_path = run_dir.join("raw/oe1022d.frames.idx.jsonl");
     let segments_path = run_dir.join("segments.jsonl");
     let out_path = out_path
         .map(Path::to_path_buf)
         .unwrap_or_else(|| run_dir.join("continuity_audit.json"));
 
-    let frames: Vec<ParsedFrameRecord> = read_jsonl(&parsed_path)?;
+    let (frames, parsed_frames_file) =
+        load_parsed_frames(run_dir, &parsed_path, &raw_path, &index_path)?;
     let segments: Vec<SegmentRecord> = read_jsonl(&segments_path)?;
 
     let mut segment_reports = Vec::new();
@@ -73,7 +78,7 @@ pub fn run_audit_continuity(run_dir: &Path, out_path: Option<&Path>) -> Result<P
     let report = ContinuityAuditReport {
         schema_version: 1,
         run_dir: run_dir.display().to_string(),
-        parsed_frames_file: path_relative_to(run_dir, &parsed_path),
+        parsed_frames_file,
         segments_file: path_relative_to(run_dir, &segments_path),
         frames_total: frames.len(),
         frames_usable,
@@ -349,6 +354,61 @@ fn read_jsonl<T: serde::de::DeserializeOwned>(path: &Path) -> Result<Vec<T>, Str
         records.push(record);
     }
     Ok(records)
+}
+
+fn load_parsed_frames(
+    run_dir: &Path,
+    parsed_path: &Path,
+    raw_path: &Path,
+    index_path: &Path,
+) -> Result<(Vec<ParsedFrameRecord>, String), String> {
+    if parsed_path.exists() {
+        return Ok((
+            read_jsonl(parsed_path)?,
+            path_relative_to(run_dir, parsed_path),
+        ));
+    }
+
+    let index: Vec<FrameIndexRecord> = read_jsonl(index_path)?;
+    let mut raw_file = File::open(raw_path)
+        .map_err(|err| format!("无法打开 raw 文件 {}: {err}", raw_path.display()))?;
+    let mut frames = Vec::with_capacity(index.len());
+
+    for record in index {
+        let mut payload = vec![0_u8; record.raw_len];
+        raw_file
+            .seek(SeekFrom::Start(record.raw_offset))
+            .map_err(|err| format!("raw seek 失败 offset={}: {err}", record.raw_offset))?;
+        raw_file
+            .read_exact(&mut payload)
+            .map_err(|err| format!("raw 读取失败 frame_seq={}: {err}", record.frame_seq))?;
+        let parsed = parse_rall_frame_full(&payload).map_err(|err| {
+            format!(
+                "从 raw 重建 parsed frame 失败 frame_seq={}: {err}",
+                record.frame_seq
+            )
+        })?;
+        frames.push(ParsedFrameRecord {
+            frame_seq: record.frame_seq,
+            ts: record.ts,
+            monotonic_ns: record.monotonic_ns,
+            raw_offset: record.raw_offset,
+            raw_len: record.raw_len,
+            transport_status: "payload_committed".to_string(),
+            parse_status: record.parse_status,
+            duplicate_hint: record.duplicate_of,
+            ..parsed
+        });
+    }
+
+    Ok((
+        frames,
+        format!(
+            "{} (derived_from_raw + {})",
+            path_relative_to(run_dir, raw_path),
+            path_relative_to(run_dir, index_path)
+        ),
+    ))
 }
 
 #[derive(Debug, Serialize)]

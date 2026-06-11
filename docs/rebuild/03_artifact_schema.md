@@ -16,12 +16,14 @@ runs/<run_id>/
   events.jsonl
   points.jsonl
   point_fields.jsonl
+  point_fields/
+    seg_<point_id>_0000.npz
   segments.jsonl
   quality.jsonl
   raw/
     oe1022d.rall
     oe1022d.frames.idx.jsonl
-    oe1022d.frames.parsed.jsonl
+    oe1022d.frames.parsed.jsonl   # 仅 debug artifact mode
   summary.json
 ```
 
@@ -96,7 +98,8 @@ runs/<run_id>/
 
 ## raw/oe1022d.frames.parsed.jsonl
 
-这是 `raw/oe1022d.rall` 的运行时结构化 companion truth，不替代 raw。
+这是 `raw/oe1022d.rall` 的运行时结构化 companion truth，不替代 raw。  
+当前它不再是默认 artifact，而是 `run execute --artifact-mode debug` 才会额外写出的重型调试产物。
 
 每行至少包含：
 
@@ -122,8 +125,8 @@ runs/<run_id>/
 当前工程结论：
 
 - `raw + frames.idx + segments` 仍是 point 真值层
-- `frames.parsed` 负责把每帧按手册表格直接整理成结构化 sidecar
-- point 聚合和离线 replay 都应优先复用这份 sidecar，而不是重复裸解析 raw
+- `frames.parsed` 负责把每帧按手册表格直接整理成结构化 debug sidecar
+- 默认轻量模式下，point 聚合和 continuity audit 直接从 `raw + frames.idx` 现算，不依赖 `frames.parsed`
 
 ## plan_snapshot.json
 
@@ -212,7 +215,7 @@ point record 不保存 raw 数据本体，只保存该点的上下文。
 
 ## point_fields.jsonl
 
-每个 point 一行，表达 point 窗口里已经解析出的最小字段级数据：
+每个 point 一行，表达 point 窗口里已经解析出的轻量 metadata：
 
 ```json
 {
@@ -222,39 +225,61 @@ point record 不保存 raw 数据本体，只保存该点的上下文。
   "segment_id": "seg_p0001_0000",
   "frames_parsed": 104,
   "samples_total": 5200,
+  "samples_per_frame": 50,
   "matrix_shape": [20, 5200],
   "measurement_field_order": [
     "A-X", "A-Y", "A-Freq", "A-Noise", "A-Xh1", "A-Yh1", "A-Xh2", "A-Yh2",
     "B-X", "B-Y", "B-Freq", "B-Noise", "B-Xh1", "B-Yh1", "B-Xh2", "B-Yh2",
     "AUXADC1", "AUXADC2", "AUXADC3", "AUXADC4"
   ],
-  "b_x_mv": [0.000000081, 0.000000079],
-  "b_y_mv": [0.000000004, 0.000000005],
-  "b_freq_hz": [499.9991, 499.9989],
-  "b_noise_mv": [0.000000067, 0.000000068],
-  "aux_adc1_v": [0.0026, 0.0027],
-  "b_x_mean_mv": 0.000000017,
-  "b_freq_mean_hz": 499.9990,
+  "measurement_field_keys": [
+    "a_x", "a_y", "a_freq", "a_noise", "a_xh1", "a_yh1", "a_xh2", "a_yh2",
+    "b_x", "b_y", "b_freq", "b_noise", "b_xh1", "b_yh1", "b_xh2", "b_yh2",
+    "auxadc1", "auxadc2", "auxadc3", "auxadc4"
+  ],
+  "field_summaries": [
+    { "field_name": "B-X", "npz_key": "b_x", "mean": 0.000000017 },
+    { "field_name": "B-Freq", "npz_key": "b_freq", "mean": 499.9990 }
+  ],
   "b_pll_locked_ratio": 1.0,
   "b_input_overload_ratio": 0.0,
   "b_gain_overload_ratio": 0.0,
   "last_b_ref_source_code": 0,
   "last_b_ref_slope_code": 2,
-  "last_b_ref_current_freq_hz": 499.9990
+  "last_b_ref_current_freq_hz": 499.9990,
+  "sidecar": {
+    "format": "npz",
+    "schema_version": 1,
+    "relative_path": "point_fields/seg_p0001_0000.npz",
+    "measurement_field_keys": ["a_x", "a_y", "a_freq", "a_noise"],
+    "status_keys": [
+      "frame_seq",
+      "duplicate_hint",
+      "b_ref_source_code",
+      "b_ref_slope_code",
+      "b_ref_current_freq_hz",
+      "b_input_overload",
+      "b_gain_overload",
+      "b_pll_locked"
+    ]
+  }
 }
 ```
 
-这不是完整科学分析，只是 point 级最小字段产物。最终事实层是：
+这不是完整科学分析，只是 point 级轻量 metadata。  
+完整 20 字段数组和必要状态数组默认进入每个 point 的 `NPZ` sidecar。
+
+最终事实层是：
 
 - `raw/oe1022d.rall`
 - `raw/oe1022d.frames.idx.jsonl`
 - `segments.jsonl`
 
-当前已观察到的现实问题：
+当前默认策略：
 
-- 直接把完整字段数组写进 `point_fields.jsonl`，体积会很快膨胀
-- `manual_live_v5` 仅 `3` 个 point，`point_fields.jsonl` 已约 `2.2 MB`
-- 因此这份 artifact 目前只能视为“字段级验证基线”，不能直接原样沿用到长时 run
+- 默认不再把完整数组内联进 `point_fields.jsonl`
+- 默认不再写 `frames.parsed`
+- 长时 run 目录大小主要由 `raw/oe1022d.rall` 决定，而不是 JSON sidecar
 
 ## segments.jsonl
 

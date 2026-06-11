@@ -975,24 +975,11 @@ pub struct PointFieldRecord {
     pub segment_id: String,
     pub frames_parsed: usize,
     pub samples_total: usize,
+    pub samples_per_frame: usize,
     pub matrix_shape: [usize; 2],
     pub measurement_field_order: Vec<String>,
-    pub b_x_mv: Vec<f64>,
-    pub b_y_mv: Vec<f64>,
-    pub b_freq_hz: Vec<f64>,
-    pub b_noise_mv: Vec<f64>,
-    pub aux_adc1_v: Vec<f64>,
-    pub aux_adc2_v: Vec<f64>,
-    pub aux_adc3_v: Vec<f64>,
-    pub aux_adc4_v: Vec<f64>,
-    pub b_x_mean_mv: f64,
-    pub b_y_mean_mv: f64,
-    pub b_freq_mean_hz: f64,
-    pub b_noise_mean_mv: f64,
-    pub aux_adc1_mean_v: f64,
-    pub aux_adc2_mean_v: f64,
-    pub aux_adc3_mean_v: f64,
-    pub aux_adc4_mean_v: f64,
+    pub measurement_field_keys: Vec<String>,
+    pub field_summaries: Vec<PointFieldSummaryRecord>,
     pub b_pll_locked_frames: usize,
     pub b_pll_locked_ratio: f64,
     pub b_input_overload_frames: usize,
@@ -1005,6 +992,47 @@ pub struct PointFieldRecord {
     pub last_b_ref_slope_code: Option<u8>,
     #[serde(default)]
     pub last_b_ref_current_freq_hz: Option<f64>,
+    pub sidecar: PointFieldSidecarRef,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PointFieldSummaryRecord {
+    pub field_name: String,
+    pub npz_key: String,
+    pub mean: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PointFieldSidecarRef {
+    pub format: String,
+    pub schema_version: u32,
+    pub relative_path: String,
+    pub measurement_field_keys: Vec<String>,
+    pub status_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PointFieldSidecarData {
+    pub schema_version: u32,
+    pub matrix_shape: [usize; 2],
+    pub samples_per_frame: usize,
+    pub measurement_field_order: Vec<String>,
+    pub measurement_field_keys: Vec<String>,
+    pub measurement_fields: Vec<Vec<f64>>,
+    pub frame_seq: Vec<u64>,
+    pub duplicate_hint: Vec<i64>,
+    pub b_ref_source_code: Vec<i16>,
+    pub b_ref_slope_code: Vec<i16>,
+    pub b_ref_current_freq_hz: Vec<f64>,
+    pub b_input_overload: Vec<i8>,
+    pub b_gain_overload: Vec<i8>,
+    pub b_pll_locked: Vec<i8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PointFieldBundle {
+    pub metadata: PointFieldRecord,
+    pub sidecar: PointFieldSidecarData,
 }
 
 impl CollectorFrame {
@@ -1160,12 +1188,13 @@ pub fn build_parsed_frame_record(
     }
 }
 
-pub fn build_point_field_record(
+pub fn build_point_field_bundle(
     run_id: &str,
     point_id: &str,
     segment_id: &str,
+    sidecar_relative_path: &str,
     frames: &[CollectorFrame],
-) -> Result<PointFieldRecord, MinimalRallParseError> {
+) -> Result<PointFieldBundle, MinimalRallParseError> {
     let parsed_frames = frames
         .iter()
         .map(|frame| {
@@ -1179,26 +1208,42 @@ pub fn build_point_field_record(
             Ok(parsed)
         })
         .collect::<Result<Vec<_>, MinimalRallParseError>>()?;
-    build_point_field_record_from_parsed(run_id, point_id, segment_id, &parsed_frames)
+    build_point_field_bundle_from_parsed(
+        run_id,
+        point_id,
+        segment_id,
+        sidecar_relative_path,
+        &parsed_frames,
+    )
 }
 
-pub fn build_point_field_record_from_parsed(
+pub fn build_point_field_bundle_from_parsed(
     run_id: &str,
     point_id: &str,
     segment_id: &str,
+    sidecar_relative_path: &str,
     frames: &[ParsedFrameRecord],
-) -> Result<PointFieldRecord, MinimalRallParseError> {
-    let mut b_x_mv = Vec::new();
-    let mut b_y_mv = Vec::new();
-    let mut b_freq_hz = Vec::new();
-    let mut b_noise_mv = Vec::new();
-    let mut aux_adc1_v = Vec::new();
-    let mut aux_adc2_v = Vec::new();
-    let mut aux_adc3_v = Vec::new();
-    let mut aux_adc4_v = Vec::new();
+) -> Result<PointFieldBundle, MinimalRallParseError> {
+    let measurement_field_order = RALL_FIELD_ORDER
+        .iter()
+        .map(|name| (*name).to_string())
+        .collect::<Vec<_>>();
+    let measurement_field_keys = measurement_field_order
+        .iter()
+        .map(|name| point_field_npz_key(name))
+        .collect::<Vec<_>>();
+    let mut measurement_fields = vec![Vec::new(); RALL_PARAM_COUNT];
     let mut pll_locked_frames = 0_usize;
     let mut input_overload_frames = 0_usize;
     let mut gain_overload_frames = 0_usize;
+    let mut frame_seq = Vec::with_capacity(frames.len());
+    let mut duplicate_hint = Vec::with_capacity(frames.len());
+    let mut b_ref_source_code = Vec::with_capacity(frames.len());
+    let mut b_ref_slope_code = Vec::with_capacity(frames.len());
+    let mut b_ref_current_freq_hz = Vec::with_capacity(frames.len());
+    let mut b_input_overload = Vec::with_capacity(frames.len());
+    let mut b_gain_overload = Vec::with_capacity(frames.len());
+    let mut b_pll_locked = Vec::with_capacity(frames.len());
     let mut last_status = MinimalRallStatus {
         b_ref_source_code: None,
         b_ref_slope_code: None,
@@ -1212,6 +1257,13 @@ pub fn build_point_field_record_from_parsed(
         let matrix = frame.measurement_matrix.as_ref().ok_or_else(|| {
             MinimalRallParseError::LayoutSpec("parsed frame 缺少 measurement_matrix".to_string())
         })?;
+        if matrix.len() != RALL_PARAM_COUNT {
+            return Err(MinimalRallParseError::LayoutSpec(format!(
+                "parsed frame measurement_matrix 行数错误: expected={}, actual={}",
+                RALL_PARAM_COUNT,
+                matrix.len()
+            )));
+        }
         last_status = MinimalRallStatus {
             b_ref_source_code: frame.b_ref_source_code,
             b_ref_slope_code: frame.b_ref_slope_code,
@@ -1220,14 +1272,17 @@ pub fn build_point_field_record_from_parsed(
             b_gain_overload: frame.b_gain_overload,
             b_pll_locked: frame.b_pll_locked,
         };
-        b_x_mv.extend_from_slice(&matrix[8]);
-        b_y_mv.extend_from_slice(&matrix[9]);
-        b_freq_hz.extend_from_slice(&matrix[10]);
-        b_noise_mv.extend_from_slice(&matrix[11]);
-        aux_adc1_v.extend_from_slice(&matrix[16]);
-        aux_adc2_v.extend_from_slice(&matrix[17]);
-        aux_adc3_v.extend_from_slice(&matrix[18]);
-        aux_adc4_v.extend_from_slice(&matrix[19]);
+        for (field_index, samples) in matrix.iter().enumerate() {
+            measurement_fields[field_index].extend_from_slice(samples);
+        }
+        frame_seq.push(frame.frame_seq);
+        duplicate_hint.push(frame.duplicate_hint.map(|value| value as i64).unwrap_or(-1));
+        b_ref_source_code.push(frame.b_ref_source_code.map(i16::from).unwrap_or(-1));
+        b_ref_slope_code.push(frame.b_ref_slope_code.map(i16::from).unwrap_or(-1));
+        b_ref_current_freq_hz.push(frame.b_ref_current_freq_hz.unwrap_or(f64::NAN));
+        b_input_overload.push(option_bool_to_i8(frame.b_input_overload));
+        b_gain_overload.push(option_bool_to_i8(frame.b_gain_overload));
+        b_pll_locked.push(option_bool_to_i8(frame.b_pll_locked));
         if frame.b_pll_locked.unwrap_or(false) {
             pll_locked_frames += 1;
         }
@@ -1249,43 +1304,73 @@ pub fn build_point_field_record_from_parsed(
         }
     };
 
-    Ok(PointFieldRecord {
+    let field_summaries = measurement_field_order
+        .iter()
+        .zip(measurement_field_keys.iter())
+        .zip(measurement_fields.iter())
+        .map(|((field_name, npz_key), values)| PointFieldSummaryRecord {
+            field_name: field_name.clone(),
+            npz_key: npz_key.clone(),
+            mean: mean(values),
+        })
+        .collect::<Vec<_>>();
+    let sidecar = PointFieldSidecarRef {
+        format: "npz".to_string(),
         schema_version: 1,
-        run_id: run_id.to_string(),
-        point_id: point_id.to_string(),
-        segment_id: segment_id.to_string(),
-        frames_parsed,
-        samples_total,
-        matrix_shape: [RALL_PARAM_COUNT, samples_total],
-        measurement_field_order: RALL_FIELD_ORDER
-            .iter()
-            .map(|name| (*name).to_string())
-            .collect(),
-        b_x_mv: b_x_mv.clone(),
-        b_y_mv: b_y_mv.clone(),
-        b_freq_hz: b_freq_hz.clone(),
-        b_noise_mv: b_noise_mv.clone(),
-        aux_adc1_v: aux_adc1_v.clone(),
-        aux_adc2_v: aux_adc2_v.clone(),
-        aux_adc3_v: aux_adc3_v.clone(),
-        aux_adc4_v: aux_adc4_v.clone(),
-        b_x_mean_mv: mean(&b_x_mv),
-        b_y_mean_mv: mean(&b_y_mv),
-        b_freq_mean_hz: mean(&b_freq_hz),
-        b_noise_mean_mv: mean(&b_noise_mv),
-        aux_adc1_mean_v: mean(&aux_adc1_v),
-        aux_adc2_mean_v: mean(&aux_adc2_v),
-        aux_adc3_mean_v: mean(&aux_adc3_v),
-        aux_adc4_mean_v: mean(&aux_adc4_v),
-        b_pll_locked_frames: pll_locked_frames,
-        b_pll_locked_ratio: ratio(pll_locked_frames),
-        b_input_overload_frames: input_overload_frames,
-        b_input_overload_ratio: ratio(input_overload_frames),
-        b_gain_overload_frames: gain_overload_frames,
-        b_gain_overload_ratio: ratio(gain_overload_frames),
-        last_b_ref_source_code: last_status.b_ref_source_code,
-        last_b_ref_slope_code: last_status.b_ref_slope_code,
-        last_b_ref_current_freq_hz: last_status.b_ref_current_freq_hz,
+        relative_path: sidecar_relative_path.to_string(),
+        measurement_field_keys: measurement_field_keys.clone(),
+        status_keys: vec![
+            "frame_seq".to_string(),
+            "duplicate_hint".to_string(),
+            "b_ref_source_code".to_string(),
+            "b_ref_slope_code".to_string(),
+            "b_ref_current_freq_hz".to_string(),
+            "b_input_overload".to_string(),
+            "b_gain_overload".to_string(),
+            "b_pll_locked".to_string(),
+        ],
+    };
+
+    Ok(PointFieldBundle {
+        metadata: PointFieldRecord {
+            schema_version: 1,
+            run_id: run_id.to_string(),
+            point_id: point_id.to_string(),
+            segment_id: segment_id.to_string(),
+            frames_parsed,
+            samples_total,
+            samples_per_frame: RALL_SAMPLE_COUNT,
+            matrix_shape: [RALL_PARAM_COUNT, samples_total],
+            measurement_field_order: measurement_field_order.clone(),
+            measurement_field_keys: measurement_field_keys.clone(),
+            field_summaries,
+            b_pll_locked_frames: pll_locked_frames,
+            b_pll_locked_ratio: ratio(pll_locked_frames),
+            b_input_overload_frames: input_overload_frames,
+            b_input_overload_ratio: ratio(input_overload_frames),
+            b_gain_overload_frames: gain_overload_frames,
+            b_gain_overload_ratio: ratio(gain_overload_frames),
+            last_b_ref_source_code: last_status.b_ref_source_code,
+            last_b_ref_slope_code: last_status.b_ref_slope_code,
+            last_b_ref_current_freq_hz: last_status.b_ref_current_freq_hz,
+            sidecar: sidecar.clone(),
+        },
+        sidecar: PointFieldSidecarData {
+            schema_version: 1,
+            matrix_shape: [RALL_PARAM_COUNT, samples_total],
+            samples_per_frame: RALL_SAMPLE_COUNT,
+            measurement_field_order,
+            measurement_field_keys,
+            measurement_fields,
+            frame_seq,
+            duplicate_hint,
+            b_ref_source_code,
+            b_ref_slope_code,
+            b_ref_current_freq_hz,
+            b_input_overload,
+            b_gain_overload,
+            b_pll_locked,
+        },
     })
 }
 
@@ -1302,6 +1387,24 @@ fn mean(values: &[f64]) -> f64 {
         return 0.0;
     }
     values.iter().sum::<f64>() / values.len() as f64
+}
+
+fn point_field_npz_key(field_name: &str) -> String {
+    field_name
+        .chars()
+        .map(|ch| match ch {
+            '-' => '_',
+            other => other.to_ascii_lowercase(),
+        })
+        .collect()
+}
+
+fn option_bool_to_i8(value: Option<bool>) -> i8 {
+    match value {
+        Some(true) => 1,
+        Some(false) => 0,
+        None => -1,
+    }
 }
 
 pub fn rall_layout_spec() -> Result<&'static RallLayoutSpec, MinimalRallParseError> {
@@ -2331,7 +2434,7 @@ mod tests {
     }
 
     #[test]
-    fn point_field_record_aggregates_selected_fields() {
+    fn point_field_bundle_aggregates_all_fields_and_sidecar_contract() {
         let mut payload = vec![0_u8; RALL_FRAME_BYTES];
         write_f64(&mut payload, 8 * RALL_PARAM_BLOCK_BYTES, 1.5);
         write_f64(&mut payload, 9 * RALL_PARAM_BLOCK_BYTES, 2.5);
@@ -2349,17 +2452,40 @@ mod tests {
             duplicate_of: None,
         }];
 
-        let record = build_point_field_record("run_1", "p1", "seg1", &frames).unwrap();
+        let bundle =
+            build_point_field_bundle("run_1", "p1", "seg1", "point_fields/seg1.npz", &frames)
+                .unwrap();
+        let record = bundle.metadata;
 
         assert_eq!(record.frames_parsed, 1);
         assert_eq!(record.samples_total, 50);
+        assert_eq!(record.samples_per_frame, 50);
         assert_eq!(record.matrix_shape, [20, 50]);
-        assert_eq!(record.b_x_mv.first().copied(), Some(1.5));
-        assert_eq!(record.b_y_mv.first().copied(), Some(2.5));
-        assert_eq!(record.b_freq_hz.first().copied(), Some(500.0));
-        assert_eq!(record.b_noise_mv.first().copied(), Some(0.25));
-        assert_eq!(record.aux_adc1_v.first().copied(), Some(3.1));
+        assert_eq!(record.sidecar.relative_path, "point_fields/seg1.npz");
+        assert_eq!(record.field_summaries.len(), 20);
+        assert_eq!(record.field_summaries[8].field_name, "B-X");
+        assert_eq!(record.field_summaries[8].npz_key, "b_x");
+        assert_eq!(record.field_summaries[8].mean, 0.03);
+        assert_eq!(record.field_summaries[10].mean, 10.0);
         assert_eq!(record.b_pll_locked_ratio, 1.0);
+        assert_eq!(bundle.sidecar.measurement_field_keys[8], "b_x");
+        assert_eq!(
+            bundle.sidecar.measurement_fields[8].first().copied(),
+            Some(1.5)
+        );
+        assert_eq!(
+            bundle.sidecar.measurement_fields[9].first().copied(),
+            Some(2.5)
+        );
+        assert_eq!(
+            bundle.sidecar.measurement_fields[10].first().copied(),
+            Some(500.0)
+        );
+        assert_eq!(
+            bundle.sidecar.measurement_fields[16].first().copied(),
+            Some(3.1)
+        );
+        assert_eq!(bundle.sidecar.b_pll_locked, vec![1]);
     }
 
     fn sample_cartesian_plan(

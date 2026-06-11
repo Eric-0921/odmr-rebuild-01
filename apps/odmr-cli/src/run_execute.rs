@@ -9,18 +9,20 @@
 //! - 写出第一版 run artifact
 
 use acquisition_runtime::{
-    build_parsed_frame_record, build_point_field_record_from_parsed, compute_quality_record,
+    build_parsed_frame_record, build_point_field_bundle, compute_quality_record,
     parse_rall_frame_full, AcquisitionRunPlan, BaselineAxisSnapshot, BaselineSnapshot,
     CalibrationProfile, CollectorConfig, CollectorCursor, CollectorFrame, EventRecord,
     FrameIndexRecord, FrameRingBuffer, LaserBackgroundMode, LaserRunProfile, Oe1022dRunProfile,
-    ParsedFrameRecord, PlanSnapshot, PointRecord, ResolvedRunPlan, ResolvedSmbSweep, RunManifest,
-    SegmentRecord, SettleRecord, Smb100aRunProfile, SummaryRecord,
+    ParsedFrameRecord, PlanSnapshot, PointFieldSidecarData, PointRecord, ResolvedRunPlan,
+    ResolvedSmbSweep, RunManifest, SegmentRecord, SettleRecord, Smb100aRunProfile, SummaryRecord,
 };
 use chrono::{DateTime, Local};
 use cni_laser_transport::{CniLaserTransport, CniLaserTransportConfig};
 use device_transport::TransportError;
 use m8812_commands::{m8812_set_voltage_protection_v, m8812_set_voltage_v};
 use m8812_transport::{M8812Transport, M8812TransportConfig};
+use ndarray::Array1;
+use ndarray_npy::NpzWriter;
 use oe1022d_commands::{
     oe1022d_set_dynamic_reserve, oe1022d_set_filter_slope, oe1022d_set_harmonic,
     oe1022d_set_input_coupling, oe1022d_set_input_grounding, oe1022d_set_input_source,
@@ -70,6 +72,25 @@ const USER_INTERRUPTED: &str = "用户中断";
 const COLLECTOR_COMMIT_SYNC_TIMEOUT_MS: u64 = 2_000;
 
 static RUN_INTERRUPT_FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunArtifactMode {
+    Lightweight,
+    Debug,
+}
+
+impl RunArtifactMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Lightweight => "lightweight",
+            Self::Debug => "debug",
+        }
+    }
+
+    fn writes_frames_parsed(self) -> bool {
+        matches!(self, Self::Debug)
+    }
+}
 
 fn run_interrupt_flag() -> Result<Arc<AtomicBool>, String> {
     if let Some(flag) = RUN_INTERRUPT_FLAG.get() {
@@ -145,6 +166,7 @@ pub fn run_execute(
     oe_profile_path: &Path,
     laser_profile_path: &Path,
     out_dir: Option<&Path>,
+    artifact_mode: RunArtifactMode,
 ) -> Result<PathBuf, String> {
     let interrupt_flag = run_interrupt_flag()?;
     interrupt_flag.store(false, Ordering::SeqCst);
@@ -167,6 +189,8 @@ pub fn run_execute(
     let target_dir = resolve_run_output_dir(&plan.run_id, out_dir);
     fs::create_dir_all(target_dir.join("raw"))
         .map_err(|err| format!("无法创建 run 输出目录 {}: {err}", target_dir.display()))?;
+    fs::create_dir_all(target_dir.join("point_fields"))
+        .map_err(|err| format!("无法创建 point_fields 目录 {}: {err}", target_dir.display()))?;
     print_stage(&format!(
         "打开 run: {} -> {}",
         plan.run_id,
@@ -324,7 +348,9 @@ pub fn run_execute(
     let collector_artifacts = CollectorArtifactPaths {
         raw_path: raw_dir.join("oe1022d.rall"),
         index_path: raw_dir.join("oe1022d.frames.idx.jsonl"),
-        parsed_path: raw_dir.join("oe1022d.frames.parsed.jsonl"),
+        parsed_path: artifact_mode
+            .writes_frames_parsed()
+            .then(|| raw_dir.join("oe1022d.frames.parsed.jsonl")),
     };
     let mut collector = CollectorHandle::start(
         oe_device,
@@ -336,10 +362,9 @@ pub fn run_execute(
     let CollectorArtifactPaths {
         raw_path,
         index_path,
-        parsed_path,
+        ..
     } = &collector_artifacts;
     let mut raw_replay = RawReplayReader::open(raw_path, index_path)?;
-    let mut parsed_replay = ParsedReplayReader::open(parsed_path)?;
     append_event(
         &mut events_file,
         &start_instant,
@@ -352,15 +377,18 @@ pub fn run_execute(
             "poll_interval_ms": effective_collector_config.poll_interval_ms,
             "ring_capacity_frames": effective_collector_config.ring_capacity_frames,
             "estimated_frames_max": ring_capacity_plan.estimated_frames_max,
-            "guard_frames": ring_capacity_plan.guard_frames
+            "guard_frames": ring_capacity_plan.guard_frames,
+            "artifact_mode": artifact_mode.as_str(),
+            "frames_parsed_enabled": artifact_mode.writes_frames_parsed()
         }),
     )?;
     print_stage(&format!(
-        "collector 已启动: poll_interval_ms={}, ring_capacity_frames={}, estimated_frames_max={}, guard_frames={}",
+        "collector 已启动: poll_interval_ms={}, ring_capacity_frames={}, estimated_frames_max={}, guard_frames={}, artifact_mode={}",
         effective_collector_config.poll_interval_ms,
         effective_collector_config.ring_capacity_frames,
         ring_capacity_plan.estimated_frames_max,
-        ring_capacity_plan.guard_frames
+        ring_capacity_plan.guard_frames,
+        artifact_mode.as_str()
     ));
 
     let baseline_current_a = baseline_snapshot.baseline_current_a();
@@ -415,13 +443,13 @@ pub fn run_execute(
             &mut mag_axes,
             &mut collector,
             &mut raw_replay,
-            &mut parsed_replay,
             &mut events_file,
             &mut points_file,
             &mut segments_file,
             &mut quality_file,
             &mut point_fields_file,
             &start_instant,
+            &target_dir,
             &resolved_plan,
             &eta_summary,
             effective_collector_config.poll_interval_ms,
@@ -429,6 +457,7 @@ pub fn run_execute(
             calibrated_delta_current_a,
             target_current_a,
             point,
+            artifact_mode,
             Arc::clone(&interrupt_flag),
         );
         collector.set_active_point(None)?;
@@ -660,13 +689,13 @@ fn execute_point(
     mag_axes: &mut [MagAxisHandle],
     collector: &mut CollectorHandle,
     raw_replay: &mut RawReplayReader,
-    parsed_replay: &mut ParsedReplayReader,
     events_file: &mut File,
     points_file: &mut File,
     segments_file: &mut File,
     quality_file: &mut File,
     point_fields_file: &mut File,
     start_instant: &Instant,
+    run_dir: &Path,
     resolved_plan: &ResolvedRunPlan,
     _eta_summary: &RunEtaSummary,
     collector_poll_interval_ms: u64,
@@ -674,6 +703,7 @@ fn execute_point(
     calibrated_delta_current_a: [f64; 3],
     target_current_a: [f64; 3],
     point: &acquisition_runtime::RunPointPlan,
+    artifact_mode: RunArtifactMode,
     interrupt_flag: Arc<AtomicBool>,
 ) -> Result<PointExecutionOutcome, String> {
     collector.drain_diag_events(events_file)?;
@@ -808,16 +838,22 @@ fn execute_point(
     };
     append_jsonl(segments_file, &segment)?;
     let frames = raw_replay.replay_segment(&segment)?;
-    let parsed_frames = parsed_replay.replay_segment(&segment)?;
-
-    let point_fields = build_point_field_record_from_parsed(
+    let point_fields_relative_path = point_fields_sidecar_relative_path(&segment_id);
+    let point_fields_bundle = build_point_field_bundle(
         &plan.run_id,
         &point.point_id,
         &segment_id,
-        &parsed_frames,
+        &point_fields_relative_path,
+        &frames,
     )
     .map_err(|err| format!("RALL point 字段解析失败: {err}"))?;
-    append_jsonl(point_fields_file, &point_fields)?;
+    write_point_fields_sidecar_npz(
+        run_dir,
+        &point_fields_bundle.sidecar,
+        &point_fields_relative_path,
+    )
+    .map_err(|err| format!("point_fields NPZ 写入失败: {err}"))?;
+    append_jsonl(point_fields_file, &point_fields_bundle.metadata)?;
 
     let quality = compute_quality_record(
         &plan.run_id,
@@ -878,7 +914,9 @@ fn execute_point(
             "timeout_budget_remaining": outcome.timeout_budget_remaining,
             "timeout_count": outcome.point_timeout_count,
             "frame_coverage_ratio": outcome.frame_coverage_ratio,
-            "estimated_frames_expected": outcome.estimated_frames_expected
+            "estimated_frames_expected": outcome.estimated_frames_expected,
+            "point_fields_sidecar": point_fields_relative_path,
+            "artifact_mode": artifact_mode.as_str()
         }),
     )?;
 
@@ -1620,7 +1658,95 @@ fn format_local_time(system_time: SystemTime) -> String {
 struct CollectorArtifactPaths {
     raw_path: PathBuf,
     index_path: PathBuf,
-    parsed_path: PathBuf,
+    parsed_path: Option<PathBuf>,
+}
+
+fn point_fields_sidecar_relative_path(segment_id: &str) -> String {
+    format!("point_fields/{segment_id}.npz")
+}
+
+fn write_point_fields_sidecar_npz(
+    run_dir: &Path,
+    sidecar: &PointFieldSidecarData,
+    relative_path: &str,
+) -> Result<(), String> {
+    let path = run_dir.join(relative_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "无法创建 point_fields sidecar 目录 {}: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    let file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&path)
+        .map_err(|err| format!("无法打开 point_fields sidecar {}: {err}", path.display()))?;
+    let mut writer = NpzWriter::new(file);
+
+    for (key, values) in sidecar
+        .measurement_field_keys
+        .iter()
+        .zip(sidecar.measurement_fields.iter())
+    {
+        writer
+            .add_array(key, &Array1::from_vec(values.clone()))
+            .map_err(|err| format!("写入 NPZ measurement field `{key}` 失败: {err}"))?;
+    }
+
+    writer
+        .add_array("frame_seq", &Array1::from_vec(sidecar.frame_seq.clone()))
+        .map_err(|err| format!("写入 NPZ frame_seq 失败: {err}"))?;
+    writer
+        .add_array(
+            "duplicate_hint",
+            &Array1::from_vec(sidecar.duplicate_hint.clone()),
+        )
+        .map_err(|err| format!("写入 NPZ duplicate_hint 失败: {err}"))?;
+    writer
+        .add_array(
+            "b_ref_source_code",
+            &Array1::from_vec(sidecar.b_ref_source_code.clone()),
+        )
+        .map_err(|err| format!("写入 NPZ b_ref_source_code 失败: {err}"))?;
+    writer
+        .add_array(
+            "b_ref_slope_code",
+            &Array1::from_vec(sidecar.b_ref_slope_code.clone()),
+        )
+        .map_err(|err| format!("写入 NPZ b_ref_slope_code 失败: {err}"))?;
+    writer
+        .add_array(
+            "b_ref_current_freq_hz",
+            &Array1::from_vec(sidecar.b_ref_current_freq_hz.clone()),
+        )
+        .map_err(|err| format!("写入 NPZ b_ref_current_freq_hz 失败: {err}"))?;
+    writer
+        .add_array(
+            "b_input_overload",
+            &Array1::from_vec(sidecar.b_input_overload.clone()),
+        )
+        .map_err(|err| format!("写入 NPZ b_input_overload 失败: {err}"))?;
+    writer
+        .add_array(
+            "b_gain_overload",
+            &Array1::from_vec(sidecar.b_gain_overload.clone()),
+        )
+        .map_err(|err| format!("写入 NPZ b_gain_overload 失败: {err}"))?;
+    writer
+        .add_array(
+            "b_pll_locked",
+            &Array1::from_vec(sidecar.b_pll_locked.clone()),
+        )
+        .map_err(|err| format!("写入 NPZ b_pll_locked 失败: {err}"))?;
+
+    writer
+        .finish()
+        .map_err(|err| format!("关闭 NPZ sidecar {} 失败: {err}", path.display()))?;
+    Ok(())
 }
 
 struct RawReplayReader {
@@ -1743,12 +1869,14 @@ impl RawReplayReader {
     }
 }
 
+#[cfg(test)]
 struct ParsedReplayReader {
     parsed_path: PathBuf,
     parsed_bytes_read: u64,
     cached_parsed: Vec<ParsedFrameRecord>,
 }
 
+#[cfg(test)]
 impl ParsedReplayReader {
     fn open(parsed_path: &Path) -> Result<Self, String> {
         Ok(Self {
@@ -2203,7 +2331,7 @@ impl CollectorHandle {
         let active_point = Arc::new(Mutex::new(None));
         let raw_path = raw_path.to_path_buf();
         let index_path = index_path.to_path_buf();
-        let parsed_path = parsed_path.to_path_buf();
+        let parsed_path = parsed_path.clone();
         let (frame_tx, frame_rx) = sync_channel::<ProducedFrame>(COLLECTOR_QUEUE_CAPACITY);
         let (diag_tx, diag_rx) = channel::<EventRecord>();
         let diag_emitter = CollectorDiagEmitter {
@@ -2364,17 +2492,23 @@ impl CollectorHandle {
                 .map_err(|err| {
                     format!("无法打开 frame index 文件 {}: {err}", index_path.display())
                 })?;
-            let mut parsed_file = OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(&parsed_path)
-                .map_err(|err| {
-                    format!(
-                        "无法打开 frame parsed 文件 {}: {err}",
-                        parsed_path.display()
-                    )
-                })?;
+            let mut parsed_file = if let Some(parsed_path) = &parsed_path {
+                Some(
+                    OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(parsed_path)
+                        .map_err(|err| {
+                            format!(
+                                "无法打开 frame parsed 文件 {}: {err}",
+                                parsed_path.display()
+                            )
+                        })?,
+                )
+            } else {
+                None
+            };
             let mut previous_duplicate_key: Option<DuplicateHintKey> = None;
             let mut previous_duplicate_frame_seq: Option<u64> = None;
 
@@ -2415,7 +2549,9 @@ impl CollectorHandle {
                             .write_all(&frame.payload)
                             .map_err(|err| format!("写入 raw 文件失败: {err}"))?;
                         append_jsonl(&mut index_file, &frame.index_record(parse_status))?;
-                        append_jsonl(&mut parsed_file, &parsed_record)?;
+                        if let Some(parsed_file) = parsed_file.as_mut() {
+                            append_jsonl(parsed_file, &parsed_record)?;
+                        }
 
                         let mut guard = shared_consumer
                             .lock()

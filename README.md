@@ -156,10 +156,12 @@ cargo run -p odmr-cli -- run execute \
 - `OE1022D` 采用 run 级单 reader `RALL?` collector
 - collector 只在 `run execute` 打开后启动，不在“仅连接设备”阶段常驻拉取
 - point 真值已切到 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切；ring buffer 只做实时观察
-- 当前 `run execute` 已正式产出 `raw/oe1022d.frames.parsed.jsonl`，每帧按手册表格解析为 `20 x 50` 测量矩阵和配置/状态 sidecar
+- 当前 `run execute` 默认进入轻量 artifact 模式：保留 `raw + frames.idx + segments + events + quality + point_fields.jsonl metadata + point_fields/*.npz`
+- `raw/oe1022d.frames.parsed.jsonl` 已改成 `--artifact-mode debug` 才落盘的重型调试产物
 - 当前实验室真机已证明：`*OPC?` 不能单独作为 sweep 结束信号，runtime 已改为 `*OPC?` + sweep 时长估算 fallback
-- 当前已经接入 `target_b_nt -> calibration -> target_current_a` 链路
+- 当前已经接入 `target_b_nt -> calibration -> target_current_a -> measured_current_a` 链路
 - 当前零场锁定语义是“零偏电流锁定 + 复现电流叠加”，不是物理零磁场已证明
 - 当前磁场电源第一版只支持非负目标电流；默认 1D/2D/3D 示例网格已全部改成非负值
-- 当前已产出 `point_fields.jsonl`，每个 point 都有字段级 `B-X/B-Y/B-Freq/B-Noise/AUXADC1..4` 数据与 PLL 状态摘要
-- 当前 15 分钟真机长跑已证明：collector 级 `0-byte timeout` 仍会低频出现并吞掉部分 point 帧，但 `raw / frames.idx / frames.parsed` 已保持条数对齐，坏点根因已收敛到真实采集链抖动而不是 ring buffer 截断
+- 当前 `point_fields.jsonl` 已改成轻量 metadata；完整 20 字段数组和必要状态数组进入每个 point 的 `NPZ` sidecar
+- 当前 `runs/grid_3d_raster_0_50_100ut_validation_live` 已完成 `3D 0/50/100 uT` 单轮真机验证：`27/27 points passed`、`collector_timeout_total=0`
+- continuity audit 现在即使没有 `frames.parsed`，也能直接从 `raw + frames.idx` 重建逐帧结构化数据做审计

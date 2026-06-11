@@ -21,7 +21,7 @@ use hardware_smoke::run_hardware_smoke;
 use hardware_state_snapshot::run_hardware_state_snapshot;
 use hardware_verify_mag_lock::run_hardware_verify_mag_lock;
 use run_audit_continuity::run_audit_continuity;
-use run_execute::run_execute;
+use run_execute::{run_execute, RunArtifactMode};
 use station_resolver::{resolve_station, StationSpec};
 use std::env;
 use std::fs;
@@ -65,6 +65,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
             oe_profile,
             laser_profile,
             out_dir,
+            artifact_mode,
         } => run_execute(
             &station,
             &calibration,
@@ -73,6 +74,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
             &oe_profile,
             &laser_profile,
             out_dir.as_deref(),
+            artifact_mode,
         )
         .map(|_| ()),
         CliCommand::RunAuditContinuity { run_dir, out } => {
@@ -154,6 +156,7 @@ enum CliCommand {
         oe_profile: PathBuf,
         laser_profile: PathBuf,
         out_dir: Option<PathBuf>,
+        artifact_mode: RunArtifactMode,
     },
     RunAuditContinuity {
         run_dir: PathBuf,
@@ -375,6 +378,7 @@ fn parse_run_execute(args: &[String]) -> Result<CliCommand, String> {
     let mut oe_profile: Option<PathBuf> = None;
     let mut laser_profile: Option<PathBuf> = None;
     let mut out_dir: Option<PathBuf> = None;
+    let mut artifact_mode = RunArtifactMode::Lightweight;
     let mut index = 3_usize;
 
     while index < args.len() {
@@ -428,6 +432,21 @@ fn parse_run_execute(args: &[String]) -> Result<CliCommand, String> {
                 out_dir = Some(PathBuf::from(value));
                 index += 2;
             }
+            "--artifact-mode" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--artifact-mode 缺少参数".to_string());
+                };
+                artifact_mode = match value.as_str() {
+                    "lightweight" => RunArtifactMode::Lightweight,
+                    "debug" => RunArtifactMode::Debug,
+                    other => {
+                        return Err(format!(
+                            "--artifact-mode 仅支持 lightweight 或 debug，当前为 {other}"
+                        ))
+                    }
+                };
+                index += 2;
+            }
             "--help" | "-h" => return Err(usage()),
             other => return Err(format!("未知参数: {other}\n\n{}", usage())),
         }
@@ -460,6 +479,7 @@ fn parse_run_execute(args: &[String]) -> Result<CliCommand, String> {
         oe_profile,
         laser_profile,
         out_dir,
+        artifact_mode,
     })
 }
 
@@ -565,7 +585,7 @@ fn usage() -> String {
         "  odmr hardware arm-pll-verify-state --station <path> [--out-dir <path>]",
         "  odmr hardware snapshot-pll-state --station <path> [--out-dir <path>]",
         "  odmr hardware verify-mag-lock --station <path> --calibration <path> --plan <path> [--out-dir <path>]",
-        "  odmr run execute --station <path> --calibration <path> --plan <path> --smb-profile <path> --oe-profile <path> --laser-profile <path> [--out-dir <path>]",
+        "  odmr run execute --station <path> --calibration <path> --plan <path> --smb-profile <path> --oe-profile <path> --laser-profile <path> [--out-dir <path>] [--artifact-mode <lightweight|debug>]",
         "  odmr run audit-continuity --run <run-dir> [--out <path>]",
         "",
         "示例:",
@@ -577,7 +597,7 @@ fn usage() -> String {
         "  odmr hardware snapshot-pll-state --station configs/stations/lab_a.json --out-dir out/hardware_state_snapshot/manual",
         "  odmr hardware verify-mag-lock --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/mag_zero_lock_verify.json --out-dir out/hardware_verify_mag_lock/manual",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/manual",
-        "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/x_axis_1d_bounce_15min",
+        "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/x_axis_1d_bounce_15min --artifact-mode debug",
         "  odmr run audit-continuity --run runs/manual_live_recheck_20260612_retry2",
     ]
     .join("\n")
@@ -769,6 +789,45 @@ mod tests {
                 oe_profile: PathBuf::from("configs/profiles/oe1022d_run_ch_b_observed.json"),
                 laser_profile: PathBuf::from("configs/profiles/cni_laser_run_on_background.json"),
                 out_dir: Some(PathBuf::from("runs/manual")),
+                artifact_mode: RunArtifactMode::Lightweight,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_run_execute_command_debug_artifacts() {
+        let args = vec![
+            "odmr".to_string(),
+            "run".to_string(),
+            "execute".to_string(),
+            "--station".to_string(),
+            "configs/stations/lab_a.json".to_string(),
+            "--calibration".to_string(),
+            "configs/calibrations/main.json".to_string(),
+            "--plan".to_string(),
+            "configs/plans/minimal_3point_runtime.json".to_string(),
+            "--smb-profile".to_string(),
+            "configs/profiles/smb100a_run_pll_default.json".to_string(),
+            "--oe-profile".to_string(),
+            "configs/profiles/oe1022d_run_ch_b_observed.json".to_string(),
+            "--laser-profile".to_string(),
+            "configs/profiles/cni_laser_run_on_background.json".to_string(),
+            "--artifact-mode".to_string(),
+            "debug".to_string(),
+        ];
+
+        let command = parse_command(&args).unwrap();
+        assert_eq!(
+            command,
+            CliCommand::RunExecute {
+                station: PathBuf::from("configs/stations/lab_a.json"),
+                calibration: PathBuf::from("configs/calibrations/main.json"),
+                plan: PathBuf::from("configs/plans/minimal_3point_runtime.json"),
+                smb_profile: PathBuf::from("configs/profiles/smb100a_run_pll_default.json"),
+                oe_profile: PathBuf::from("configs/profiles/oe1022d_run_ch_b_observed.json"),
+                laser_profile: PathBuf::from("configs/profiles/cni_laser_run_on_background.json"),
+                out_dir: None,
+                artifact_mode: RunArtifactMode::Debug,
             }
         );
     }

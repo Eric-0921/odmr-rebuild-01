@@ -41,6 +41,13 @@
 - `runs/verify_20260611_long_readchain/quality.jsonl`
 - `runs/verify_20260611_long_readchain/raw/oe1022d.frames.idx.jsonl`
 - `runs/verify_20260611_long_readchain/raw/oe1022d.frames.parsed.jsonl`
+- `runs/grid_3d_raster_0_50_100ut_validation_live/summary.json`
+- `runs/grid_3d_raster_0_50_100ut_validation_live/points.jsonl`
+- `runs/grid_3d_raster_0_50_100ut_validation_live/segments.jsonl`
+- `runs/grid_3d_raster_0_50_100ut_validation_live/quality.jsonl`
+- `runs/grid_3d_raster_0_50_100ut_validation_live/point_fields.jsonl`
+- `runs/grid_3d_raster_0_50_100ut_validation_live/point_fields/seg_p000001_0000.npz`
+- `runs/grid_3d_raster_0_50_100ut_validation_live/continuity_audit.json`
 
 文档整理日期：
 
@@ -51,6 +58,7 @@
 - 15 分钟 1D 长跑完成时间：`2026-06-11`
 - 文档收口时间：`2026-06-11`
 - 读取链与表格解析短/长验证时间：`2026-06-11`
+- 3D 单轮真机验证时间：`2026-06-12`
 
 ## 新增真机校正事实（2026-06-11）
 
@@ -331,7 +339,38 @@ run 结束后额外只读核验：
 - 同时，这次长跑已经足够排除一个旧怀疑：
   - 当前 point 级掉帧主要不是 ring buffer 截断
   - 因为 `raw / frames.idx / frames.parsed` 已保持条数对齐
-  - 坏点根因已收敛到真实 collector / transport 抖动
+- 坏点根因已收敛到真实 collector / transport 抖动
+
+## 3D `0/50/100 uT` 单轮验证结果（2026-06-12）
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/grid_3d_raster_0_50_100ut_validation.json --smb-profile configs/profiles/smb100a_run_3d_validation_fast.json --oe-profile configs/profiles/oe1022d_run_3d_validation_fast.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/grid_3d_raster_0_50_100ut_validation_live`
+
+运行结果：
+
+- `summary.status = completed`
+- `points_passed = 27 / 27`
+- `points / segments / point_fields / quality = 27 / 27 / 27 / 27`
+- `summary.frames_total = 3290`
+- `quality.timeout_count = 0`（全部 point）
+- `quality.collector_health = clean`（全部 point）
+- `collector_stopped.timeout_count = 0`
+- continuity audit 结果：
+  - `verdict = continuous`
+  - `suspected_missing_boundaries = 0`
+  - `max_observed_gap_ms = 99.19`
+- 默认轻量 artifact 已真机验证：
+  - `raw/oe1022d.frames.parsed.jsonl` 默认不落盘
+  - `point_fields.jsonl` 改为 metadata
+  - `point_fields/*.npz` 可作为完整 20 字段数组 sidecar
+
+这说明当前 runtime 已经真机证明：
+
+- 3D `x/y/z = [0, 50, 100] uT` 的 27 点笛卡尔积能正确展开并单轮执行
+- `target_b_nt -> calibration -> target_current_a -> measured_current_a` 三轴电流链已在真实 run 中完整落盘
+- 3D 快配 profile 下，run 级 collector 可在 27 点单轮中保持 `0-byte timeout = 0`
+- 默认轻量 artifact 策略不会破坏 replay / continuity audit / point 级字段 sidecar
 
 ## 明确未验证内容
 
@@ -342,7 +381,7 @@ run 结束后额外只读核验：
 - 更长时 point segmentation 稳定性
 - point 级 `Laser` 变量
 - point 级 `OE1022D` 配置变更
-- 3D 真机网格运行
+- 更长时的 3D 多轮稳定性
 
 ## 运行时基线
 
@@ -352,7 +391,9 @@ run 结束后额外只读核验：
 - `OE1022D` 不是 point 级设备，而是 run 级固定观测器
 - `RALL?` 必须由单一 run 级 reader 线程持续执行
 - point 线程不直接碰 OE 串口；point 完整帧序列按 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切恢复
-- 每帧现在还会同步落 `raw/oe1022d.frames.parsed.jsonl`，作为表格驱动结构化 sidecar
+- 默认不再同步落 `raw/oe1022d.frames.parsed.jsonl`；只有 debug 模式才写
+- point 级完整 20 字段数组默认进入 `point_fields/*.npz`
+- `point_fields.jsonl` 只保留 metadata、摘要统计和 sidecar 路径
 - ring buffer 只保留最近窗口观察和 collector 健康摘要，不再决定 point 完整性
 - `continuous raw + frame index + segment boundary` 才是最终事实来源
 - `frames.parsed` 是 companion truth，不替代 raw
