@@ -9,10 +9,11 @@
 //! - 写出第一版 run artifact
 
 use acquisition_runtime::{
-    build_point_field_record, compute_quality_record, AcquisitionRunPlan, BaselineAxisSnapshot,
-    BaselineSnapshot, CalibrationProfile, CollectorConfig, CollectorCursor, CollectorFrame,
-    EventRecord, FrameIndexRecord, FrameRingBuffer, LaserBackgroundMode, LaserRunProfile,
-    Oe1022dRunProfile, PlanSnapshot, PointRecord, ResolvedRunPlan, ResolvedSmbSweep, RunManifest,
+    build_parsed_frame_record, build_point_field_record_from_parsed, compute_quality_record,
+    parse_rall_frame_full, AcquisitionRunPlan, BaselineAxisSnapshot, BaselineSnapshot,
+    CalibrationProfile, CollectorConfig, CollectorCursor, CollectorFrame, EventRecord,
+    FrameIndexRecord, FrameRingBuffer, LaserBackgroundMode, LaserRunProfile, Oe1022dRunProfile,
+    ParsedFrameRecord, PlanSnapshot, PointRecord, ResolvedRunPlan, ResolvedSmbSweep, RunManifest,
     SegmentRecord, SettleRecord, Smb100aRunProfile, SummaryRecord,
 };
 use chrono::{DateTime, Local};
@@ -49,7 +50,8 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+    mpsc::{sync_channel, RecvTimeoutError, SyncSender, TrySendError},
+    Arc, Mutex, OnceLock,
 };
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -58,6 +60,65 @@ const RUNTIME_VERSION: &str = "0.1.0-mvp";
 const SMB_CLEANUP_WAIT_MS: u64 = 300;
 const MAG_CLEANUP_WAIT_MS: u64 = 500;
 const SWEEP_COMPLETION_GUARD_MS: u64 = 100;
+const COLLECTOR_QUEUE_CAPACITY: usize = 8;
+const COLLECTOR_ZERO_BYTE_RETRY_LIMIT: usize = 1;
+const INTERRUPT_POLL_MS: u64 = 50;
+const USER_INTERRUPTED: &str = "用户中断";
+const COLLECTOR_COMMIT_SYNC_TIMEOUT_MS: u64 = 2_000;
+
+static RUN_INTERRUPT_FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+
+fn run_interrupt_flag() -> Result<Arc<AtomicBool>, String> {
+    if let Some(flag) = RUN_INTERRUPT_FLAG.get() {
+        return Ok(Arc::clone(flag));
+    }
+
+    let flag = Arc::new(AtomicBool::new(false));
+    let handler_flag = Arc::clone(&flag);
+    ctrlc::set_handler(move || {
+        handler_flag.store(true, Ordering::SeqCst);
+    })
+    .map_err(|err| format!("安装 Ctrl-C handler 失败: {err}"))?;
+
+    let _ = RUN_INTERRUPT_FLAG.set(Arc::clone(&flag));
+    Ok(RUN_INTERRUPT_FLAG.get().map(Arc::clone).unwrap_or(flag))
+}
+
+fn check_interrupted(interrupt_flag: &Arc<AtomicBool>) -> Result<(), String> {
+    if interrupt_flag.load(Ordering::SeqCst) {
+        Err(USER_INTERRUPTED.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn sleep_with_interrupt(
+    duration: Duration,
+    interrupt_flag: &Arc<AtomicBool>,
+) -> Result<(), String> {
+    let started = Instant::now();
+    while started.elapsed() < duration {
+        check_interrupted(interrupt_flag)?;
+        let remaining = duration.saturating_sub(started.elapsed());
+        thread::sleep(remaining.min(Duration::from_millis(INTERRUPT_POLL_MS)));
+    }
+    Ok(())
+}
+
+fn wait_remaining(start: Instant, interval_ms: u64, stop_flag: &Arc<AtomicBool>) {
+    loop {
+        let elapsed = start.elapsed().as_millis() as u64;
+        if elapsed >= interval_ms {
+            return;
+        }
+        let remaining = interval_ms - elapsed;
+        let nap = remaining.min(10);
+        if stop_flag.load(Ordering::SeqCst) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(nap));
+    }
+}
 
 #[derive(Debug, Clone)]
 struct RunEtaSummary {
@@ -82,6 +143,8 @@ pub fn run_execute(
     laser_profile_path: &Path,
     out_dir: Option<&Path>,
 ) -> Result<PathBuf, String> {
+    let interrupt_flag = run_interrupt_flag()?;
+    interrupt_flag.store(false, Ordering::SeqCst);
     let spec: StationSpec = crate::read_station_spec(station_path)?;
     let calibration: CalibrationProfile = read_json_file(calibration_path)?;
     let plan: AcquisitionRunPlan = read_json_file(plan_path)?;
@@ -255,17 +318,24 @@ pub fn run_execute(
     ));
 
     let raw_dir = target_dir.join("raw");
+    let collector_artifacts = CollectorArtifactPaths {
+        raw_path: raw_dir.join("oe1022d.rall"),
+        index_path: raw_dir.join("oe1022d.frames.idx.jsonl"),
+        parsed_path: raw_dir.join("oe1022d.frames.parsed.jsonl"),
+    };
     let mut collector = CollectorHandle::start(
         oe_device,
         &effective_collector_config,
-        &raw_dir.join("oe1022d.rall"),
-        &raw_dir.join("oe1022d.frames.idx.jsonl"),
+        &collector_artifacts,
         start_instant,
     )?;
-    let mut raw_replay = RawReplayReader::open(
-        &raw_dir.join("oe1022d.rall"),
-        &raw_dir.join("oe1022d.frames.idx.jsonl"),
-    )?;
+    let CollectorArtifactPaths {
+        raw_path,
+        index_path,
+        parsed_path,
+    } = &collector_artifacts;
+    let mut raw_replay = RawReplayReader::open(raw_path, index_path)?;
+    let mut parsed_replay = ParsedReplayReader::open(parsed_path)?;
     append_event(
         &mut events_file,
         &start_instant,
@@ -295,6 +365,20 @@ pub fn run_execute(
     let mut run_error: Option<String> = None;
 
     for (index, point) in resolved_plan.points.iter().enumerate() {
+        if interrupt_flag.load(Ordering::SeqCst) {
+            run_error = Some(USER_INTERRUPTED.to_string());
+            append_event(
+                &mut events_file,
+                &start_instant,
+                &plan.run_id,
+                "run_interrupted",
+                "run",
+                None,
+                None,
+                json!({"stage": "before_point", "point_id": point.point_id}),
+            )?;
+            break;
+        }
         print_stage(&format!(
             "point {}/{} {} 开始: target_b_nt={:?}",
             index + 1,
@@ -325,6 +409,7 @@ pub fn run_execute(
             &mut mag_axes,
             &mut collector,
             &mut raw_replay,
+            &mut parsed_replay,
             &mut events_file,
             &mut points_file,
             &mut segments_file,
@@ -338,6 +423,7 @@ pub fn run_execute(
             calibrated_delta_current_a,
             target_current_a,
             point,
+            Arc::clone(&interrupt_flag),
         );
 
         match point_result {
@@ -351,6 +437,20 @@ pub fn run_execute(
                     &outcome,
                     &eta_summary,
                 );
+                if interrupt_flag.load(Ordering::SeqCst) {
+                    run_error = Some(USER_INTERRUPTED.to_string());
+                    append_event(
+                        &mut events_file,
+                        &start_instant,
+                        &plan.run_id,
+                        "run_interrupted",
+                        "run",
+                        Some(point.point_id.clone()),
+                        None,
+                        json!({"stage": "after_point"}),
+                    )?;
+                    break;
+                }
             }
             Ok(outcome) => {
                 points_failed += 1;
@@ -366,8 +466,36 @@ pub fn run_execute(
                     run_error = Some(format!("point {} 质量不达标，run 终止", point.point_id));
                     break;
                 }
+                if interrupt_flag.load(Ordering::SeqCst) {
+                    run_error = Some(USER_INTERRUPTED.to_string());
+                    append_event(
+                        &mut events_file,
+                        &start_instant,
+                        &plan.run_id,
+                        "run_interrupted",
+                        "run",
+                        Some(point.point_id.clone()),
+                        None,
+                        json!({"stage": "after_failed_point"}),
+                    )?;
+                    break;
+                }
             }
             Err(err) => {
+                if err == USER_INTERRUPTED {
+                    run_error = Some(err);
+                    append_event(
+                        &mut events_file,
+                        &start_instant,
+                        &plan.run_id,
+                        "run_interrupted",
+                        "run",
+                        Some(point.point_id.clone()),
+                        None,
+                        json!({"stage": "point_execution"}),
+                    )?;
+                    break;
+                }
                 points_failed += 1;
                 append_event(
                     &mut events_file,
@@ -522,6 +650,7 @@ fn execute_point(
     mag_axes: &mut [MagAxisHandle],
     collector: &mut CollectorHandle,
     raw_replay: &mut RawReplayReader,
+    parsed_replay: &mut ParsedReplayReader,
     events_file: &mut File,
     points_file: &mut File,
     segments_file: &mut File,
@@ -535,10 +664,12 @@ fn execute_point(
     calibrated_delta_current_a: [f64; 3],
     target_current_a: [f64; 3],
     point: &acquisition_runtime::RunPointPlan,
+    interrupt_flag: Arc<AtomicBool>,
 ) -> Result<PointExecutionOutcome, String> {
     set_mag_target_currents(mag_axes, target_current_a)?;
-    thread::sleep(Duration::from_millis(plan.point_settle_ms));
+    sleep_with_interrupt(Duration::from_millis(plan.point_settle_ms), &interrupt_flag)?;
     let measured_current_a = read_mag_currents(mag_axes)?;
+    check_interrupted(&interrupt_flag)?;
 
     let sweep = smb_profile
         .default_sweep
@@ -562,7 +693,7 @@ fn execute_point(
     let segment_id = format!("seg_{}_0000", point.point_id);
     let start_ts = now_ts_string();
     let start_monotonic_ns = monotonic_ns(start_instant);
-    let start_cursor = collector.committed_cursor()?;
+    let start_cursor = collector.produced_cursor()?;
     let timeouts_before = collector.timeout_count()?;
 
     append_event(
@@ -593,7 +724,7 @@ fn execute_point(
 
     smb.send(smb100a_execute_frequency_sweep())
         .map_err(|err| format!("SMB 执行扫频失败: {err}"))?;
-    let sweep_completion = wait_for_sweep_complete(smb, &sweep)?;
+    let sweep_completion = wait_for_sweep_complete(smb, &sweep, &interrupt_flag)?;
 
     if smb_profile.error_check_after_write {
         ensure_smb_no_error(smb)?;
@@ -601,34 +732,9 @@ fn execute_point(
 
     let end_ts = now_ts_string();
     let end_monotonic_ns = monotonic_ns(start_instant);
-    let end_cursor = collector.committed_cursor()?;
+    let end_cursor = collector.produced_cursor()?;
+    let committed_end_cursor = collector.wait_until_committed(end_cursor)?;
     let timeouts_after = collector.timeout_count()?;
-    let segment = SegmentRecord {
-        schema_version: 1,
-        run_id: plan.run_id.clone(),
-        segment_id: segment_id.clone(),
-        point_id: point.point_id.clone(),
-        source: "oe1022d_main".to_string(),
-        start_ts,
-        end_ts,
-        start_monotonic_ns,
-        end_monotonic_ns,
-        raw_file: "raw/oe1022d.rall".to_string(),
-        raw_offset_start: start_cursor.next_raw_offset,
-        raw_offset_end: end_cursor.next_raw_offset,
-        frame_seq_start: if start_cursor.next_frame_seq < end_cursor.next_frame_seq {
-            Some(start_cursor.next_frame_seq)
-        } else {
-            None
-        },
-        frame_seq_end: if start_cursor.next_frame_seq < end_cursor.next_frame_seq {
-            Some(end_cursor.next_frame_seq - 1)
-        } else {
-            None
-        },
-    };
-    append_jsonl(segments_file, &segment)?;
-    let frames = raw_replay.replay_segment(&segment)?;
     let estimated_frames_expected = sweep.estimate().ok().map(|estimate| {
         estimate_frames_for_quality(estimate.sweep_duration_ms, collector_poll_interval_ms)
     });
@@ -659,16 +765,46 @@ fn execute_point(
         None,
         json!({
             "segment_id": segment_id,
-            "frames_total": frames.len(),
-            "raw_offset_start": segment.raw_offset_start,
-            "raw_offset_end": segment.raw_offset_end
+            "raw_offset_start": start_cursor.next_raw_offset,
+            "raw_offset_end": committed_end_cursor.next_raw_offset
         }),
     )?;
 
-    // 这里先把 point 窗口解析成最小字段级数据，collector 线程本身仍只负责 raw/ring buffer。
-    let point_fields =
-        build_point_field_record(&plan.run_id, &point.point_id, &segment_id, &frames)
-            .map_err(|err| format!("RALL point 字段解析失败: {err}"))?;
+    let segment = SegmentRecord {
+        schema_version: 1,
+        run_id: plan.run_id.clone(),
+        segment_id: segment_id.clone(),
+        point_id: point.point_id.clone(),
+        source: "oe1022d_main".to_string(),
+        start_ts,
+        end_ts,
+        start_monotonic_ns,
+        end_monotonic_ns,
+        raw_file: "raw/oe1022d.rall".to_string(),
+        raw_offset_start: start_cursor.next_raw_offset,
+        raw_offset_end: committed_end_cursor.next_raw_offset,
+        frame_seq_start: if start_cursor.next_frame_seq < end_cursor.next_frame_seq {
+            Some(start_cursor.next_frame_seq)
+        } else {
+            None
+        },
+        frame_seq_end: if start_cursor.next_frame_seq < end_cursor.next_frame_seq {
+            Some(end_cursor.next_frame_seq - 1)
+        } else {
+            None
+        },
+    };
+    append_jsonl(segments_file, &segment)?;
+    let frames = raw_replay.replay_segment(&segment)?;
+    let parsed_frames = parsed_replay.replay_segment(&segment)?;
+
+    let point_fields = build_point_field_record_from_parsed(
+        &plan.run_id,
+        &point.point_id,
+        &segment_id,
+        &parsed_frames,
+    )
+    .map_err(|err| format!("RALL point 字段解析失败: {err}"))?;
     append_jsonl(point_fields_file, &point_fields)?;
 
     let quality = compute_quality_record(
@@ -682,6 +818,17 @@ fn execute_point(
         estimated_frames_expected,
     );
     append_jsonl(quality_file, &quality)?;
+
+    let outcome = PointExecutionOutcome {
+        quality_status: quality.quality_status,
+        frames_total: frames.len(),
+        collector_frames_total: end_cursor.next_frame_seq,
+        timeout_count: timeouts_after,
+        point_timeout_count: timeouts_after.saturating_sub(timeouts_before),
+        ring_retained_frames: collector.retained_ring_frames()?,
+        estimated_frames_expected: quality.estimated_frames_expected,
+        frame_coverage_ratio: quality.frame_coverage_ratio,
+    };
 
     let point_record = PointRecord {
         schema_version: 1,
@@ -703,26 +850,22 @@ fn execute_point(
     };
     append_jsonl(points_file, &point_record)?;
 
-    if quality.quality_status == "passed" {
-        append_event(
-            events_file,
-            start_instant,
-            &plan.run_id,
-            "point_completed",
-            "point",
-            Some(point.point_id.clone()),
-            None,
-            json!({"quality_status": quality.quality_status}),
-        )?;
-    }
+    append_event(
+        events_file,
+        start_instant,
+        &plan.run_id,
+        "point_completed",
+        "point",
+        Some(point.point_id.clone()),
+        None,
+        json!({
+            "quality_status": outcome.quality_status.clone(),
+            "frame_coverage_ratio": outcome.frame_coverage_ratio,
+            "estimated_frames_expected": outcome.estimated_frames_expected
+        }),
+    )?;
 
-    Ok(PointExecutionOutcome {
-        quality_status: quality.quality_status,
-        frames_total: frames.len(),
-        collector_frames_total: end_cursor.next_frame_seq,
-        timeout_count: timeouts_after,
-        ring_retained_frames: collector.retained_ring_frames()?,
-    })
+    Ok(outcome)
 }
 
 fn apply_smb_fixed_profile(
@@ -1191,12 +1334,16 @@ struct PointExecutionOutcome {
     frames_total: usize,
     collector_frames_total: u64,
     timeout_count: usize,
+    point_timeout_count: usize,
     ring_retained_frames: usize,
+    estimated_frames_expected: Option<usize>,
+    frame_coverage_ratio: Option<f64>,
 }
 
 fn wait_for_sweep_complete(
     transport: &mut Smb100aTransport,
     sweep: &ResolvedSmbSweep,
+    interrupt_flag: &Arc<AtomicBool>,
 ) -> Result<SweepCompletionObservation, String> {
     let estimate = sweep
         .estimate()
@@ -1217,7 +1364,7 @@ fn wait_for_sweep_complete(
             .sweep_duration_ms
             .saturating_sub(opc_wait_ms)
             .saturating_add(SWEEP_COMPLETION_GUARD_MS);
-        thread::sleep(Duration::from_millis(remaining_ms));
+        sleep_with_interrupt(Duration::from_millis(remaining_ms), interrupt_flag)?;
     }
 
     Ok(SweepCompletionObservation {
@@ -1381,6 +1528,11 @@ fn print_point_progress(
     } else {
         0.0
     };
+    let batch_rate_hz = if elapsed_s > 0.0 {
+        outcome.collector_frames_total as f64 / elapsed_s
+    } else {
+        0.0
+    };
     let completed_points = index + 1;
     let progress_percent = if total_points == 0 {
         0.0
@@ -1394,17 +1546,27 @@ fn print_point_progress(
     let eta_end =
         remaining_ms.map(|remaining| SystemTime::now() + Duration::from_millis(remaining));
     println!(
-        "[odmr] point {}/{} {} 完成: target_b_nt={:?}, frames_total={}, quality_status={}, collector_frames_total={}, ring_retained_frames={}, timeout_count={}, 估算点速率={:.1} pts/s, progress={:.1}%, 已耗时={}, 剩余预计时长={}, 预计结束时间={}",
+        "[odmr] point {}/{} {} 完成: target_b_nt={:?}, frames_total={}/{}, coverage={}, quality_status={}, collector_frames_total={}, ring_retained_frames={}, point_timeout_count={}, collector_timeout_total={}, 采样速率={:.1} pts/s, batch_rate={:.1} Hz, progress={:.1}%, 已耗时={}, 剩余预计时长={}, 预计结束时间={}",
         index + 1,
         total_points,
         point.point_id,
         point.target_b_nt,
         outcome.frames_total,
+        outcome
+            .estimated_frames_expected
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "?".to_string()),
+        outcome
+            .frame_coverage_ratio
+            .map(|value| format!("{value:.6}"))
+            .unwrap_or_else(|| "未知".to_string()),
         outcome.quality_status,
         outcome.collector_frames_total,
         outcome.ring_retained_frames,
+        outcome.point_timeout_count,
         outcome.timeout_count,
         estimated_sample_rate,
+        batch_rate_hz,
         progress_percent,
         format_duration_ms(elapsed_ms),
         remaining_ms
@@ -1431,6 +1593,13 @@ fn format_duration_ms(duration_ms: u64) -> String {
 fn format_local_time(system_time: SystemTime) -> String {
     let date_time: DateTime<Local> = DateTime::<Local>::from(system_time);
     date_time.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+#[derive(Debug, Clone)]
+struct CollectorArtifactPaths {
+    raw_path: PathBuf,
+    index_path: PathBuf,
+    parsed_path: PathBuf,
 }
 
 struct RawReplayReader {
@@ -1550,6 +1719,133 @@ impl RawReplayReader {
         }
 
         Ok(frames)
+    }
+}
+
+struct ParsedReplayReader {
+    parsed_path: PathBuf,
+    parsed_bytes_read: u64,
+    cached_parsed: Vec<ParsedFrameRecord>,
+}
+
+impl ParsedReplayReader {
+    fn open(parsed_path: &Path) -> Result<Self, String> {
+        Ok(Self {
+            parsed_path: parsed_path.to_path_buf(),
+            parsed_bytes_read: 0,
+            cached_parsed: Vec::new(),
+        })
+    }
+
+    fn refresh(&mut self) -> Result<(), String> {
+        let mut reader = BufReader::new(
+            OpenOptions::new()
+                .read(true)
+                .open(&self.parsed_path)
+                .map_err(|err| {
+                    format!(
+                        "无法打开 frame parsed 文件 {}: {err}",
+                        self.parsed_path.display()
+                    )
+                })?,
+        );
+        reader
+            .seek(SeekFrom::Start(self.parsed_bytes_read))
+            .map_err(|err| format!("frame parsed seek 失败: {err}"))?;
+
+        let mut line = String::new();
+        loop {
+            line.clear();
+            let bytes = reader
+                .read_line(&mut line)
+                .map_err(|err| format!("frame parsed 读取失败: {err}"))?;
+            if bytes == 0 {
+                break;
+            }
+            self.parsed_bytes_read = self.parsed_bytes_read.saturating_add(bytes as u64);
+            if line.trim().is_empty() {
+                continue;
+            }
+            let record: ParsedFrameRecord =
+                serde_json::from_str(line.trim_end()).map_err(|err| {
+                    format!(
+                        "frame parsed JSON 解析失败 {}: {err}",
+                        self.parsed_path.display()
+                    )
+                })?;
+            self.cached_parsed.push(record);
+        }
+
+        Ok(())
+    }
+
+    fn replay_segment(
+        &mut self,
+        segment: &SegmentRecord,
+    ) -> Result<Vec<ParsedFrameRecord>, String> {
+        self.refresh()?;
+        let Some(frame_seq_start) = segment.frame_seq_start else {
+            return Ok(Vec::new());
+        };
+        let Some(frame_seq_end) = segment.frame_seq_end else {
+            return Ok(Vec::new());
+        };
+        if self.cached_parsed.len() <= frame_seq_end as usize {
+            return Err(format!(
+                "frame parsed 未覆盖 segment {}: need_end_seq={}, cached_len={}",
+                segment.segment_id,
+                frame_seq_end,
+                self.cached_parsed.len()
+            ));
+        }
+
+        let mut frames = Vec::with_capacity((frame_seq_end - frame_seq_start + 1) as usize);
+        for frame_seq in frame_seq_start..=frame_seq_end {
+            let record = self
+                .cached_parsed
+                .get(frame_seq as usize)
+                .ok_or_else(|| format!("frame parsed 缺少 frame_seq={frame_seq}"))?;
+            if record.frame_seq != frame_seq {
+                return Err(format!(
+                    "frame parsed frame_seq 不连续: expected={}, actual={}",
+                    frame_seq, record.frame_seq
+                ));
+            }
+            frames.push(record.clone());
+        }
+
+        Ok(frames)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct DuplicateHintKey {
+    b_x0: f64,
+    b_y0: f64,
+    b_freq0: f64,
+    b_noise0: f64,
+}
+
+fn duplicate_key_from_parsed(parsed: &ParsedFrameRecord) -> Option<DuplicateHintKey> {
+    let matrix = parsed.measurement_matrix.as_ref()?;
+    Some(DuplicateHintKey {
+        b_x0: *matrix.get(8)?.first()?,
+        b_y0: *matrix.get(9)?.first()?,
+        b_freq0: *matrix.get(10)?.first()?,
+        b_noise0: *matrix.get(11)?.first()?,
+    })
+}
+
+fn derive_duplicate_hint(
+    parsed_result: &Result<ParsedFrameRecord, acquisition_runtime::MinimalRallParseError>,
+    previous_key: Option<&DuplicateHintKey>,
+    previous_frame_seq: Option<u64>,
+) -> Option<u64> {
+    let current_key = duplicate_key_from_parsed(parsed_result.as_ref().ok()?);
+    if current_key.as_ref() == previous_key {
+        previous_frame_seq
+    } else {
+        None
     }
 }
 
@@ -1724,6 +2020,7 @@ struct MagAxisHandle {
 struct CollectorSharedState {
     ring: FrameRingBuffer,
     timeout_count: usize,
+    produced_cursor: CollectorCursor,
     committed_cursor: CollectorCursor,
 }
 
@@ -1733,8 +2030,9 @@ impl CollectorSharedState {
         ts: String,
         monotonic_ns: u64,
         payload: Vec<u8>,
+        duplicate_of: Option<u64>,
     ) -> CollectorFrame {
-        self.ring.push(ts, monotonic_ns, payload)
+        self.ring.push(ts, monotonic_ns, payload, duplicate_of)
     }
 
     fn mark_committed(&mut self, frame: &CollectorFrame) {
@@ -1745,6 +2043,44 @@ impl CollectorSharedState {
     }
 }
 
+fn collector_cursor_snapshot(
+    shared: &Arc<Mutex<CollectorSharedState>>,
+) -> Result<CollectorCursor, String> {
+    let guard = shared
+        .lock()
+        .map_err(|_| "collector ring buffer mutex poisoned".to_string())?;
+    Ok(guard.committed_cursor)
+}
+
+fn record_collector_timeout(
+    shared: &Arc<Mutex<CollectorSharedState>>,
+) -> Result<(usize, CollectorCursor), String> {
+    let mut guard = shared
+        .lock()
+        .map_err(|_| "collector ring buffer mutex poisoned".to_string())?;
+    guard.timeout_count += 1;
+    Ok((guard.timeout_count, guard.committed_cursor))
+}
+
+fn enqueue_produced_frame(
+    sender: &SyncSender<ProducedFrame>,
+    frame: ProducedFrame,
+) -> Result<(), String> {
+    match sender.try_send(frame) {
+        Ok(()) => Ok(()),
+        Err(TrySendError::Full(_)) => Err(
+            "collector consumer 背压过高，bounded queue 已满，producer 不再阻塞等待".to_string(),
+        ),
+        Err(TrySendError::Disconnected(_)) => Err("collector consumer channel 已断开".to_string()),
+    }
+}
+
+struct ProducedFrame {
+    ts: String,
+    monotonic_ns: u64,
+    payload: Vec<u8>,
+}
+
 struct CollectorStopSummary {
     frames_total: u64,
     timeout_count: usize,
@@ -1753,38 +2089,164 @@ struct CollectorStopSummary {
 struct CollectorHandle {
     stop_flag: Arc<AtomicBool>,
     shared: Arc<Mutex<CollectorSharedState>>,
-    join: Option<JoinHandle<Result<CollectorStopSummary, String>>>,
+    producer_join: Option<JoinHandle<Result<(), String>>>,
+    consumer_join: Option<JoinHandle<Result<(), String>>>,
 }
 
 impl CollectorHandle {
     fn start(
         device: &DeviceSpec,
         config: &CollectorConfig,
-        raw_path: &Path,
-        index_path: &Path,
+        artifacts: &CollectorArtifactPaths,
         run_start_instant: Instant,
     ) -> Result<Self, String> {
         let stop_flag = Arc::new(AtomicBool::new(false));
         let shared = Arc::new(Mutex::new(CollectorSharedState {
             ring: FrameRingBuffer::new(config.ring_capacity_frames),
             timeout_count: 0,
+            produced_cursor: CollectorCursor {
+                next_frame_seq: 0,
+                next_raw_offset: 0,
+            },
             committed_cursor: CollectorCursor {
                 next_frame_seq: 0,
                 next_raw_offset: 0,
             },
         }));
         let device_config = oe_config(device)?;
+        let CollectorArtifactPaths {
+            raw_path,
+            index_path,
+            parsed_path,
+        } = artifacts;
+        let producer_done = Arc::new(AtomicBool::new(false));
         let poll_interval = config.poll_interval_ms;
         let frame_exact_bytes = config.frame_exact_bytes;
         let frame_max_bytes = config.frame_max_bytes;
-        let stop_clone = Arc::clone(&stop_flag);
-        let shared_clone = Arc::clone(&shared);
+        let producer_stop = Arc::clone(&stop_flag);
+        let consumer_stop = Arc::clone(&stop_flag);
+        let producer_done_clone = Arc::clone(&producer_done);
+        let shared_producer = Arc::clone(&shared);
+        let shared_consumer = Arc::clone(&shared);
         let raw_path = raw_path.to_path_buf();
         let index_path = index_path.to_path_buf();
+        let parsed_path = parsed_path.to_path_buf();
+        let (frame_tx, frame_rx) = sync_channel::<ProducedFrame>(COLLECTOR_QUEUE_CAPACITY);
 
-        let join = thread::spawn(move || {
+        let producer_join = thread::spawn(move || {
             let mut transport = Oe1022dTransport::open(&device_config)
                 .map_err(|err| format!("collector 打开 OE1022D 失败: {err}"))?;
+            let mut consecutive_timeouts = 0_usize;
+            let mut timeout_streak_started_at: Option<Instant> = None;
+            let result = (|| -> Result<(), String> {
+                loop {
+                    if producer_stop.load(Ordering::SeqCst) {
+                        break;
+                    }
+
+                    let _ = transport.clear_input();
+                    let read_start = Instant::now();
+                    match if frame_exact_bytes > 0 {
+                        transport
+                            .query_rall_frame_exact_with_zero_retry(
+                                frame_exact_bytes,
+                                COLLECTOR_ZERO_BYTE_RETRY_LIMIT,
+                            )
+                            .map(|outcome| {
+                                if outcome.zero_byte_retry_count > 0 {
+                                    let cursor = collector_cursor_snapshot(&shared_producer)
+                                        .unwrap_or(CollectorCursor {
+                                            next_frame_seq: 0,
+                                            next_raw_offset: 0,
+                                        });
+                                    println!(
+                                        "[odmr][diag] collector 0-byte timeout 后同周期重试成功: retry_count={}, committed_frame_seq={}, committed_raw_offset={}",
+                                        outcome.zero_byte_retry_count,
+                                        cursor.next_frame_seq,
+                                        cursor.next_raw_offset
+                                    );
+                                }
+                                outcome.payload
+                            })
+                    } else {
+                        transport.query_rall_frame_until_timeout(frame_max_bytes)
+                    } {
+                        Ok(payload) if !payload.is_empty() => {
+                            let payload_len = payload.len() as u64;
+                            {
+                                let mut guard = shared_producer.lock().map_err(|_| {
+                                    "collector ring buffer mutex poisoned".to_string()
+                                })?;
+                                let cursor = guard.produced_cursor;
+                                guard.produced_cursor = CollectorCursor {
+                                    next_frame_seq: cursor.next_frame_seq + 1,
+                                    next_raw_offset: cursor.next_raw_offset + payload_len,
+                                };
+                            }
+                            let produced = ProducedFrame {
+                                ts: now_ts_string(),
+                                monotonic_ns: monotonic_ns(&run_start_instant),
+                                payload,
+                            };
+                            enqueue_produced_frame(&frame_tx, produced)?;
+                            if consecutive_timeouts > 0 {
+                                let recovered_after_ms = timeout_streak_started_at
+                                    .take()
+                                    .map(|started| started.elapsed().as_millis())
+                                    .unwrap_or_default();
+                                let cursor = collector_cursor_snapshot(&shared_producer)?;
+                                println!(
+                                            "[odmr][diag] collector 已恢复: consecutive_timeouts={}, recovered_after_ms={}, committed_frame_seq={}, committed_raw_offset={}",
+                                            consecutive_timeouts,
+                                            recovered_after_ms,
+                                            cursor.next_frame_seq,
+                                            cursor.next_raw_offset
+                                        );
+                                consecutive_timeouts = 0;
+                            }
+                        }
+                        Ok(_) => {
+                            let (timeout_total, cursor) =
+                                record_collector_timeout(&shared_producer)?;
+                            consecutive_timeouts += 1;
+                            if timeout_streak_started_at.is_none() {
+                                timeout_streak_started_at = Some(Instant::now());
+                            }
+                            println!(
+                                        "[odmr][diag] collector 超时/空帧: kind=empty_payload, consecutive_timeouts={}, total_timeouts={}, committed_frame_seq={}, committed_raw_offset={}",
+                                        consecutive_timeouts,
+                                        timeout_total,
+                                        cursor.next_frame_seq,
+                                        cursor.next_raw_offset
+                                    );
+                        }
+                        Err(err) => {
+                            let (timeout_total, cursor) =
+                                record_collector_timeout(&shared_producer)?;
+                            consecutive_timeouts += 1;
+                            if timeout_streak_started_at.is_none() {
+                                timeout_streak_started_at = Some(Instant::now());
+                            }
+                            println!(
+                                        "[odmr][diag] collector 超时/读失败: kind=transport_error, consecutive_timeouts={}, total_timeouts={}, committed_frame_seq={}, committed_raw_offset={}, error={}",
+                                        consecutive_timeouts,
+                                        timeout_total,
+                                        cursor.next_frame_seq,
+                                        cursor.next_raw_offset,
+                                        err
+                                    );
+                        }
+                    }
+
+                    wait_remaining(read_start, poll_interval, &producer_stop);
+                }
+                Ok(())
+            })();
+            producer_done_clone.store(true, Ordering::SeqCst);
+            result
+        });
+
+        let consumer_join = thread::spawn(move || {
             let mut raw_file = OpenOptions::new()
                 .create(true)
                 .write(true)
@@ -1799,78 +2261,90 @@ impl CollectorHandle {
                 .map_err(|err| {
                     format!("无法打开 frame index 文件 {}: {err}", index_path.display())
                 })?;
-            let mut next_poll_deadline = run_start_instant;
+            let mut parsed_file = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&parsed_path)
+                .map_err(|err| {
+                    format!(
+                        "无法打开 frame parsed 文件 {}: {err}",
+                        parsed_path.display()
+                    )
+                })?;
+            let mut previous_duplicate_key: Option<DuplicateHintKey> = None;
+            let mut previous_duplicate_frame_seq: Option<u64> = None;
 
             loop {
-                if stop_clone.load(Ordering::SeqCst) {
-                    break;
-                }
-
-                let now = Instant::now();
-                if now < next_poll_deadline {
-                    thread::sleep(next_poll_deadline.saturating_duration_since(now));
-                }
-
-                let _ = transport.clear_input();
-                match if frame_exact_bytes > 0 {
-                    transport.query_rall_frame(frame_exact_bytes)
-                } else {
-                    transport.query_rall_frame_until_timeout(frame_max_bytes)
-                } {
-                    Ok(payload) if !payload.is_empty() => {
-                        let ts = now_ts_string();
-                        let monotonic_ns = monotonic_ns(&run_start_instant);
+                match frame_rx.recv_timeout(Duration::from_millis(50)) {
+                    Ok(produced) => {
+                        let parsed_result = parse_rall_frame_full(&produced.payload);
+                        let duplicate_of = derive_duplicate_hint(
+                            &parsed_result,
+                            previous_duplicate_key.as_ref(),
+                            previous_duplicate_frame_seq,
+                        );
 
                         let frame = {
-                            let mut guard = shared_clone
+                            let mut guard = shared_consumer
                                 .lock()
                                 .map_err(|_| "collector ring buffer mutex poisoned".to_string())?;
-                            guard.record_polled_frame(ts, monotonic_ns, payload)
+                            guard.record_polled_frame(
+                                produced.ts,
+                                produced.monotonic_ns,
+                                produced.payload,
+                                duplicate_of,
+                            )
                         };
+                        let parse_status = if parsed_result.is_ok() {
+                            "ok"
+                        } else {
+                            "parse_failed"
+                        };
+                        let parsed_record = build_parsed_frame_record(
+                            &frame,
+                            "payload_committed",
+                            parse_status,
+                            parsed_result,
+                        );
 
                         raw_file
                             .write_all(&frame.payload)
                             .map_err(|err| format!("写入 raw 文件失败: {err}"))?;
-                        append_jsonl(&mut index_file, &frame.index_record())?;
-                        let mut guard = shared_clone
+                        append_jsonl(&mut index_file, &frame.index_record(parse_status))?;
+                        append_jsonl(&mut parsed_file, &parsed_record)?;
+
+                        let mut guard = shared_consumer
                             .lock()
                             .map_err(|_| "collector ring buffer mutex poisoned".to_string())?;
                         guard.mark_committed(&frame);
+                        if parsed_record.parse_status == "ok" {
+                            previous_duplicate_key = duplicate_key_from_parsed(&parsed_record);
+                            previous_duplicate_frame_seq = Some(frame.frame_seq);
+                        } else {
+                            previous_duplicate_key = None;
+                            previous_duplicate_frame_seq = None;
+                        }
                     }
-                    Ok(_) => {
-                        let mut guard = shared_clone
-                            .lock()
-                            .map_err(|_| "collector ring buffer mutex poisoned".to_string())?;
-                        guard.timeout_count += 1;
+                    Err(RecvTimeoutError::Timeout) => {
+                        if producer_done.load(Ordering::SeqCst) {
+                            break;
+                        }
+                        if consumer_stop.load(Ordering::SeqCst) {
+                            continue;
+                        }
                     }
-                    Err(_) => {
-                        let mut guard = shared_clone
-                            .lock()
-                            .map_err(|_| "collector ring buffer mutex poisoned".to_string())?;
-                        guard.timeout_count += 1;
-                    }
-                }
-
-                next_poll_deadline += Duration::from_millis(poll_interval);
-                let now = Instant::now();
-                if next_poll_deadline <= now {
-                    next_poll_deadline = now;
+                    Err(RecvTimeoutError::Disconnected) => break,
                 }
             }
-
-            let guard = shared_clone
-                .lock()
-                .map_err(|_| "collector ring buffer mutex poisoned".to_string())?;
-            Ok(CollectorStopSummary {
-                frames_total: guard.committed_cursor.next_frame_seq,
-                timeout_count: guard.timeout_count,
-            })
+            Ok(())
         });
 
         Ok(Self {
             stop_flag,
             shared,
-            join: Some(join),
+            producer_join: Some(producer_join),
+            consumer_join: Some(consumer_join),
         })
     }
 
@@ -1880,6 +2354,37 @@ impl CollectorHandle {
             .lock()
             .map_err(|_| "collector state mutex poisoned".to_string())?;
         Ok(guard.committed_cursor)
+    }
+
+    fn produced_cursor(&self) -> Result<CollectorCursor, String> {
+        let guard = self
+            .shared
+            .lock()
+            .map_err(|_| "collector state mutex poisoned".to_string())?;
+        Ok(guard.produced_cursor)
+    }
+
+    fn wait_until_committed(&self, target: CollectorCursor) -> Result<CollectorCursor, String> {
+        let started = Instant::now();
+        loop {
+            let committed = self.committed_cursor()?;
+            if committed.next_frame_seq >= target.next_frame_seq
+                && committed.next_raw_offset >= target.next_raw_offset
+            {
+                return Ok(committed);
+            }
+            if started.elapsed() >= Duration::from_millis(COLLECTOR_COMMIT_SYNC_TIMEOUT_MS) {
+                return Err(format!(
+                    "collector committed cursor 未在 {}ms 内追平 produced cursor: committed=({}, {}), target=({}, {})",
+                    COLLECTOR_COMMIT_SYNC_TIMEOUT_MS,
+                    committed.next_frame_seq,
+                    committed.next_raw_offset,
+                    target.next_frame_seq,
+                    target.next_raw_offset
+                ));
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
     }
 
     fn retained_ring_frames(&self) -> Result<usize, String> {
@@ -1900,27 +2405,53 @@ impl CollectorHandle {
 
     fn stop_join(mut self) -> Result<CollectorStopSummary, String> {
         self.stop_flag.store(true, Ordering::SeqCst);
-        let Some(join) = self.join.take() else {
-            return Err("collector join handle 不存在".to_string());
+        let Some(producer_join) = self.producer_join.take() else {
+            return Err("collector producer join handle 不存在".to_string());
         };
-        join.join()
-            .map_err(|_| "collector 线程 join 失败".to_string())?
+        let producer_result = producer_join
+            .join()
+            .map_err(|_| "collector producer 线程 join 失败".to_string())?;
+        let consumer_result = if let Some(consumer_join) = self.consumer_join.take() {
+            consumer_join
+                .join()
+                .map_err(|_| "collector consumer 线程 join 失败".to_string())?
+        } else {
+            Ok(())
+        };
+        producer_result?;
+        consumer_result?;
+
+        let guard = self
+            .shared
+            .lock()
+            .map_err(|_| "collector state mutex poisoned".to_string())?;
+        Ok(CollectorStopSummary {
+            frames_total: guard.committed_cursor.next_frame_seq,
+            timeout_count: guard.timeout_count,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        build_ring_capacity_plan, ensure_nonnegative_target_currents, open_jsonl_writer,
-        CollectorSharedState, RawReplayReader,
+        build_ring_capacity_plan, enqueue_produced_frame, ensure_nonnegative_target_currents,
+        open_jsonl_writer, sleep_with_interrupt, CollectorSharedState, ParsedReplayReader,
+        ProducedFrame, RawReplayReader,
     };
     use acquisition_runtime::{
-        CollectorConfig, CollectorCursor, FrameIndexRecord, FrameRingBuffer, SegmentRecord,
-        Smb100aFixedProfile, Smb100aRunProfile, SmbSweepDefaults,
+        CollectorConfig, CollectorCursor, FrameIndexRecord, FrameRingBuffer, ParsedFrameRecord,
+        SegmentRecord, Smb100aFixedProfile, Smb100aRunProfile, SmbSweepDefaults,
     };
     use std::fs;
     use std::io::Write;
     use std::path::PathBuf;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::sync_channel,
+        Arc,
+    };
+    use std::time::Duration;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -1948,12 +2479,16 @@ mod tests {
         let mut shared = CollectorSharedState {
             ring: FrameRingBuffer::new(2),
             timeout_count: 0,
+            produced_cursor: CollectorCursor {
+                next_frame_seq: 0,
+                next_raw_offset: 0,
+            },
             committed_cursor: CollectorCursor {
                 next_frame_seq: 0,
                 next_raw_offset: 0,
             },
         };
-        let frame = shared.record_polled_frame("t1".to_string(), 10, vec![1, 2, 3, 4]);
+        let frame = shared.record_polled_frame("t1".to_string(), 10, vec![1, 2, 3, 4], None);
         assert_eq!(shared.committed_cursor.next_frame_seq, 0);
         assert_eq!(shared.committed_cursor.next_raw_offset, 0);
 
@@ -2026,6 +2561,91 @@ mod tests {
     }
 
     #[test]
+    fn parsed_replay_reader_reconstructs_frames_from_parsed_jsonl() {
+        let parsed_path = unique_temp_path("odmr_parsed_replay").with_extension("jsonl");
+        let records = vec![
+            ParsedFrameRecord {
+                schema_version: 1,
+                layout_version: "layout".to_string(),
+                frame_seq: 0,
+                ts: "t1".to_string(),
+                monotonic_ns: 100,
+                raw_offset: 0,
+                raw_len: 12288,
+                transport_status: "payload_committed".to_string(),
+                parse_status: "ok".to_string(),
+                padding_status: "all_zero".to_string(),
+                duplicate_hint: None,
+                parse_error: None,
+                measurement_field_order: vec!["A-X".to_string()],
+                measurement_matrix: Some(vec![vec![1.0]]),
+                scalar_fields: Vec::new(),
+                b_ref_source_code: Some(0),
+                b_ref_slope_code: Some(2),
+                b_ref_current_freq_hz: Some(500.0),
+                b_input_overload: Some(false),
+                b_gain_overload: Some(false),
+                b_pll_locked: Some(true),
+            },
+            ParsedFrameRecord {
+                schema_version: 1,
+                layout_version: "layout".to_string(),
+                frame_seq: 1,
+                ts: "t2".to_string(),
+                monotonic_ns: 200,
+                raw_offset: 12288,
+                raw_len: 12288,
+                transport_status: "payload_committed".to_string(),
+                parse_status: "ok".to_string(),
+                padding_status: "all_zero".to_string(),
+                duplicate_hint: Some(0),
+                parse_error: None,
+                measurement_field_order: vec!["A-X".to_string()],
+                measurement_matrix: Some(vec![vec![1.0]]),
+                scalar_fields: Vec::new(),
+                b_ref_source_code: Some(0),
+                b_ref_slope_code: Some(2),
+                b_ref_current_freq_hz: Some(500.0),
+                b_input_overload: Some(false),
+                b_gain_overload: Some(false),
+                b_pll_locked: Some(true),
+            },
+        ];
+        let parsed_text = records
+            .iter()
+            .map(|record| serde_json::to_string(record).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n")
+            + "\n";
+        fs::write(&parsed_path, parsed_text).unwrap();
+
+        let segment = SegmentRecord {
+            schema_version: 1,
+            run_id: "run".to_string(),
+            segment_id: "seg".to_string(),
+            point_id: "p1".to_string(),
+            source: "oe".to_string(),
+            start_ts: "s".to_string(),
+            end_ts: "e".to_string(),
+            start_monotonic_ns: 0,
+            end_monotonic_ns: 300,
+            raw_file: "raw/oe1022d.rall".to_string(),
+            raw_offset_start: 0,
+            raw_offset_end: 24576,
+            frame_seq_start: Some(0),
+            frame_seq_end: Some(1),
+        };
+
+        let mut reader = ParsedReplayReader::open(&parsed_path).unwrap();
+        let frames = reader.replay_segment(&segment).unwrap();
+        assert_eq!(frames.len(), 2);
+        assert_eq!(frames[0].frame_seq, 0);
+        assert_eq!(frames[1].duplicate_hint, Some(0));
+
+        let _ = fs::remove_file(parsed_path);
+    }
+
+    #[test]
     fn ring_capacity_plan_expands_for_long_sweep() {
         let collector = CollectorConfig {
             poll_interval_ms: 48,
@@ -2085,6 +2705,39 @@ mod tests {
         assert!(plan.effective_capacity_frames > 512);
         assert!(plan.estimated_frames_max > 700);
         assert!(plan.guard_frames > 0);
+    }
+
+    #[test]
+    fn enqueue_produced_frame_fails_fast_when_queue_is_full() {
+        let (tx, _rx) = sync_channel(1);
+        enqueue_produced_frame(
+            &tx,
+            ProducedFrame {
+                ts: "t1".to_string(),
+                monotonic_ns: 1,
+                payload: vec![1; 8],
+            },
+        )
+        .unwrap();
+
+        let err = enqueue_produced_frame(
+            &tx,
+            ProducedFrame {
+                ts: "t2".to_string(),
+                monotonic_ns: 2,
+                payload: vec![2; 8],
+            },
+        )
+        .unwrap_err();
+        assert!(err.contains("bounded queue 已满"));
+    }
+
+    #[test]
+    fn sleep_with_interrupt_returns_when_flag_is_set() {
+        let flag = Arc::new(AtomicBool::new(true));
+        let err = sleep_with_interrupt(Duration::from_millis(200), &flag).unwrap_err();
+        assert_eq!(err, "用户中断");
+        assert!(flag.load(Ordering::SeqCst));
     }
 
     fn unique_temp_path(prefix: &str) -> PathBuf {

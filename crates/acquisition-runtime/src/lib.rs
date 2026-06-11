@@ -9,8 +9,10 @@
 //! 这里提供的是运行时协议、数据结构和可测试的窗口/质量逻辑。
 
 use serde::{Deserialize, Serialize};
+use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::VecDeque;
 use std::fmt;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Smb100aFixedProfile {
@@ -785,6 +787,10 @@ pub struct CollectorFrame {
 pub const RALL_FRAME_BYTES: usize = 12288;
 pub const RALL_PARAM_COUNT: usize = 20;
 pub const RALL_SAMPLE_COUNT: usize = 50;
+pub const RALL_MEASUREMENT_BYTES: usize = 8000;
+pub const RALL_CONFIG_BYTES: usize = 1216;
+pub const RALL_PADDING_BYTES: usize = 3072;
+pub const RALL_PADDING_START: usize = RALL_MEASUREMENT_BYTES + RALL_CONFIG_BYTES;
 const RALL_PARAM_BLOCK_BYTES: usize = RALL_SAMPLE_COUNT * 8;
 
 pub const RALL_FIELD_ORDER: [&str; RALL_PARAM_COUNT] = [
@@ -792,16 +798,100 @@ pub const RALL_FIELD_ORDER: [&str; RALL_PARAM_COUNT] = [
     "B-Noise", "B-Xh1", "B-Yh1", "B-Xh2", "B-Yh2", "AUXADC1", "AUXADC2", "AUXADC3", "AUXADC4",
 ];
 
+const RALL_LAYOUT_MARKDOWN: &str = include_str!(
+    "../../../docs/equipment_manual/oe1022d/05_oe1022d_rall_global_data_config_reading.md"
+);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RallMeasurementFieldSpec {
+    pub index: usize,
+    pub name: String,
+    pub start: usize,
+    pub end: usize,
+    pub sample_count: usize,
+    pub encoding: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RallScalarFieldSpec {
+    pub index: usize,
+    pub category: String,
+    pub name: String,
+    pub start: usize,
+    pub end: usize,
+    pub encoding: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RallReservedRangeSpec {
+    pub start: usize,
+    pub end: usize,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RallLayoutSpec {
+    pub schema_version: u32,
+    pub source_document: String,
+    pub measurement_fields: Vec<RallMeasurementFieldSpec>,
+    pub scalar_fields: Vec<RallScalarFieldSpec>,
+    pub reserved_ranges: Vec<RallReservedRangeSpec>,
+    pub padding_start: usize,
+    pub padding_end: usize,
+    pub padding_must_be_zero: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ParsedScalarFieldRecord {
+    pub index: usize,
+    pub category: String,
+    pub name: String,
+    pub start: usize,
+    pub end: usize,
+    pub encoding: String,
+    pub value: JsonValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ParsedFrameRecord {
+    pub schema_version: u32,
+    pub layout_version: String,
+    pub frame_seq: u64,
+    pub ts: String,
+    pub monotonic_ns: u64,
+    pub raw_offset: u64,
+    pub raw_len: usize,
+    pub transport_status: String,
+    pub parse_status: String,
+    pub padding_status: String,
+    #[serde(default)]
+    pub duplicate_hint: Option<u64>,
+    #[serde(default)]
+    pub parse_error: Option<String>,
+    pub measurement_field_order: Vec<String>,
+    #[serde(default)]
+    pub measurement_matrix: Option<Vec<Vec<f64>>>,
+    #[serde(default)]
+    pub scalar_fields: Vec<ParsedScalarFieldRecord>,
+    #[serde(default)]
+    pub b_ref_source_code: Option<u8>,
+    #[serde(default)]
+    pub b_ref_slope_code: Option<u8>,
+    #[serde(default)]
+    pub b_ref_current_freq_hz: Option<f64>,
+    #[serde(default)]
+    pub b_input_overload: Option<bool>,
+    #[serde(default)]
+    pub b_gain_overload: Option<bool>,
+    #[serde(default)]
+    pub b_pll_locked: Option<bool>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum MinimalRallParseError {
-    WrongLength {
-        expected: usize,
-        actual: usize,
-    },
-    NonFiniteValue {
-        field: &'static str,
-        sample_index: usize,
-    },
+    WrongLength { expected: usize, actual: usize },
+    NonFiniteValue { field: String, sample_index: usize },
+    LayoutSpec(String),
 }
 
 impl std::fmt::Display for MinimalRallParseError {
@@ -816,6 +906,7 @@ impl std::fmt::Display for MinimalRallParseError {
             } => {
                 write!(f, "RALL 字段 {field} 在 sample {sample_index} 出现非有限值")
             }
+            Self::LayoutSpec(message) => write!(f, "RALL 布局规格错误: {message}"),
         }
     }
 }
@@ -889,20 +980,39 @@ impl CollectorFrame {
         self.payload.len()
     }
 
-    pub fn index_record(&self) -> FrameIndexRecord {
+    pub fn index_record(&self, parse_status: impl Into<String>) -> FrameIndexRecord {
         FrameIndexRecord {
             frame_seq: self.frame_seq,
             ts: self.ts.clone(),
             monotonic_ns: self.monotonic_ns,
             raw_offset: self.raw_offset,
             raw_len: self.raw_len(),
-            parse_status: "ok".to_string(),
+            parse_status: parse_status.into(),
             duplicate_of: self.duplicate_of,
         }
     }
 }
 
 pub fn parse_rall_frame_minimal(bytes: &[u8]) -> Result<MinimalRallFrame, MinimalRallParseError> {
+    let parsed = parse_rall_frame_full(bytes)?;
+    let measurement_matrix = parsed
+        .measurement_matrix
+        .ok_or_else(|| MinimalRallParseError::LayoutSpec("measurement_matrix 缺失".to_string()))?;
+
+    Ok(MinimalRallFrame {
+        measurement_matrix,
+        status: MinimalRallStatus {
+            b_ref_source_code: parsed.b_ref_source_code,
+            b_ref_slope_code: parsed.b_ref_slope_code,
+            b_ref_current_freq_hz: parsed.b_ref_current_freq_hz,
+            b_input_overload: parsed.b_input_overload,
+            b_gain_overload: parsed.b_gain_overload,
+            b_pll_locked: parsed.b_pll_locked,
+        },
+    })
+}
+
+pub fn parse_rall_frame_full(bytes: &[u8]) -> Result<ParsedFrameRecord, MinimalRallParseError> {
     if bytes.len() != RALL_FRAME_BYTES {
         return Err(MinimalRallParseError::WrongLength {
             expected: RALL_FRAME_BYTES,
@@ -910,39 +1020,112 @@ pub fn parse_rall_frame_minimal(bytes: &[u8]) -> Result<MinimalRallFrame, Minima
         });
     }
 
-    let mut measurement_matrix = Vec::with_capacity(RALL_PARAM_COUNT);
-    for (field_index, field_name) in RALL_FIELD_ORDER.iter().enumerate() {
-        let start = field_index * RALL_PARAM_BLOCK_BYTES;
-        let end = start + RALL_PARAM_BLOCK_BYTES;
-        let mut samples = Vec::with_capacity(RALL_SAMPLE_COUNT);
-        for sample_index in 0..RALL_SAMPLE_COUNT {
-            let sample_start = start + sample_index * 8;
+    let layout = rall_layout_spec()?;
+    let mut measurement_matrix = Vec::with_capacity(layout.measurement_fields.len());
+    for field in &layout.measurement_fields {
+        let mut samples = Vec::with_capacity(field.sample_count);
+        for sample_index in 0..field.sample_count {
+            let sample_start = field.start + sample_index * 8;
             let sample_end = sample_start + 8;
             let chunk: [u8; 8] = bytes[sample_start..sample_end].try_into().unwrap();
             let value = f64::from_bits(u64::from_be_bytes(chunk));
             if !value.is_finite() {
                 return Err(MinimalRallParseError::NonFiniteValue {
-                    field: field_name,
+                    field: field.name.clone(),
                     sample_index,
                 });
             }
             samples.push(value);
         }
-        debug_assert_eq!(end - start, RALL_PARAM_BLOCK_BYTES);
+        debug_assert_eq!(field.end + 1 - field.start, RALL_PARAM_BLOCK_BYTES);
         measurement_matrix.push(samples);
     }
 
-    Ok(MinimalRallFrame {
-        measurement_matrix,
-        status: MinimalRallStatus {
-            b_ref_source_code: read_rall_u8(bytes, 8504),
-            b_ref_slope_code: read_rall_u8(bytes, 8521),
-            b_ref_current_freq_hz: read_rall_f64(bytes, 8505),
-            b_input_overload: read_rall_u8(bytes, 8779).map(|value| value != 0),
-            b_gain_overload: read_rall_u8(bytes, 8780).map(|value| value != 0),
-            b_pll_locked: read_rall_u8(bytes, 8781).map(|value| value != 0),
-        },
+    let scalar_fields = layout
+        .scalar_fields
+        .iter()
+        .map(|spec| parse_scalar_field(bytes, spec))
+        .collect::<Result<Vec<_>, _>>()?;
+    let padding_status = if bytes[RALL_PADDING_START..].iter().all(|byte| *byte == 0) {
+        "all_zero".to_string()
+    } else {
+        "non_zero".to_string()
+    };
+
+    Ok(ParsedFrameRecord {
+        schema_version: 1,
+        layout_version: "oe1022d_rall_v1_table_driven".to_string(),
+        frame_seq: 0,
+        ts: String::new(),
+        monotonic_ns: 0,
+        raw_offset: 0,
+        raw_len: bytes.len(),
+        transport_status: "payload_committed".to_string(),
+        parse_status: "ok".to_string(),
+        padding_status,
+        duplicate_hint: None,
+        parse_error: None,
+        measurement_field_order: layout
+            .measurement_fields
+            .iter()
+            .map(|field| field.name.clone())
+            .collect(),
+        measurement_matrix: Some(measurement_matrix),
+        scalar_fields,
+        b_ref_source_code: read_rall_u8(bytes, 8504),
+        b_ref_slope_code: read_rall_u8(bytes, 8521),
+        b_ref_current_freq_hz: read_rall_f64(bytes, 8505),
+        b_input_overload: read_rall_u8(bytes, 8779).map(|value| value != 0),
+        b_gain_overload: read_rall_u8(bytes, 8780).map(|value| value != 0),
+        b_pll_locked: read_rall_u8(bytes, 8781).map(|value| value != 0),
     })
+}
+
+pub fn build_parsed_frame_record(
+    frame: &CollectorFrame,
+    transport_status: &str,
+    parse_status: &str,
+    parse_result: Result<ParsedFrameRecord, MinimalRallParseError>,
+) -> ParsedFrameRecord {
+    match parse_result {
+        Ok(mut parsed) => {
+            parsed.frame_seq = frame.frame_seq;
+            parsed.ts = frame.ts.clone();
+            parsed.monotonic_ns = frame.monotonic_ns;
+            parsed.raw_offset = frame.raw_offset;
+            parsed.raw_len = frame.raw_len();
+            parsed.transport_status = transport_status.to_string();
+            parsed.parse_status = parse_status.to_string();
+            parsed.duplicate_hint = frame.duplicate_of;
+            parsed
+        }
+        Err(err) => ParsedFrameRecord {
+            schema_version: 1,
+            layout_version: "oe1022d_rall_v1_table_driven".to_string(),
+            frame_seq: frame.frame_seq,
+            ts: frame.ts.clone(),
+            monotonic_ns: frame.monotonic_ns,
+            raw_offset: frame.raw_offset,
+            raw_len: frame.raw_len(),
+            transport_status: transport_status.to_string(),
+            parse_status: parse_status.to_string(),
+            padding_status: "not_checked".to_string(),
+            duplicate_hint: frame.duplicate_of,
+            parse_error: Some(err.to_string()),
+            measurement_field_order: RALL_FIELD_ORDER
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect(),
+            measurement_matrix: None,
+            scalar_fields: Vec::new(),
+            b_ref_source_code: None,
+            b_ref_slope_code: None,
+            b_ref_current_freq_hz: None,
+            b_input_overload: None,
+            b_gain_overload: None,
+            b_pll_locked: None,
+        },
+    }
 }
 
 pub fn build_point_field_record(
@@ -950,6 +1133,28 @@ pub fn build_point_field_record(
     point_id: &str,
     segment_id: &str,
     frames: &[CollectorFrame],
+) -> Result<PointFieldRecord, MinimalRallParseError> {
+    let parsed_frames = frames
+        .iter()
+        .map(|frame| {
+            let mut parsed = parse_rall_frame_full(&frame.payload)?;
+            parsed.frame_seq = frame.frame_seq;
+            parsed.ts = frame.ts.clone();
+            parsed.monotonic_ns = frame.monotonic_ns;
+            parsed.raw_offset = frame.raw_offset;
+            parsed.raw_len = frame.raw_len();
+            parsed.duplicate_hint = frame.duplicate_of;
+            Ok(parsed)
+        })
+        .collect::<Result<Vec<_>, MinimalRallParseError>>()?;
+    build_point_field_record_from_parsed(run_id, point_id, segment_id, &parsed_frames)
+}
+
+pub fn build_point_field_record_from_parsed(
+    run_id: &str,
+    point_id: &str,
+    segment_id: &str,
+    frames: &[ParsedFrameRecord],
 ) -> Result<PointFieldRecord, MinimalRallParseError> {
     let mut b_x_mv = Vec::new();
     let mut b_y_mv = Vec::new();
@@ -972,23 +1177,32 @@ pub fn build_point_field_record(
     };
 
     for frame in frames {
-        let parsed = parse_rall_frame_minimal(&frame.payload)?;
-        last_status = parsed.status.clone();
-        b_x_mv.extend_from_slice(&parsed.measurement_matrix[8]);
-        b_y_mv.extend_from_slice(&parsed.measurement_matrix[9]);
-        b_freq_hz.extend_from_slice(&parsed.measurement_matrix[10]);
-        b_noise_mv.extend_from_slice(&parsed.measurement_matrix[11]);
-        aux_adc1_v.extend_from_slice(&parsed.measurement_matrix[16]);
-        aux_adc2_v.extend_from_slice(&parsed.measurement_matrix[17]);
-        aux_adc3_v.extend_from_slice(&parsed.measurement_matrix[18]);
-        aux_adc4_v.extend_from_slice(&parsed.measurement_matrix[19]);
-        if parsed.status.b_pll_locked.unwrap_or(false) {
+        let matrix = frame.measurement_matrix.as_ref().ok_or_else(|| {
+            MinimalRallParseError::LayoutSpec("parsed frame 缺少 measurement_matrix".to_string())
+        })?;
+        last_status = MinimalRallStatus {
+            b_ref_source_code: frame.b_ref_source_code,
+            b_ref_slope_code: frame.b_ref_slope_code,
+            b_ref_current_freq_hz: frame.b_ref_current_freq_hz,
+            b_input_overload: frame.b_input_overload,
+            b_gain_overload: frame.b_gain_overload,
+            b_pll_locked: frame.b_pll_locked,
+        };
+        b_x_mv.extend_from_slice(&matrix[8]);
+        b_y_mv.extend_from_slice(&matrix[9]);
+        b_freq_hz.extend_from_slice(&matrix[10]);
+        b_noise_mv.extend_from_slice(&matrix[11]);
+        aux_adc1_v.extend_from_slice(&matrix[16]);
+        aux_adc2_v.extend_from_slice(&matrix[17]);
+        aux_adc3_v.extend_from_slice(&matrix[18]);
+        aux_adc4_v.extend_from_slice(&matrix[19]);
+        if frame.b_pll_locked.unwrap_or(false) {
             pll_locked_frames += 1;
         }
-        if parsed.status.b_input_overload.unwrap_or(false) {
+        if frame.b_input_overload.unwrap_or(false) {
             input_overload_frames += 1;
         }
-        if parsed.status.b_gain_overload.unwrap_or(false) {
+        if frame.b_gain_overload.unwrap_or(false) {
             gain_overload_frames += 1;
         }
     }
@@ -1048,8 +1262,7 @@ fn read_rall_u8(bytes: &[u8], offset: usize) -> Option<u8> {
 }
 
 fn read_rall_f64(bytes: &[u8], offset: usize) -> Option<f64> {
-    let chunk: [u8; 8] = bytes.get(offset..offset + 8)?.try_into().ok()?;
-    Some(f64::from_bits(u64::from_be_bytes(chunk)))
+    read_f64_be(bytes, offset).ok()
 }
 
 fn mean(values: &[f64]) -> f64 {
@@ -1057,6 +1270,211 @@ fn mean(values: &[f64]) -> f64 {
         return 0.0;
     }
     values.iter().sum::<f64>() / values.len() as f64
+}
+
+pub fn rall_layout_spec() -> Result<&'static RallLayoutSpec, MinimalRallParseError> {
+    static SPEC: OnceLock<Result<RallLayoutSpec, String>> = OnceLock::new();
+    SPEC.get_or_init(parse_rall_layout_spec_from_markdown)
+        .as_ref()
+        .map_err(|message| MinimalRallParseError::LayoutSpec(message.clone()))
+}
+
+fn parse_rall_layout_spec_from_markdown() -> Result<RallLayoutSpec, String> {
+    let mut measurement_fields = Vec::new();
+    let mut scalar_fields = Vec::new();
+
+    for line in RALL_LAYOUT_MARKDOWN.lines() {
+        if !line.starts_with('|') {
+            continue;
+        }
+        let columns = line.split('|').map(str::trim).collect::<Vec<_>>();
+        if columns.len() < 8 {
+            continue;
+        }
+        let Ok(index) = columns[1].parse::<usize>() else {
+            continue;
+        };
+        let category = columns[2];
+        let name = columns[3];
+        let start = columns[4]
+            .parse::<usize>()
+            .map_err(|err| format!("RALL layout start 解析失败 `{}`: {err}", columns[4]))?;
+        let end = columns[5]
+            .parse::<usize>()
+            .map_err(|err| format!("RALL layout end 解析失败 `{}`: {err}", columns[5]))?;
+        let encoding = columns[6];
+        let sample_count = columns[7]
+            .parse::<usize>()
+            .map_err(|err| format!("RALL layout sample_count 解析失败 `{}`: {err}", columns[7]))?;
+
+        if sample_count == RALL_SAMPLE_COUNT && encoding == "f64" {
+            measurement_fields.push(RallMeasurementFieldSpec {
+                index,
+                name: name.to_string(),
+                start,
+                end,
+                sample_count,
+                encoding: encoding.to_string(),
+            });
+        } else {
+            scalar_fields.push(RallScalarFieldSpec {
+                index,
+                category: category.to_string(),
+                name: name.to_string(),
+                start,
+                end,
+                encoding: encoding.to_string(),
+            });
+        }
+    }
+
+    if measurement_fields.len() != RALL_PARAM_COUNT {
+        return Err(format!(
+            "RALL measurement field 数量错误: expected={}, actual={}",
+            RALL_PARAM_COUNT,
+            measurement_fields.len()
+        ));
+    }
+
+    let mut reserved_ranges = Vec::new();
+    let mut occupied_ranges = measurement_fields
+        .iter()
+        .map(|field| (field.start, field.end))
+        .chain(scalar_fields.iter().map(|field| (field.start, field.end)))
+        .collect::<Vec<_>>();
+    occupied_ranges.sort_by_key(|(start, _)| *start);
+
+    let mut cursor = 0_usize;
+    for (start, end) in occupied_ranges {
+        if start > cursor {
+            reserved_ranges.push(RallReservedRangeSpec {
+                start: cursor,
+                end: start - 1,
+                reason: "manual_reserved_gap".to_string(),
+            });
+        }
+        cursor = end.saturating_add(1);
+    }
+    if cursor < RALL_PADDING_START {
+        reserved_ranges.push(RallReservedRangeSpec {
+            start: cursor,
+            end: RALL_PADDING_START - 1,
+            reason: "manual_reserved_gap".to_string(),
+        });
+    }
+
+    Ok(RallLayoutSpec {
+        schema_version: 1,
+        source_document:
+            "docs/equipment_manual/oe1022d/05_oe1022d_rall_global_data_config_reading.md"
+                .to_string(),
+        measurement_fields,
+        scalar_fields,
+        reserved_ranges,
+        padding_start: RALL_PADDING_START,
+        padding_end: RALL_FRAME_BYTES - 1,
+        padding_must_be_zero: true,
+    })
+}
+
+fn parse_scalar_field(
+    bytes: &[u8],
+    spec: &RallScalarFieldSpec,
+) -> Result<ParsedScalarFieldRecord, MinimalRallParseError> {
+    let value = match spec.encoding.as_str() {
+        "i8" => JsonValue::from(read_i8(bytes, spec.start)?),
+        "i16" => JsonValue::from(read_i16_be(bytes, spec.start)?),
+        "i64" => JsonValue::from(read_i64_be(bytes, spec.start)?),
+        "f32" => {
+            let value = read_f32_be(bytes, spec.start)?;
+            JsonValue::from(value)
+        }
+        "f64" => {
+            let value = read_f64_be(bytes, spec.start)?;
+            JsonValue::from(value)
+        }
+        encoding if encoding.starts_with("bytes[") => {
+            let raw = bytes.get(spec.start..=spec.end).ok_or_else(|| {
+                MinimalRallParseError::LayoutSpec(format!("bytes 字段越界: {}", spec.name))
+            })?;
+            let mut value = JsonMap::new();
+            value.insert("hex".to_string(), JsonValue::from(hex_encode(raw)));
+            let text = String::from_utf8_lossy(raw)
+                .trim_matches(char::from(0))
+                .trim()
+                .to_string();
+            value.insert("text".to_string(), JsonValue::from(text));
+            JsonValue::Object(value)
+        }
+        other => {
+            return Err(MinimalRallParseError::LayoutSpec(format!(
+                "不支持的 RALL 标量编码: {other}"
+            )))
+        }
+    };
+
+    Ok(ParsedScalarFieldRecord {
+        index: spec.index,
+        category: spec.category.clone(),
+        name: spec.name.clone(),
+        start: spec.start,
+        end: spec.end,
+        encoding: spec.encoding.clone(),
+        value,
+    })
+}
+
+fn read_i8(bytes: &[u8], offset: usize) -> Result<i8, MinimalRallParseError> {
+    bytes
+        .get(offset)
+        .copied()
+        .map(|value| value as i8)
+        .ok_or_else(|| MinimalRallParseError::LayoutSpec(format!("i8 字段越界: offset={offset}")))
+}
+
+fn read_i16_be(bytes: &[u8], offset: usize) -> Result<i16, MinimalRallParseError> {
+    let chunk: [u8; 2] = bytes
+        .get(offset..offset + 2)
+        .ok_or_else(|| MinimalRallParseError::LayoutSpec(format!("i16 字段越界: offset={offset}")))?
+        .try_into()
+        .unwrap();
+    Ok(i16::from_be_bytes(chunk))
+}
+
+fn read_i64_be(bytes: &[u8], offset: usize) -> Result<i64, MinimalRallParseError> {
+    let chunk: [u8; 8] = bytes
+        .get(offset..offset + 8)
+        .ok_or_else(|| MinimalRallParseError::LayoutSpec(format!("i64 字段越界: offset={offset}")))?
+        .try_into()
+        .unwrap();
+    Ok(i64::from_be_bytes(chunk))
+}
+
+fn read_f32_be(bytes: &[u8], offset: usize) -> Result<f32, MinimalRallParseError> {
+    let chunk: [u8; 4] = bytes
+        .get(offset..offset + 4)
+        .ok_or_else(|| MinimalRallParseError::LayoutSpec(format!("f32 字段越界: offset={offset}")))?
+        .try_into()
+        .unwrap();
+    Ok(f32::from_bits(u32::from_be_bytes(chunk)))
+}
+
+fn read_f64_be(bytes: &[u8], offset: usize) -> Result<f64, MinimalRallParseError> {
+    let chunk: [u8; 8] = bytes
+        .get(offset..offset + 8)
+        .ok_or_else(|| MinimalRallParseError::LayoutSpec(format!("f64 字段越界: offset={offset}")))?
+        .try_into()
+        .unwrap();
+    Ok(f64::from_bits(u64::from_be_bytes(chunk)))
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        use std::fmt::Write as _;
+        let _ = write!(&mut out, "{byte:02X}");
+    }
+    out
 }
 
 fn default_cartesian_order() -> Vec<String> {
@@ -1171,13 +1589,19 @@ impl FrameRingBuffer {
         }
     }
 
-    pub fn push(&mut self, ts: String, monotonic_ns: u64, payload: Vec<u8>) -> CollectorFrame {
+    pub fn push(
+        &mut self,
+        ts: String,
+        monotonic_ns: u64,
+        payload: Vec<u8>,
+        duplicate_of: Option<u64>,
+    ) -> CollectorFrame {
         let frame = CollectorFrame {
             frame_seq: self.next_frame_seq,
             ts,
             monotonic_ns,
             raw_offset: self.next_raw_offset,
-            duplicate_of: None,
+            duplicate_of,
             payload,
         };
         self.next_frame_seq += 1;
@@ -1253,11 +1677,12 @@ pub fn compute_quality_record(
         "failed_no_frames".to_string()
     } else if frames_total < thresholds.min_frames {
         "failed_min_frames".to_string()
-    } else if timeout_count > thresholds.max_timeout_count
-        || duplicate_ratio > thresholds.max_duplicate_ratio
+    } else if timeout_count > thresholds.max_timeout_count {
+        "failed_timeout".to_string()
+    } else if duplicate_ratio > thresholds.max_duplicate_ratio
         || last_frame_age_ms > thresholds.max_last_frame_age_ms
     {
-        "failed_timeouts".to_string()
+        "failed_quality".to_string()
     } else {
         "passed".to_string()
     };
@@ -1589,9 +2014,9 @@ mod tests {
     #[test]
     fn ring_buffer_retains_latest_frames_only() {
         let mut ring = FrameRingBuffer::new(2);
-        ring.push("t1".to_string(), 10, vec![1, 2, 3]);
-        ring.push("t2".to_string(), 20, vec![4, 5]);
-        ring.push("t3".to_string(), 30, vec![6]);
+        ring.push("t1".to_string(), 10, vec![1, 2, 3], None);
+        ring.push("t2".to_string(), 20, vec![4, 5], None);
+        ring.push("t3".to_string(), 30, vec![6], None);
 
         let window = ring.pull_window(0, 100);
         assert_eq!(window.len(), 2);
@@ -1654,6 +2079,88 @@ mod tests {
         assert_eq!(quality.frames_total, 2);
         assert_eq!(quality.frames_unique, 2);
         assert_eq!(quality.estimated_frames_expected, Some(4));
+        assert_eq!(quality.frame_coverage_ratio, Some(0.5));
+    }
+
+    #[test]
+    fn quality_fails_when_timeout_occurs() {
+        let thresholds = RunQualityThresholds {
+            min_frames: 2,
+            max_timeout_count: 0,
+            max_duplicate_ratio: 0.5,
+            max_last_frame_age_ms: 100,
+        };
+        let frames = vec![
+            CollectorFrame {
+                frame_seq: 0,
+                ts: "t1".to_string(),
+                monotonic_ns: 1_000_000,
+                raw_offset: 0,
+                payload: vec![1; 16],
+                duplicate_of: None,
+            },
+            CollectorFrame {
+                frame_seq: 1,
+                ts: "t2".to_string(),
+                monotonic_ns: 5_000_000,
+                raw_offset: 16,
+                payload: vec![2; 16],
+                duplicate_of: None,
+            },
+        ];
+
+        let quality = compute_quality_record(
+            "run_1",
+            "p1",
+            "seg1",
+            20_000_000,
+            &frames,
+            &thresholds,
+            1,
+            Some(4),
+        );
+        assert_eq!(quality.quality_status, "failed_timeout");
+        assert_eq!(quality.frame_coverage_ratio, Some(0.5));
+    }
+
+    #[test]
+    fn quality_allows_timeout_within_threshold() {
+        let thresholds = RunQualityThresholds {
+            min_frames: 2,
+            max_timeout_count: 2,
+            max_duplicate_ratio: 0.5,
+            max_last_frame_age_ms: 100,
+        };
+        let frames = vec![
+            CollectorFrame {
+                frame_seq: 0,
+                ts: "t1".to_string(),
+                monotonic_ns: 1_000_000,
+                raw_offset: 0,
+                payload: vec![1; 16],
+                duplicate_of: None,
+            },
+            CollectorFrame {
+                frame_seq: 1,
+                ts: "t2".to_string(),
+                monotonic_ns: 5_000_000,
+                raw_offset: 16,
+                payload: vec![2; 16],
+                duplicate_of: None,
+            },
+        ];
+
+        let quality = compute_quality_record(
+            "run_1",
+            "p1",
+            "seg1",
+            20_000_000,
+            &frames,
+            &thresholds,
+            1,
+            Some(4),
+        );
+        assert_eq!(quality.quality_status, "passed");
         assert_eq!(quality.frame_coverage_ratio, Some(0.5));
     }
 
