@@ -754,7 +754,15 @@ pub struct QualityRecord {
     pub estimated_frames_expected: Option<usize>,
     #[serde(default)]
     pub frame_coverage_ratio: Option<f64>,
+    #[serde(default = "default_collector_health_clean")]
+    pub collector_health: String,
+    #[serde(default)]
+    pub timeout_budget_remaining: usize,
     pub quality_status: String,
+}
+
+fn default_collector_health_clean() -> String {
+    "clean".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1696,6 +1704,14 @@ pub fn compute_quality_record(
             frames_total as f64 / expected as f64
         }
     });
+    let collector_health = if timeout_count == 0 {
+        "clean"
+    } else if timeout_count <= thresholds.max_timeout_count {
+        "recovered_timeout"
+    } else {
+        "degraded_timeout"
+    };
+    let timeout_budget_remaining = thresholds.max_timeout_count.saturating_sub(timeout_count);
 
     let quality_status = if frames_total == 0 {
         "failed_no_frames".to_string()
@@ -1725,6 +1741,8 @@ pub fn compute_quality_record(
         min_frames: thresholds.min_frames,
         estimated_frames_expected,
         frame_coverage_ratio,
+        collector_health: collector_health.to_string(),
+        timeout_budget_remaining,
         quality_status,
     }
 }
@@ -2060,6 +2078,8 @@ mod tests {
 
         let quality = compute_quality_record("run_1", "p1", "seg1", 10, &[], &thresholds, 0, None);
         assert_eq!(quality.quality_status, "failed_no_frames");
+        assert_eq!(quality.collector_health, "clean");
+        assert_eq!(quality.timeout_budget_remaining, 0);
     }
 
     #[test]
@@ -2104,6 +2124,8 @@ mod tests {
         assert_eq!(quality.frames_unique, 2);
         assert_eq!(quality.estimated_frames_expected, Some(4));
         assert_eq!(quality.frame_coverage_ratio, Some(0.5));
+        assert_eq!(quality.collector_health, "clean");
+        assert_eq!(quality.timeout_budget_remaining, 0);
     }
 
     #[test]
@@ -2145,6 +2167,8 @@ mod tests {
         );
         assert_eq!(quality.quality_status, "failed_timeout");
         assert_eq!(quality.frame_coverage_ratio, Some(0.5));
+        assert_eq!(quality.collector_health, "degraded_timeout");
+        assert_eq!(quality.timeout_budget_remaining, 0);
     }
 
     #[test]
@@ -2186,6 +2210,92 @@ mod tests {
         );
         assert_eq!(quality.quality_status, "passed");
         assert_eq!(quality.frame_coverage_ratio, Some(0.5));
+        assert_eq!(quality.collector_health, "recovered_timeout");
+        assert_eq!(quality.timeout_budget_remaining, 1);
+    }
+
+    #[test]
+    fn quality_allows_timeout_at_threshold_boundary() {
+        let thresholds = RunQualityThresholds {
+            min_frames: 2,
+            max_timeout_count: 2,
+            max_duplicate_ratio: 0.5,
+            max_last_frame_age_ms: 100,
+        };
+        let frames = vec![
+            CollectorFrame {
+                frame_seq: 0,
+                ts: "t1".to_string(),
+                monotonic_ns: 1_000_000,
+                raw_offset: 0,
+                payload: vec![1; 16],
+                duplicate_of: None,
+            },
+            CollectorFrame {
+                frame_seq: 1,
+                ts: "t2".to_string(),
+                monotonic_ns: 5_000_000,
+                raw_offset: 16,
+                payload: vec![2; 16],
+                duplicate_of: None,
+            },
+        ];
+
+        let quality = compute_quality_record(
+            "run_1",
+            "p1",
+            "seg1",
+            20_000_000,
+            &frames,
+            &thresholds,
+            2,
+            Some(4),
+        );
+        assert_eq!(quality.quality_status, "passed");
+        assert_eq!(quality.collector_health, "recovered_timeout");
+        assert_eq!(quality.timeout_budget_remaining, 0);
+    }
+
+    #[test]
+    fn quality_fails_when_timeout_exceeds_threshold() {
+        let thresholds = RunQualityThresholds {
+            min_frames: 2,
+            max_timeout_count: 2,
+            max_duplicate_ratio: 0.5,
+            max_last_frame_age_ms: 100,
+        };
+        let frames = vec![
+            CollectorFrame {
+                frame_seq: 0,
+                ts: "t1".to_string(),
+                monotonic_ns: 1_000_000,
+                raw_offset: 0,
+                payload: vec![1; 16],
+                duplicate_of: None,
+            },
+            CollectorFrame {
+                frame_seq: 1,
+                ts: "t2".to_string(),
+                monotonic_ns: 5_000_000,
+                raw_offset: 16,
+                payload: vec![2; 16],
+                duplicate_of: None,
+            },
+        ];
+
+        let quality = compute_quality_record(
+            "run_1",
+            "p1",
+            "seg1",
+            20_000_000,
+            &frames,
+            &thresholds,
+            3,
+            Some(4),
+        );
+        assert_eq!(quality.quality_status, "failed_timeout");
+        assert_eq!(quality.collector_health, "degraded_timeout");
+        assert_eq!(quality.timeout_budget_remaining, 0);
     }
 
     #[test]

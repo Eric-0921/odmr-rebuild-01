@@ -53,7 +53,7 @@ impl Default for Oe1022dTransportConfig {
             rall_chunk_timeout: Duration::from_millis(5),
             // 如果连第一个字节都迟迟不来，就尽快把这一轮判空，
             // 让上层有机会在同周期内重发一次。
-            rall_first_byte_deadline: Duration::from_millis(20),
+            rall_first_byte_deadline: Duration::from_millis(30),
             rall_frame_deadline: Duration::from_millis(120),
             response_max_bytes: 4096,
             command_terminator: b"\r".to_vec(),
@@ -217,50 +217,234 @@ impl Oe1022dTransport {
 
     fn read_rall_frame_fast(&mut self, expected_len: usize) -> Result<Vec<u8>> {
         self.set_port_timeout(self.rall_chunk_timeout)?;
-        let started = std::time::Instant::now();
-        let first_byte_deadline = started + self.rall_first_byte_deadline;
-        let frame_deadline = started + self.rall_frame_deadline;
-        let mut out = Vec::with_capacity(expected_len);
-        let mut buf = [0_u8; 4096];
+        read_rall_frame_fast_with_reader(
+            &mut self.port,
+            expected_len,
+            self.rall_first_byte_deadline,
+            self.rall_frame_deadline,
+        )
+    }
+}
 
-        while out.len() < expected_len && std::time::Instant::now() < frame_deadline {
-            if out.is_empty() && std::time::Instant::now() >= first_byte_deadline {
-                break;
-            }
-            let remaining = expected_len.saturating_sub(out.len());
-            let read_len = remaining.min(buf.len());
-            match self.port.read(&mut buf[..read_len]) {
-                Ok(0) => {
-                    thread::sleep(Duration::from_millis(1));
-                }
-                Ok(actual) => {
-                    out.extend_from_slice(&buf[..actual]);
-                }
-                Err(err)
-                    if matches!(
-                        err.kind(),
-                        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
-                    ) =>
-                {
-                    thread::sleep(Duration::from_millis(1));
-                }
-                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
-                Err(err) => return Err(err.into()),
-            }
-        }
+#[derive(Debug)]
+pub struct RallFrameReadOutcome {
+    pub payload: Vec<u8>,
+    pub zero_byte_retry_count: usize,
+}
 
-        if out.len() == expected_len {
-            Ok(out)
-        } else {
-            Err(TransportError::Timeout {
-                context: "读取 OE1022D RALL 定长帧",
-                partial_len: out.len(),
-            })
+#[cfg(test)]
+fn read_rall_frame_exact_with_zero_retry_impl<FSend, FRead, FClear>(
+    expected_len: usize,
+    max_zero_byte_retries: usize,
+    mut send_rall_query: FSend,
+    mut read_rall_frame_exact: FRead,
+    mut clear_input: FClear,
+) -> Result<RallFrameReadOutcome>
+where
+    FSend: FnMut() -> Result<()>,
+    FRead: FnMut() -> Result<Vec<u8>>,
+    FClear: FnMut() -> Result<()>,
+{
+    let mut zero_byte_retry_count = 0;
+
+    loop {
+        send_rall_query()?;
+        match read_rall_frame_exact() {
+            Ok(payload) => {
+                debug_assert_eq!(payload.len(), expected_len);
+                return Ok(RallFrameReadOutcome {
+                    payload,
+                    zero_byte_retry_count,
+                });
+            }
+            Err(TransportError::Timeout { partial_len: 0, .. })
+                if zero_byte_retry_count < max_zero_byte_retries =>
+            {
+                zero_byte_retry_count += 1;
+                clear_input()?;
+            }
+            Err(err) => return Err(err),
         }
     }
 }
 
-pub struct RallFrameReadOutcome {
-    pub payload: Vec<u8>,
-    pub zero_byte_retry_count: usize,
+fn read_rall_frame_fast_with_reader<R: Read>(
+    reader: &mut R,
+    expected_len: usize,
+    first_byte_deadline: Duration,
+    frame_deadline: Duration,
+) -> Result<Vec<u8>> {
+    let started = std::time::Instant::now();
+    let first_byte_deadline = started + first_byte_deadline;
+    let frame_deadline = started + frame_deadline;
+    let mut out = Vec::with_capacity(expected_len);
+    let mut buf = [0_u8; 4096];
+
+    while out.len() < expected_len && std::time::Instant::now() < frame_deadline {
+        if out.is_empty() && std::time::Instant::now() >= first_byte_deadline {
+            break;
+        }
+        let remaining = expected_len.saturating_sub(out.len());
+        let read_len = remaining.min(buf.len());
+        match reader.read(&mut buf[..read_len]) {
+            Ok(0) => {
+                thread::sleep(Duration::from_millis(1));
+            }
+            Ok(actual) => {
+                out.extend_from_slice(&buf[..actual]);
+            }
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                ) =>
+            {
+                thread::sleep(Duration::from_millis(1));
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    if out.len() == expected_len {
+        Ok(out)
+    } else {
+        Err(TransportError::Timeout {
+            context: "读取 OE1022D RALL 定长帧",
+            partial_len: out.len(),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+    use std::io;
+
+    struct FakeReader {
+        reads: VecDeque<io::Result<Vec<u8>>>,
+        pending: VecDeque<u8>,
+    }
+
+    impl FakeReader {
+        fn new(reads: Vec<io::Result<Vec<u8>>>) -> Self {
+            Self {
+                reads: reads.into(),
+                pending: VecDeque::new(),
+            }
+        }
+    }
+
+    impl Read for FakeReader {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.pending.is_empty() {
+                let Some(next) = self.reads.pop_front() else {
+                    return Err(io::Error::new(io::ErrorKind::TimedOut, "timeout"));
+                };
+                self.pending.extend(next?);
+            }
+
+            let len = self.pending.len().min(buf.len());
+            for slot in buf.iter_mut().take(len) {
+                *slot = self.pending.pop_front().expect("pending 不应为空");
+            }
+            Ok(len)
+        }
+    }
+
+    #[test]
+    fn rall_first_byte_timeout_fails_fast() {
+        let mut reader = FakeReader::new(vec![]);
+        let err = read_rall_frame_fast_with_reader(
+            &mut reader,
+            4,
+            Duration::from_millis(2),
+            Duration::from_millis(20),
+        )
+        .expect_err("首字节超时应直接失败");
+        match err {
+            TransportError::Timeout { partial_len, .. } => assert_eq!(partial_len, 0),
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn rall_frame_can_be_assembled_within_deadline() {
+        let mut reader = FakeReader::new(vec![Ok(vec![1, 2]), Ok(vec![3, 4])]);
+        let payload = read_rall_frame_fast_with_reader(
+            &mut reader,
+            4,
+            Duration::from_millis(5),
+            Duration::from_millis(20),
+        )
+        .expect("应在 frame deadline 内拼满");
+        assert_eq!(payload, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn zero_byte_timeout_triggers_single_controlled_resend() {
+        let mut send_calls = 0_usize;
+        let mut clear_calls = 0_usize;
+        let mut reads = VecDeque::from([
+            Err(TransportError::Timeout {
+                context: "读取 OE1022D RALL 定长帧",
+                partial_len: 0,
+            }),
+            Ok(vec![1, 2, 3, 4]),
+        ]);
+
+        let outcome = read_rall_frame_exact_with_zero_retry_impl(
+            4,
+            1,
+            || {
+                send_calls += 1;
+                Ok(())
+            },
+            || reads.pop_front().expect("应存在预置 read 结果"),
+            || {
+                clear_calls += 1;
+                Ok(())
+            },
+        )
+        .expect("零字节 timeout 后应允许同周期重试一次");
+
+        assert_eq!(send_calls, 2);
+        assert_eq!(clear_calls, 1);
+        assert_eq!(outcome.zero_byte_retry_count, 1);
+        assert_eq!(outcome.payload, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn partial_frame_timeout_does_not_resend() {
+        let mut send_calls = 0_usize;
+        let mut clear_calls = 0_usize;
+
+        let err = read_rall_frame_exact_with_zero_retry_impl(
+            4,
+            1,
+            || {
+                send_calls += 1;
+                Ok(())
+            },
+            || {
+                Err(TransportError::Timeout {
+                    context: "读取 OE1022D RALL 定长帧",
+                    partial_len: 2,
+                })
+            },
+            || {
+                clear_calls += 1;
+                Ok(())
+            },
+        )
+        .expect_err("半帧超时不应触发 resend");
+
+        assert_eq!(send_calls, 1);
+        assert_eq!(clear_calls, 0);
+        match err {
+            TransportError::Timeout { partial_len, .. } => assert_eq!(partial_len, 2),
+            other => panic!("unexpected error: {other}"),
+        }
+    }
 }

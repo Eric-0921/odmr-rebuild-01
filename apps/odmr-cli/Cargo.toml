@@ -21,3 +21,5 @@ m8812-transport = { path = "../../crates/m8812-transport" }
 oe1022d-commands = { path = "../../crates/oe1022d-commands" }
 oe1022d-transport = { path = "../../crates/oe1022d-transport" }
 cni-laser-transport = { path = "../../crates/cni-laser-transport" }
+ctrlc = "3.4"
+device-transport = { path = "../../crates/device-transport" }

@@ -18,6 +18,7 @@ use acquisition_runtime::{
 };
 use chrono::{DateTime, Local};
 use cni_laser_transport::{CniLaserTransport, CniLaserTransportConfig};
+use device_transport::TransportError;
 use m8812_commands::{m8812_set_voltage_protection_v, m8812_set_voltage_v};
 use m8812_transport::{M8812Transport, M8812TransportConfig};
 use oe1022d_commands::{
@@ -50,7 +51,10 @@ use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    mpsc::{sync_channel, RecvTimeoutError, SyncSender, TrySendError},
+    mpsc::{
+        channel, sync_channel, Receiver, RecvTimeoutError, Sender, SyncSender, TryRecvError,
+        TrySendError,
+    },
     Arc, Mutex, OnceLock,
 };
 use std::thread::{self, JoinHandle};
@@ -324,6 +328,7 @@ pub fn run_execute(
     };
     let mut collector = CollectorHandle::start(
         oe_device,
+        &plan.run_id,
         &effective_collector_config,
         &collector_artifacts,
         start_instant,
@@ -364,6 +369,7 @@ pub fn run_execute(
     let mut run_error: Option<String> = None;
 
     for (index, point) in resolved_plan.points.iter().enumerate() {
+        collector.drain_diag_events(&mut events_file)?;
         if interrupt_flag.load(Ordering::SeqCst) {
             run_error = Some(USER_INTERRUPTED.to_string());
             append_event(
@@ -399,6 +405,7 @@ pub fn run_execute(
         let target_current_a = calibration.target_current_a(baseline_current_a, point.target_b_nt);
         let calibrated_delta_current_a = calibration.delta_current_a(point.target_b_nt);
         ensure_nonnegative_target_currents(&point.point_id, target_current_a)?;
+        collector.set_active_point(Some(point.point_id.clone()))?;
 
         let point_result = execute_point(
             index,
@@ -424,6 +431,8 @@ pub fn run_execute(
             point,
             Arc::clone(&interrupt_flag),
         );
+        collector.set_active_point(None)?;
+        collector.drain_diag_events(&mut events_file)?;
 
         match point_result {
             Ok(outcome) if outcome.quality_status == "passed" => {
@@ -514,6 +523,7 @@ pub fn run_execute(
         }
     }
 
+    collector.drain_diag_events(&mut events_file)?;
     append_event(
         &mut events_file,
         &start_instant,
@@ -538,6 +548,7 @@ pub fn run_execute(
     }
 
     let collector_summary = collector.stop_join()?;
+    collector.drain_diag_events(&mut events_file)?;
     append_event(
         &mut events_file,
         &start_instant,
@@ -665,6 +676,7 @@ fn execute_point(
     point: &acquisition_runtime::RunPointPlan,
     interrupt_flag: Arc<AtomicBool>,
 ) -> Result<PointExecutionOutcome, String> {
+    collector.drain_diag_events(events_file)?;
     set_mag_target_currents(mag_axes, target_current_a)?;
     sleep_with_interrupt(Duration::from_millis(plan.point_settle_ms), &interrupt_flag)?;
     let measured_current_a = read_mag_currents(mag_axes)?;
@@ -734,6 +746,7 @@ fn execute_point(
     let end_cursor = collector.produced_cursor()?;
     let committed_end_cursor = collector.wait_until_committed(end_cursor)?;
     let timeouts_after = collector.timeout_count()?;
+    collector.drain_diag_events(events_file)?;
     let estimated_frames_expected = sweep.estimate().ok().map(|estimate| {
         estimate_frames_for_quality(estimate.sweep_duration_ms, collector_poll_interval_ms)
     });
@@ -820,6 +833,8 @@ fn execute_point(
 
     let outcome = PointExecutionOutcome {
         quality_status: quality.quality_status,
+        collector_health: quality.collector_health.clone(),
+        timeout_budget_remaining: quality.timeout_budget_remaining,
         frames_total: frames.len(),
         collector_frames_total: end_cursor.next_frame_seq,
         timeout_count: timeouts_after,
@@ -859,6 +874,9 @@ fn execute_point(
         None,
         json!({
             "quality_status": outcome.quality_status.clone(),
+            "collector_health": outcome.collector_health.clone(),
+            "timeout_budget_remaining": outcome.timeout_budget_remaining,
+            "timeout_count": outcome.point_timeout_count,
             "frame_coverage_ratio": outcome.frame_coverage_ratio,
             "estimated_frames_expected": outcome.estimated_frames_expected
         }),
@@ -1330,6 +1348,8 @@ struct LaserHandle {
 
 struct PointExecutionOutcome {
     quality_status: String,
+    collector_health: String,
+    timeout_budget_remaining: usize,
     frames_total: usize,
     collector_frames_total: u64,
     timeout_count: usize,
@@ -1545,7 +1565,7 @@ fn print_point_progress(
     let eta_end =
         remaining_ms.map(|remaining| SystemTime::now() + Duration::from_millis(remaining));
     println!(
-        "[odmr] point {}/{} {} 完成: target_b_nt={:?}, frames_total={}/{}, coverage={}, quality_status={}, collector_frames_total={}, ring_retained_frames={}, point_timeout_count={}, collector_timeout_total={}, 采样速率={:.1} pts/s, batch_rate={:.1} Hz, progress={:.1}%, 已耗时={}, 剩余预计时长={}, 预计结束时间={}",
+        "[odmr] point {}/{} {} 完成: target_b_nt={:?}, frames_total={}/{}, coverage={}, quality_status={}, collector_health={}, timeout_budget_remaining={}, collector_frames_total={}, ring_retained_frames={}, point_timeout_count={}, collector_timeout_total={}, 采样速率={:.1} pts/s, batch_rate={:.1} Hz, progress={:.1}%, 已耗时={}, 剩余预计时长={}, 预计结束时间={}",
         index + 1,
         total_points,
         point.point_id,
@@ -1560,6 +1580,8 @@ fn print_point_progress(
             .map(|value| format!("{value:.6}"))
             .unwrap_or_else(|| "未知".to_string()),
         outcome.quality_status,
+        outcome.collector_health,
+        outcome.timeout_budget_remaining,
         outcome.collector_frames_total,
         outcome.ring_retained_frames,
         outcome.point_timeout_count,
@@ -2067,6 +2089,47 @@ fn record_collector_timeout(
     Ok((guard.timeout_count, guard.committed_cursor))
 }
 
+#[derive(Clone)]
+struct CollectorDiagEmitter {
+    sender: Sender<EventRecord>,
+    active_point: Arc<Mutex<Option<String>>>,
+    run_id: String,
+    device_id: String,
+    run_start_instant: Instant,
+}
+
+impl CollectorDiagEmitter {
+    fn emit(&self, event: &str, data: serde_json::Value) -> Result<(), String> {
+        let point_id = self
+            .active_point
+            .lock()
+            .map_err(|_| "collector active point mutex poisoned".to_string())?
+            .clone();
+        self.sender
+            .send(EventRecord {
+                ts: now_ts_string(),
+                monotonic_ns: monotonic_ns(&self.run_start_instant),
+                event: event.to_string(),
+                run_id: self.run_id.clone(),
+                point_id,
+                device: Some(self.device_id.clone()),
+                phase: "collector".to_string(),
+                data,
+            })
+            .map_err(|_| "collector diag channel 已断开".to_string())
+    }
+}
+
+fn classify_collector_error(err: &TransportError) -> (&'static str, Option<usize>) {
+    match err {
+        TransportError::Timeout { partial_len: 0, .. } => ("zero_byte_timeout", Some(0)),
+        TransportError::Timeout { partial_len, .. } => {
+            ("partial_frame_timeout", Some(*partial_len))
+        }
+        _ => ("io_error", None),
+    }
+}
+
 fn enqueue_produced_frame(
     sender: &SyncSender<ProducedFrame>,
     frame: ProducedFrame,
@@ -2094,6 +2157,8 @@ struct CollectorStopSummary {
 struct CollectorHandle {
     stop_flag: Arc<AtomicBool>,
     shared: Arc<Mutex<CollectorSharedState>>,
+    active_point: Arc<Mutex<Option<String>>>,
+    diag_rx: Receiver<EventRecord>,
     producer_join: Option<JoinHandle<Result<(), String>>>,
     consumer_join: Option<JoinHandle<Result<(), String>>>,
 }
@@ -2101,6 +2166,7 @@ struct CollectorHandle {
 impl CollectorHandle {
     fn start(
         device: &DeviceSpec,
+        run_id: &str,
         config: &CollectorConfig,
         artifacts: &CollectorArtifactPaths,
         run_start_instant: Instant,
@@ -2134,10 +2200,19 @@ impl CollectorHandle {
         let producer_done_clone = Arc::clone(&producer_done);
         let shared_producer = Arc::clone(&shared);
         let shared_consumer = Arc::clone(&shared);
+        let active_point = Arc::new(Mutex::new(None));
         let raw_path = raw_path.to_path_buf();
         let index_path = index_path.to_path_buf();
         let parsed_path = parsed_path.to_path_buf();
         let (frame_tx, frame_rx) = sync_channel::<ProducedFrame>(COLLECTOR_QUEUE_CAPACITY);
+        let (diag_tx, diag_rx) = channel::<EventRecord>();
+        let diag_emitter = CollectorDiagEmitter {
+            sender: diag_tx,
+            active_point: Arc::clone(&active_point),
+            run_id: run_id.to_string(),
+            device_id: device.device_id.clone(),
+            run_start_instant,
+        };
 
         let producer_join = thread::spawn(move || {
             let mut transport = Oe1022dTransport::open(&device_config)
@@ -2153,32 +2228,40 @@ impl CollectorHandle {
                     let _ = transport.clear_input();
                     let read_start = Instant::now();
                     match if frame_exact_bytes > 0 {
-                        transport
-                            .query_rall_frame_exact_with_zero_retry(
-                                frame_exact_bytes,
-                                zero_byte_retry_limit,
-                            )
-                            .map(|outcome| {
-                                if outcome.zero_byte_retry_count > 0 {
-                                    let cursor = collector_cursor_snapshot(&shared_producer)
-                                        .unwrap_or(CollectorCursor {
-                                            next_frame_seq: 0,
-                                            next_raw_offset: 0,
-                                        });
-                                    println!(
-                                        "[odmr][diag] collector 0-byte timeout 后同周期重试成功: retry_count={}, committed_frame_seq={}, committed_raw_offset={}",
-                                        outcome.zero_byte_retry_count,
-                                        cursor.next_frame_seq,
-                                        cursor.next_raw_offset
-                                    );
-                                }
-                                outcome.payload
-                            })
+                        transport.query_rall_frame_exact_with_zero_retry(
+                            frame_exact_bytes,
+                            zero_byte_retry_limit,
+                        )
                     } else {
-                        transport.query_rall_frame_until_timeout(frame_max_bytes)
+                        transport
+                            .query_rall_frame_until_timeout(frame_max_bytes)
+                            .map(|payload| oe1022d_transport::RallFrameReadOutcome {
+                                payload,
+                                zero_byte_retry_count: 0,
+                            })
                     } {
-                        Ok(payload) if !payload.is_empty() => {
-                            let payload_len = payload.len() as u64;
+                        Ok(outcome) if !outcome.payload.is_empty() => {
+                            for retry_index in 0..outcome.zero_byte_retry_count {
+                                let (timeout_total, cursor) =
+                                    record_collector_timeout(&shared_producer)?;
+                                consecutive_timeouts += 1;
+                                if timeout_streak_started_at.is_none() {
+                                    timeout_streak_started_at = Some(Instant::now());
+                                }
+                                diag_emitter.emit(
+                                    "collector_timeout",
+                                    json!({
+                                        "kind": "zero_byte_timeout",
+                                        "retry_attempt": retry_index + 1,
+                                        "zero_byte_retry_count": outcome.zero_byte_retry_count,
+                                        "consecutive_timeouts": consecutive_timeouts,
+                                        "total_timeouts": timeout_total,
+                                        "committed_frame_seq": cursor.next_frame_seq,
+                                        "committed_raw_offset": cursor.next_raw_offset
+                                    }),
+                                )?;
+                            }
+                            let payload_len = outcome.payload.len() as u64;
                             {
                                 let mut guard = shared_producer.lock().map_err(|_| {
                                     "collector ring buffer mutex poisoned".to_string()
@@ -2192,7 +2275,7 @@ impl CollectorHandle {
                             let produced = ProducedFrame {
                                 ts: now_ts_string(),
                                 monotonic_ns: monotonic_ns(&run_start_instant),
-                                payload,
+                                payload: outcome.payload,
                             };
                             enqueue_produced_frame(&frame_tx, produced)?;
                             if consecutive_timeouts > 0 {
@@ -2201,13 +2284,16 @@ impl CollectorHandle {
                                     .map(|started| started.elapsed().as_millis())
                                     .unwrap_or_default();
                                 let cursor = collector_cursor_snapshot(&shared_producer)?;
-                                println!(
-                                            "[odmr][diag] collector 已恢复: consecutive_timeouts={}, recovered_after_ms={}, committed_frame_seq={}, committed_raw_offset={}",
-                                            consecutive_timeouts,
-                                            recovered_after_ms,
-                                            cursor.next_frame_seq,
-                                            cursor.next_raw_offset
-                                        );
+                                diag_emitter.emit(
+                                    "collector_recovered",
+                                    json!({
+                                        "recovered_after_ms": recovered_after_ms,
+                                        "zero_byte_retry_count": outcome.zero_byte_retry_count,
+                                        "consecutive_timeouts": consecutive_timeouts,
+                                        "committed_frame_seq": cursor.next_frame_seq,
+                                        "committed_raw_offset": cursor.next_raw_offset
+                                    }),
+                                )?;
                                 consecutive_timeouts = 0;
                             }
                         }
@@ -2218,13 +2304,18 @@ impl CollectorHandle {
                             if timeout_streak_started_at.is_none() {
                                 timeout_streak_started_at = Some(Instant::now());
                             }
-                            println!(
-                                        "[odmr][diag] collector 超时/空帧: kind=empty_payload, consecutive_timeouts={}, total_timeouts={}, committed_frame_seq={}, committed_raw_offset={}",
-                                        consecutive_timeouts,
-                                        timeout_total,
-                                        cursor.next_frame_seq,
-                                        cursor.next_raw_offset
-                                    );
+                            diag_emitter.emit(
+                                "collector_timeout",
+                                json!({
+                                    "kind": "zero_byte_timeout",
+                                    "reason": "empty_payload",
+                                    "zero_byte_retry_count": 0,
+                                    "consecutive_timeouts": consecutive_timeouts,
+                                    "total_timeouts": timeout_total,
+                                    "committed_frame_seq": cursor.next_frame_seq,
+                                    "committed_raw_offset": cursor.next_raw_offset
+                                }),
+                            )?;
                         }
                         Err(err) => {
                             let (timeout_total, cursor) =
@@ -2233,14 +2324,20 @@ impl CollectorHandle {
                             if timeout_streak_started_at.is_none() {
                                 timeout_streak_started_at = Some(Instant::now());
                             }
-                            println!(
-                                        "[odmr][diag] collector 超时/读失败: kind=transport_error, consecutive_timeouts={}, total_timeouts={}, committed_frame_seq={}, committed_raw_offset={}, error={}",
-                                        consecutive_timeouts,
-                                        timeout_total,
-                                        cursor.next_frame_seq,
-                                        cursor.next_raw_offset,
-                                        err
-                                    );
+                            let (kind, partial_len) = classify_collector_error(&err);
+                            diag_emitter.emit(
+                                "collector_timeout",
+                                json!({
+                                    "kind": kind,
+                                    "partial_len": partial_len,
+                                    "zero_byte_retry_count": 0,
+                                    "consecutive_timeouts": consecutive_timeouts,
+                                    "total_timeouts": timeout_total,
+                                    "committed_frame_seq": cursor.next_frame_seq,
+                                    "committed_raw_offset": cursor.next_raw_offset,
+                                    "error": err.to_string()
+                                }),
+                            )?;
                         }
                     }
 
@@ -2349,9 +2446,29 @@ impl CollectorHandle {
         Ok(Self {
             stop_flag,
             shared,
+            active_point,
+            diag_rx,
             producer_join: Some(producer_join),
             consumer_join: Some(consumer_join),
         })
+    }
+
+    fn set_active_point(&self, point_id: Option<String>) -> Result<(), String> {
+        let mut guard = self
+            .active_point
+            .lock()
+            .map_err(|_| "collector active point mutex poisoned".to_string())?;
+        *guard = point_id;
+        Ok(())
+    }
+
+    fn drain_diag_events(&self, file: &mut File) -> Result<(), String> {
+        loop {
+            match self.diag_rx.try_recv() {
+                Ok(record) => append_jsonl(file, &record)?,
+                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => return Ok(()),
+            }
+        }
     }
 
     fn committed_cursor(&self) -> Result<CollectorCursor, String> {
@@ -2409,7 +2526,7 @@ impl CollectorHandle {
         Ok(guard.timeout_count)
     }
 
-    fn stop_join(mut self) -> Result<CollectorStopSummary, String> {
+    fn stop_join(&mut self) -> Result<CollectorStopSummary, String> {
         self.stop_flag.store(true, Ordering::SeqCst);
         let Some(producer_join) = self.producer_join.take() else {
             return Err("collector producer join handle 不存在".to_string());

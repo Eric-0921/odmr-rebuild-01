@@ -55,6 +55,28 @@
 
 - `docs/rebuild/08_verified_command_and_runtime_baseline.md`
 
+当前 `OE1022D` 读取链的最新收敛状态：
+
+- 默认 `observed` profile 已固定为：
+  - ASCII query timeout = `300ms`
+  - `rall_chunk_timeout = 5ms`
+  - `rall_first_byte_deadline = 30ms`
+  - `rall_frame_deadline = 120ms`
+  - `zero_byte_retry_limit = 1`
+- `quality` 现在真正按 `max_timeout_count` 阈值判定，不再把 `timeout_count > 0` 直接视为失败
+- `quality.jsonl` 现在额外输出：
+  - `collector_health = clean | recovered_timeout | degraded_timeout`
+  - `timeout_budget_remaining`
+- `events.jsonl` 现在会显式记录：
+  - `collector_timeout`
+  - `collector_recovered`
+  - `collector_stopped`
+- `minimal_3point_runtime + smb100a_run_pll_default + oe1022d_run_ch_b_observed + cni_laser_run_on_background`
+  已在 `2026-06-12` 真机连续跑通 3 次：
+  - 3/3 points passed
+  - `collector_timeout_total = 0`
+  - `max(frame_gap_ms) ≈ 54.3 ~ 54.6ms`
+
 当前可执行命令：
 
 ```bash
@@ -108,7 +130,8 @@ cargo run -p odmr-cli -- run execute \
   - 3D 配置展开样例
 - `configs/plans/x_axis_1d_bounce_15min.json`
   - 高层 `cartesian_grid` 1D X 轴往返样例
-  - `fixed_total_points=104`
+  - 当前配置是 `fixed_total_points=21`
+  - 是否接近“15 分钟”取决于搭配的 SMB sweep profile；配 `smb100a_run_pll_default.json` 实测更接近 `36min`
   - 估时已包含每 point 的 SMB 重配置 settle 开销
 - `configs/profiles/smb100a_run_short_sweep_15min.json`
   - 专用短 sweep profile
@@ -133,8 +156,10 @@ cargo run -p odmr-cli -- run execute \
 - `OE1022D` 采用 run 级单 reader `RALL?` collector
 - collector 只在 `run execute` 打开后启动，不在“仅连接设备”阶段常驻拉取
 - point 真值已切到 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切；ring buffer 只做实时观察
+- 当前 `run execute` 已正式产出 `raw/oe1022d.frames.parsed.jsonl`，每帧按手册表格解析为 `20 x 50` 测量矩阵和配置/状态 sidecar
 - 当前实验室真机已证明：`*OPC?` 不能单独作为 sweep 结束信号，runtime 已改为 `*OPC?` + sweep 时长估算 fallback
 - 当前已经接入 `target_b_nt -> calibration -> target_current_a` 链路
 - 当前零场锁定语义是“零偏电流锁定 + 复现电流叠加”，不是物理零磁场已证明
 - 当前磁场电源第一版只支持非负目标电流；默认 1D/2D/3D 示例网格已全部改成非负值
 - 当前已产出 `point_fields.jsonl`，每个 point 都有字段级 `B-X/B-Y/B-Freq/B-Noise/AUXADC1..4` 数据与 PLL 状态摘要
+- 当前 15 分钟真机长跑已证明：collector 级 `0-byte timeout` 仍会低频出现并吞掉部分 point 帧，但 `raw / frames.idx / frames.parsed` 已保持条数对齐，坏点根因已收敛到真实采集链抖动而不是 ring buffer 截断

@@ -32,6 +32,15 @@
 - `runs/x_axis_1d_bounce_15min_live/summary.json`
 - `runs/x_axis_1d_bounce_15min_live/events.jsonl`
 - `runs/x_axis_1d_bounce_15min_live/quality.jsonl`
+- `runs/verify_20260611_short_readchain/summary.json`
+- `runs/verify_20260611_short_readchain/quality.jsonl`
+- `runs/verify_20260611_short_readchain/raw/oe1022d.frames.idx.jsonl`
+- `runs/verify_20260611_short_readchain/raw/oe1022d.frames.parsed.jsonl`
+- `runs/verify_20260611_long_readchain/summary.json`
+- `runs/verify_20260611_long_readchain/events.jsonl`
+- `runs/verify_20260611_long_readchain/quality.jsonl`
+- `runs/verify_20260611_long_readchain/raw/oe1022d.frames.idx.jsonl`
+- `runs/verify_20260611_long_readchain/raw/oe1022d.frames.parsed.jsonl`
 
 文档整理日期：
 
@@ -41,6 +50,7 @@
 - 2D 小网格真机完成时间：`2026-06-11`
 - 15 分钟 1D 长跑完成时间：`2026-06-11`
 - 文档收口时间：`2026-06-11`
+- 读取链与表格解析短/长验证时间：`2026-06-11`
 
 ## 新增真机校正事实（2026-06-11）
 
@@ -257,38 +267,77 @@ run 结束后额外只读核验：
 - collector 单实例和 point segmentation 在小网格下稳定
 - 复跑同一个 `--out-dir` 后，artifact 会被正确重建，不再静默 append 旧内容
 
+## 读取链短验证结果（2026-06-11）
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_tc100ms.json --laser-profile configs/profiles/cni_laser_run_on_background_180mw.json --out-dir runs/verify_20260611_short_readchain`
+
+运行结果：
+
+- `summary.status = completed`
+- `points_passed = 3 / 3`
+- `summary.frames_total = 2821`
+- `points / segments / point_fields / quality = 3 / 3 / 3 / 3`
+- `raw/oe1022d.frames.idx.jsonl` 与 `raw/oe1022d.frames.parsed.jsonl` 条数一致：
+  - `2821 / 2821`
+- `frames.parsed` 的 `parse_status` 全部为 `ok`
+- collector 最终 `timeout_count = 1`
+- 3 个 point 的 `frames_total = 758 / 759 / 758`
+
+必须明确的观察：
+
+- 这 1 次 timeout 发生在 point 窗口之外，所以 `quality.jsonl` 里的 point 级 `timeout_count` 仍然是 `0`
+- 这说明当前 `quality.timeout_count` 只覆盖 point 窗口内 timeout，不等于 run 级 collector 总 timeout
+- 当前短 run 已经真机证明：
+  - `0-byte timeout` 仍会出现
+  - 但新 collector 能恢复，不会立刻把整次 run 打崩
+  - `raw / frames.idx / frames.parsed` 三层真值已经能保持对齐
+
 ## 15 分钟 1D 长跑结果（2026-06-11）
 
 真机运行命令：
 
-- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/x_axis_1d_bounce_15min_live`
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_tc100ms.json --laser-profile configs/profiles/cni_laser_run_on_background_180mw.json --out-dir runs/verify_20260611_long_readchain`
 
 运行结果：
 
-- `summary.status = completed_with_failed_points`
-- `points_passed = 103 / 104`
-- `points_failed = 1 / 104`
-- `summary.frames_total = 18725`
-- `quality_status` 统计：
-  - `passed = 129`
-  - `failed_min_frames = 1`
-- 明确坏点：
-  - `p000060 -> frames_total = 12`
-- collector 最终 `timeout_count = 4`
-- collector 稳态点速率约 `~1015 pts/s`
+- `summary.status = completed`
+- `points_passed = 21 / 21`
+- `summary.frames_total = 19142`
+- `points / segments / point_fields / quality = 21 / 21 / 21 / 21`
+- `raw/oe1022d.frames.idx.jsonl` 与 `raw/oe1022d.frames.parsed.jsonl` 条数一致：
+  - `19142 / 19142`
+- `frames.parsed` 的 `parse_status` 全部为 `ok`
+- collector 最终 `timeout_count = 13`
+- point 窗口内累计 `timeout_count = 10`
+- 最差 point：
+  - `p000016 -> frames_total = 717`
+  - `frame_coverage_ratio = 0.947`
+  - `timeout_count = 2`
+- 多个 point 在 timeout 后从常态 `758/759` 帧下降到：
+  - `737 / 738 / 717`
+- collector 稳态点速率约 `~1000 pts/s`
 
 必须明确的校正说明：
 
-- 这次长跑是在发现“当前磁场电源第一版不支持负输出”之前启动的
-- 因此它主要用于验证 `collector / sweep / segmentation / cleanup` 的长时稳定性
-- 不应用它来宣称“负磁场点的电流映射已经有效”
-- 同时，这个目录里的 JSONL 曾受旧版 append 语义污染；当前代码已修复，但该目录不再作为“文件条数真值”来源
+- 这次长跑的 point 全部通过，不代表读链没有问题
+- 当前真正的结论是：
+  - collector 级 `0-byte timeout` 会低频重复出现
+  - 新 collector 能恢复并继续跑完
+  - 但 timeout 会真实吞掉 point 帧数
+  - 当前 `quality` 门槛仍偏宽，尚不足以把这类“吞帧但未跌破 min_frames”的点判成失败
+- 因此现在不能再把“全部 passed”误读成“采集链完全稳定”
+- 同时，这次长跑已经足够排除一个旧怀疑：
+  - 当前 point 级掉帧主要不是 ring buffer 截断
+  - 因为 `raw / frames.idx / frames.parsed` 已保持条数对齐
+  - 坏点根因已收敛到真实 collector / transport 抖动
 
 ## 明确未验证内容
 
 以下内容当前不得写成 `rebuild_smoke_verified`：
 
-- “非负网格条件下”的 15 分钟以上 run 级 collector
+- “timeout 继续低频出现时”的更严格 quality 判定规则
 - `OE1022D` 30 分钟以上 run 级 collector
 - 更长时 point segmentation 稳定性
 - point 级 `Laser` 变量
@@ -303,8 +352,134 @@ run 结束后额外只读核验：
 - `OE1022D` 不是 point 级设备，而是 run 级固定观测器
 - `RALL?` 必须由单一 run 级 reader 线程持续执行
 - point 线程不直接碰 OE 串口；point 完整帧序列按 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切恢复
+- 每帧现在还会同步落 `raw/oe1022d.frames.parsed.jsonl`，作为表格驱动结构化 sidecar
 - ring buffer 只保留最近窗口观察和 collector 健康摘要，不再决定 point 完整性
 - `continuous raw + frame index + segment boundary` 才是最终事实来源
+- `frames.parsed` 是 companion truth，不替代 raw
+
+## 当前默认 observed profile 基线（2026-06-12）
+
+当前默认真机基线是这组配置：
+
+- `plan = configs/plans/minimal_3point_runtime.json`
+- `smb-profile = configs/profiles/smb100a_run_pll_default.json`
+- `oe-profile = configs/profiles/oe1022d_run_ch_b_observed.json`
+- `laser-profile = configs/profiles/cni_laser_run_on_background.json`
+
+当前默认 `OE1022D` 热路径参数：
+
+- `ASCII query timeout = 300ms`
+- `rall_chunk_timeout = 5ms`
+- `rall_first_byte_deadline = 30ms`
+- `rall_frame_deadline = 120ms`
+- `zero_byte_retry_limit = 1`
+
+当前默认 `quality` / 诊断语义：
+
+- `timeout_count > max_timeout_count` 才会判成 `failed_timeout`
+- `quality.jsonl` 额外输出：
+  - `collector_health = clean | recovered_timeout | degraded_timeout`
+  - `timeout_budget_remaining`
+- `events.jsonl` 额外记录：
+  - `collector_timeout`
+  - `collector_recovered`
+  - `collector_stopped`
+
+### 3-run 真机验收
+
+真机运行目录：
+
+- `runs/manual_live_recheck_20260612_d30_r1`
+- `runs/manual_live_recheck_20260612_d30_r2`
+- `runs/manual_live_recheck_20260612_d30_r3`
+
+验收结果：
+
+- 三轮都是 `points_passed = 3 / 3`
+- 三轮都是 `collector_stopped.data.timeout_count = 0`
+- 三轮 `quality.jsonl` 全 point：
+  - `timeout_count = 0`
+  - `collector_health = clean`
+  - `quality_status = passed`
+- `raw/oe1022d.frames.idx.jsonl`：
+  - `max(frame_gap_ms)` 分别约为 `54.35 / 54.34 / 54.55`
+  - 没有 `>=100ms` gap
+
+结论：
+
+- 当前默认 `observed` profile 已经满足最小 3-point runtime 的主线真机基线
+- 旧的 `tc100ms / monitor` 组合问题仍保留为历史记录，但不能再当作当前默认配置的现状
+
+## collector split + timeout300 历史复验（2026-06-12，旧 tc100ms / monitor 组合）
+
+这轮改动固定为：
+
+- `OE1022D serial timeout = 300ms`
+- collector 改成 `producer(只负责 RALL?) + consumer(负责 parse/write/ring/commit)` 双线程
+- point 级质量规则改成：
+  - 旧实现阶段一度按 `point 内任一 timeout -> failed_timeout` 收紧；该结论已被后续 `max_timeout_count` 语义取代
+
+### 3-point 短验证
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_tc100ms.json --laser-profile configs/profiles/cni_laser_run_on_background_180mw.json --out-dir runs/verify_20260612_collector_split_short_v3`
+
+运行结果：
+
+- 无 timeout point：
+  - `frames_total ≈ 725 / 726`
+  - `quality_status = passed`
+- timeout point：
+  - `frames_total ≈ 714 / 720`
+  - `quality_status = failed_timeout`
+
+必须明确的新校正：
+
+- 当前 point 的“正常帧数”更接近 `725/726`，而不是先前用 `48ms` 直接估出来的 `757`
+- 这和手册里 `RALL?` 每 `50ms` 更新一次的设备语义是一致的
+- 因此 `frame_coverage_ratio` 目前仍只能作为诊断字段，不能直接拿现有 `757` 估值做硬 fail
+
+### Ctrl-C cleanup 复验
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- run execute ... --out-dir runs/verify_20260612_interrupt_cleanup`
+- 中途人工 `Ctrl-C`
+
+运行结果：
+
+- CLI 不再像之前那样直接退出
+- 会进入 `cleanup 开始 -> cleanup 完成`
+- 后续 `hardware smoke` 通过：
+  - `runs/verify_20260612_interrupt_cleanup_post_smoke`
+
+这说明当前“人工中断 -> cleanup”主路径已经比之前可靠。
+
+### 15 分钟长跑复验
+
+真机运行命令：
+
+- `cargo run -p odmr-cli -- run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_tc100ms.json --laser-profile configs/profiles/cni_laser_run_on_background_180mw.json --out-dir runs/verify_20260612_collector_split_long`
+
+运行中观察到：
+
+- 前几个无 timeout point：
+  - `frames_total = 725 / 726`
+  - `quality_status = passed`
+- timeout point：
+  - `frames_total = 714 / 715`
+  - `quality_status = failed_timeout`
+- 但在后续 point 上出现新的更深层故障：
+  - 连续 timeout streak 后 `collector_frames_total` 停止增长
+  - 后续 point 直接出现 `frames_total = 0`
+  - 人工中断后 cleanup 进入挂起态，需手动杀进程
+
+因此这轮复验的结论不是“collector split 已完全修复”，而是：
+
+- timeout 已经能被 point 级质量规则正确识别
+- 真实无 timeout point 的帧数基线已重新校正
+- 但长跑下仍存在“连续 timeout -> collector 卡死 -> cleanup 挂起”的未解决故障
 
 ## 当前参数归属结论
 
