@@ -12,6 +12,7 @@ mod hardware_profile_verify;
 mod hardware_smoke;
 mod hardware_state_snapshot;
 mod hardware_verify_mag_lock;
+mod run_audit_continuity;
 mod run_execute;
 
 use hardware_profile_verify::run_hardware_arm_pll_verify_state;
@@ -19,6 +20,7 @@ use hardware_profile_verify::run_hardware_profile_verify;
 use hardware_smoke::run_hardware_smoke;
 use hardware_state_snapshot::run_hardware_state_snapshot;
 use hardware_verify_mag_lock::run_hardware_verify_mag_lock;
+use run_audit_continuity::run_audit_continuity;
 use run_execute::run_execute;
 use station_resolver::{resolve_station, StationSpec};
 use std::env;
@@ -73,6 +75,9 @@ fn run(args: Vec<String>) -> Result<(), String> {
             out_dir.as_deref(),
         )
         .map(|_| ()),
+        CliCommand::RunAuditContinuity { run_dir, out } => {
+            run_audit_continuity(&run_dir, out.as_deref()).map(|_| ())
+        }
     }
 }
 
@@ -150,6 +155,10 @@ enum CliCommand {
         laser_profile: PathBuf,
         out_dir: Option<PathBuf>,
     },
+    RunAuditContinuity {
+        run_dir: PathBuf,
+        out: Option<PathBuf>,
+    },
 }
 
 fn parse_command(args: &[String]) -> Result<CliCommand, String> {
@@ -186,6 +195,7 @@ fn parse_hardware_command(args: &[String]) -> Result<CliCommand, String> {
 fn parse_run_command(args: &[String]) -> Result<CliCommand, String> {
     match args.get(2).map(String::as_str) {
         Some("execute") => parse_run_execute(args),
+        Some("audit-continuity") => parse_run_audit_continuity(args),
         _ => Err(usage()),
     }
 }
@@ -513,6 +523,39 @@ fn parse_hardware_verify_mag_lock(args: &[String]) -> Result<CliCommand, String>
     })
 }
 
+fn parse_run_audit_continuity(args: &[String]) -> Result<CliCommand, String> {
+    let mut run_dir: Option<PathBuf> = None;
+    let mut out: Option<PathBuf> = None;
+    let mut index = 3_usize;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--run" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--run 缺少路径参数".to_string());
+                };
+                run_dir = Some(PathBuf::from(value));
+                index += 2;
+            }
+            "--out" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--out 缺少路径参数".to_string());
+                };
+                out = Some(PathBuf::from(value));
+                index += 2;
+            }
+            "--help" | "-h" => return Err(usage()),
+            other => return Err(format!("未知参数: {other}\n\n{}", usage())),
+        }
+    }
+
+    let Some(run_dir) = run_dir else {
+        return Err(format!("缺少 --run 参数\n\n{}", usage()));
+    };
+
+    Ok(CliCommand::RunAuditContinuity { run_dir, out })
+}
+
 fn usage() -> String {
     [
         "用法:",
@@ -523,6 +566,7 @@ fn usage() -> String {
         "  odmr hardware snapshot-pll-state --station <path> [--out-dir <path>]",
         "  odmr hardware verify-mag-lock --station <path> --calibration <path> --plan <path> [--out-dir <path>]",
         "  odmr run execute --station <path> --calibration <path> --plan <path> --smb-profile <path> --oe-profile <path> --laser-profile <path> [--out-dir <path>]",
+        "  odmr run audit-continuity --run <run-dir> [--out <path>]",
         "",
         "示例:",
         "  odmr station verify --station configs/stations/lab_a.json",
@@ -534,6 +578,7 @@ fn usage() -> String {
         "  odmr hardware verify-mag-lock --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/mag_zero_lock_verify.json --out-dir out/hardware_verify_mag_lock/manual",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/manual",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/x_axis_1d_bounce_15min",
+        "  odmr run audit-continuity --run runs/manual_live_recheck_20260612_retry2",
     ]
     .join("\n")
 }
@@ -748,5 +793,27 @@ mod tests {
 
         let err = parse_command(&args).unwrap_err();
         assert!(err.contains("--laser-profile"));
+    }
+
+    #[test]
+    fn parse_run_audit_continuity_command() {
+        let args = vec![
+            "odmr".to_string(),
+            "run".to_string(),
+            "audit-continuity".to_string(),
+            "--run".to_string(),
+            "runs/manual".to_string(),
+            "--out".to_string(),
+            "runs/manual/continuity_audit.json".to_string(),
+        ];
+
+        let command = parse_command(&args).unwrap();
+        assert_eq!(
+            command,
+            CliCommand::RunAuditContinuity {
+                run_dir: PathBuf::from("runs/manual"),
+                out: Some(PathBuf::from("runs/manual/continuity_audit.json")),
+            }
+        );
     }
 }
