@@ -1007,6 +1007,7 @@ pub struct PointFieldSidecarRef {
     pub format: String,
     pub schema_version: u32,
     pub relative_path: String,
+    pub manifest_relative_path: String,
     pub measurement_field_keys: Vec<String>,
     pub status_keys: Vec<String>,
 }
@@ -1033,6 +1034,32 @@ pub struct PointFieldSidecarData {
 pub struct PointFieldBundle {
     pub metadata: PointFieldRecord,
     pub sidecar: PointFieldSidecarData,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PointFieldSidecarManifest {
+    pub schema_version: u32,
+    pub run_id: String,
+    pub point_id: String,
+    pub segment_id: String,
+    pub calibration_id: String,
+    pub smb_profile_id: String,
+    pub smb_command_settle_ms: u64,
+    pub smb_error_check_after_write: bool,
+    pub smb_fixed: Smb100aFixedProfile,
+    pub oe_profile_id: String,
+    pub laser_profile_id: String,
+    pub target_b_nt: [f64; 3],
+    pub baseline_current_a: [f64; 3],
+    pub calibrated_delta_current_a: [f64; 3],
+    pub target_current_a: [f64; 3],
+    pub measured_current_a: [f64; 3],
+    pub rf: ResolvedSmbSweep,
+    pub oe_fixed: Oe1022dFixedProfile,
+    pub oe_collector: CollectorConfig,
+    pub laser_mode: String,
+    pub laser_power_mw: u16,
+    pub laser_settle_ms: u64,
 }
 
 impl CollectorFrame {
@@ -1193,6 +1220,7 @@ pub fn build_point_field_bundle(
     point_id: &str,
     segment_id: &str,
     sidecar_relative_path: &str,
+    sidecar_manifest_relative_path: &str,
     frames: &[CollectorFrame],
 ) -> Result<PointFieldBundle, MinimalRallParseError> {
     let parsed_frames = frames
@@ -1213,6 +1241,7 @@ pub fn build_point_field_bundle(
         point_id,
         segment_id,
         sidecar_relative_path,
+        sidecar_manifest_relative_path,
         &parsed_frames,
     )
 }
@@ -1222,6 +1251,7 @@ pub fn build_point_field_bundle_from_parsed(
     point_id: &str,
     segment_id: &str,
     sidecar_relative_path: &str,
+    sidecar_manifest_relative_path: &str,
     frames: &[ParsedFrameRecord],
 ) -> Result<PointFieldBundle, MinimalRallParseError> {
     let measurement_field_order = RALL_FIELD_ORDER
@@ -1318,6 +1348,7 @@ pub fn build_point_field_bundle_from_parsed(
         format: "npz".to_string(),
         schema_version: 1,
         relative_path: sidecar_relative_path.to_string(),
+        manifest_relative_path: sidecar_manifest_relative_path.to_string(),
         measurement_field_keys: measurement_field_keys.clone(),
         status_keys: vec![
             "frame_seq".to_string(),
@@ -2452,9 +2483,15 @@ mod tests {
             duplicate_of: None,
         }];
 
-        let bundle =
-            build_point_field_bundle("run_1", "p1", "seg1", "point_fields/seg1.npz", &frames)
-                .unwrap();
+        let bundle = build_point_field_bundle(
+            "run_1",
+            "p1",
+            "seg1",
+            "point_fields/seg1.npz",
+            "point_fields/seg1.manifest.json",
+            &frames,
+        )
+        .unwrap();
         let record = bundle.metadata;
 
         assert_eq!(record.frames_parsed, 1);
@@ -2462,6 +2499,10 @@ mod tests {
         assert_eq!(record.samples_per_frame, 50);
         assert_eq!(record.matrix_shape, [20, 50]);
         assert_eq!(record.sidecar.relative_path, "point_fields/seg1.npz");
+        assert_eq!(
+            record.sidecar.manifest_relative_path,
+            "point_fields/seg1.manifest.json"
+        );
         assert_eq!(record.field_summaries.len(), 20);
         assert_eq!(record.field_summaries[8].field_name, "B-X");
         assert_eq!(record.field_summaries[8].npz_key, "b_x");

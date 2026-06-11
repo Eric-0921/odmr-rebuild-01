@@ -13,8 +13,9 @@ use acquisition_runtime::{
     parse_rall_frame_full, AcquisitionRunPlan, BaselineAxisSnapshot, BaselineSnapshot,
     CalibrationProfile, CollectorConfig, CollectorCursor, CollectorFrame, EventRecord,
     FrameIndexRecord, FrameRingBuffer, LaserBackgroundMode, LaserRunProfile, Oe1022dRunProfile,
-    ParsedFrameRecord, PlanSnapshot, PointFieldSidecarData, PointRecord, ResolvedRunPlan,
-    ResolvedSmbSweep, RunManifest, SegmentRecord, SettleRecord, Smb100aRunProfile, SummaryRecord,
+    ParsedFrameRecord, PlanSnapshot, PointFieldSidecarData, PointFieldSidecarManifest, PointRecord,
+    ResolvedRunPlan, ResolvedSmbSweep, RunManifest, SegmentRecord, SettleRecord, Smb100aRunProfile,
+    SummaryRecord,
 };
 use chrono::{DateTime, Local};
 use cni_laser_transport::{CniLaserTransport, CniLaserTransportConfig};
@@ -395,6 +396,12 @@ pub fn run_execute(
     let mut points_passed = 0_usize;
     let mut points_failed = 0_usize;
     let mut run_error: Option<String> = None;
+    let point_artifact_context = PointArtifactManifestContext {
+        calibration: &calibration,
+        smb_profile: &smb_profile,
+        oe_profile: &oe_profile,
+        laser_profile: &laser_profile,
+    };
 
     for (index, point) in resolved_plan.points.iter().enumerate() {
         collector.drain_diag_events(&mut events_file)?;
@@ -450,6 +457,7 @@ pub fn run_execute(
             &mut point_fields_file,
             &start_instant,
             &target_dir,
+            &point_artifact_context,
             &resolved_plan,
             &eta_summary,
             effective_collector_config.poll_interval_ms,
@@ -696,6 +704,7 @@ fn execute_point(
     point_fields_file: &mut File,
     start_instant: &Instant,
     run_dir: &Path,
+    point_artifact_context: &PointArtifactManifestContext<'_>,
     resolved_plan: &ResolvedRunPlan,
     _eta_summary: &RunEtaSummary,
     collector_poll_interval_ms: u64,
@@ -839,11 +848,13 @@ fn execute_point(
     append_jsonl(segments_file, &segment)?;
     let frames = raw_replay.replay_segment(&segment)?;
     let point_fields_relative_path = point_fields_sidecar_relative_path(&segment_id);
+    let point_manifest_relative_path = point_fields_manifest_relative_path(&segment_id);
     let point_fields_bundle = build_point_field_bundle(
         &plan.run_id,
         &point.point_id,
         &segment_id,
         &point_fields_relative_path,
+        &point_manifest_relative_path,
         &frames,
     )
     .map_err(|err| format!("RALL point 字段解析失败: {err}"))?;
@@ -853,6 +864,40 @@ fn execute_point(
         &point_fields_relative_path,
     )
     .map_err(|err| format!("point_fields NPZ 写入失败: {err}"))?;
+    let point_fields_manifest = PointFieldSidecarManifest {
+        schema_version: 1,
+        run_id: plan.run_id.clone(),
+        point_id: point.point_id.clone(),
+        segment_id: segment_id.clone(),
+        calibration_id: point_artifact_context.calibration.calibration_id.clone(),
+        smb_profile_id: point_artifact_context.smb_profile.profile_id.clone(),
+        smb_command_settle_ms: point_artifact_context.smb_profile.command_settle_ms,
+        smb_error_check_after_write: point_artifact_context.smb_profile.error_check_after_write,
+        smb_fixed: point_artifact_context.smb_profile.fixed.clone(),
+        oe_profile_id: point_artifact_context.oe_profile.profile_id.clone(),
+        laser_profile_id: point_artifact_context.laser_profile.profile_id.clone(),
+        target_b_nt: point.target_b_nt,
+        baseline_current_a,
+        calibrated_delta_current_a,
+        target_current_a,
+        measured_current_a,
+        rf: sweep.clone(),
+        oe_fixed: point_artifact_context.oe_profile.fixed.clone(),
+        oe_collector: point_artifact_context.oe_profile.collector.clone(),
+        laser_mode: point_artifact_context
+            .laser_profile
+            .mode
+            .as_str()
+            .to_string(),
+        laser_power_mw: point_artifact_context.laser_profile.power_mw,
+        laser_settle_ms: point_artifact_context.laser_profile.settle_ms,
+    };
+    write_point_fields_manifest_json(
+        run_dir,
+        &point_fields_manifest,
+        &point_manifest_relative_path,
+    )
+    .map_err(|err| format!("point_fields manifest 写入失败: {err}"))?;
     append_jsonl(point_fields_file, &point_fields_bundle.metadata)?;
 
     let quality = compute_quality_record(
@@ -916,6 +961,7 @@ fn execute_point(
             "frame_coverage_ratio": outcome.frame_coverage_ratio,
             "estimated_frames_expected": outcome.estimated_frames_expected,
             "point_fields_sidecar": point_fields_relative_path,
+            "point_fields_manifest": point_manifest_relative_path,
             "artifact_mode": artifact_mode.as_str()
         }),
     )?;
@@ -1397,6 +1443,13 @@ struct PointExecutionOutcome {
     frame_coverage_ratio: Option<f64>,
 }
 
+struct PointArtifactManifestContext<'a> {
+    calibration: &'a CalibrationProfile,
+    smb_profile: &'a Smb100aRunProfile,
+    oe_profile: &'a Oe1022dRunProfile,
+    laser_profile: &'a LaserRunProfile,
+}
+
 fn wait_for_sweep_complete(
     transport: &mut Smb100aTransport,
     sweep: &ResolvedSmbSweep,
@@ -1665,6 +1718,10 @@ fn point_fields_sidecar_relative_path(segment_id: &str) -> String {
     format!("point_fields/{segment_id}.npz")
 }
 
+fn point_fields_manifest_relative_path(segment_id: &str) -> String {
+    format!("point_fields/{segment_id}.manifest.json")
+}
+
 fn write_point_fields_sidecar_npz(
     run_dir: &Path,
     sidecar: &PointFieldSidecarData,
@@ -1747,6 +1804,23 @@ fn write_point_fields_sidecar_npz(
         .finish()
         .map_err(|err| format!("关闭 NPZ sidecar {} 失败: {err}", path.display()))?;
     Ok(())
+}
+
+fn write_point_fields_manifest_json(
+    run_dir: &Path,
+    manifest: &PointFieldSidecarManifest,
+    relative_path: &str,
+) -> Result<(), String> {
+    let path = run_dir.join(relative_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "无法创建 point_fields manifest 目录 {}: {err}",
+                parent.display()
+            )
+        })?;
+    }
+    write_pretty_json(&path, manifest)
 }
 
 struct RawReplayReader {

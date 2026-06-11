@@ -18,6 +18,7 @@ runs/<run_id>/
   point_fields.jsonl
   point_fields/
     seg_<point_id>_0000.npz
+    seg_<point_id>_0000.manifest.json
   segments.jsonl
   quality.jsonl
   raw/
@@ -251,6 +252,7 @@ point record 不保存 raw 数据本体，只保存该点的上下文。
     "format": "npz",
     "schema_version": 1,
     "relative_path": "point_fields/seg_p0001_0000.npz",
+    "manifest_relative_path": "point_fields/seg_p0001_0000.manifest.json",
     "measurement_field_keys": ["a_x", "a_y", "a_freq", "a_noise"],
     "status_keys": [
       "frame_seq",
@@ -267,7 +269,13 @@ point record 不保存 raw 数据本体，只保存该点的上下文。
 ```
 
 这不是完整科学分析，只是 point 级轻量 metadata。  
-完整 20 字段数组和必要状态数组默认进入每个 point 的 `NPZ` sidecar。
+完整 20 字段数组和必要状态数组默认进入每个 point 的 `NPZ` sidecar。  
+与之配对的 `manifest.json` 会把 point 级背景一次性钉死，包括：
+
+- `SMB` profile id、fixed 配置、point 级 `rf sweep`
+- `Mag` 的 `target_b_nt / baseline_current_a / target_current_a / measured_current_a`
+- `OE` profile id、fixed 配置、collector 配置
+- `Laser` profile id、mode、power、settle
 
 最终事实层是：
 
