@@ -25,6 +25,10 @@
     "frame_exact_bytes": 12288,
     "frame_max_bytes": 16384,
     "ring_capacity_frames": 512,
-    "guard_margin_ms": 3000
+    "guard_margin_ms": 3000,
+    "rall_chunk_timeout_ms": 5,
+    "rall_first_byte_deadline_ms": 20,
+    "rall_frame_deadline_ms": 120,
+    "zero_byte_retry_limit": 1
   }
 }

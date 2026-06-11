@@ -61,7 +61,6 @@ const SMB_CLEANUP_WAIT_MS: u64 = 300;
 const MAG_CLEANUP_WAIT_MS: u64 = 500;
 const SWEEP_COMPLETION_GUARD_MS: u64 = 100;
 const COLLECTOR_QUEUE_CAPACITY: usize = 8;
-const COLLECTOR_ZERO_BYTE_RETRY_LIMIT: usize = 1;
 const INTERRUPT_POLL_MS: u64 = 50;
 const USER_INTERRUPTED: &str = "用户中断";
 const COLLECTOR_COMMIT_SYNC_TIMEOUT_MS: u64 = 2_000;
@@ -277,7 +276,7 @@ pub fn run_execute(
     )?;
 
     {
-        let mut oe = Oe1022dTransport::open(&oe_config(oe_device)?)
+        let mut oe = Oe1022dTransport::open(&oe_config(oe_device, &oe_profile.collector)?)
             .map_err(|err| format!("无法连接 OE1022D {}: {err}", oe_device.device_id))?;
         apply_oe_fixed_profile(
             &mut oe,
@@ -1967,7 +1966,10 @@ fn tcp_config(device: &DeviceSpec) -> Result<Smb100aTransportConfig, String> {
     })
 }
 
-fn oe_config(device: &DeviceSpec) -> Result<Oe1022dTransportConfig, String> {
+fn oe_config(
+    device: &DeviceSpec,
+    collector: &CollectorConfig,
+) -> Result<Oe1022dTransportConfig, String> {
     let TransportHint::SerialPort {
         port_path,
         baud_rate,
@@ -1978,6 +1980,9 @@ fn oe_config(device: &DeviceSpec) -> Result<Oe1022dTransportConfig, String> {
     Ok(Oe1022dTransportConfig {
         port_path: port_path.clone(),
         baud_rate: *baud_rate,
+        rall_chunk_timeout: Duration::from_millis(collector.rall_chunk_timeout_ms),
+        rall_first_byte_deadline: Duration::from_millis(collector.rall_first_byte_deadline_ms),
+        rall_frame_deadline: Duration::from_millis(collector.rall_frame_deadline_ms),
         ..Oe1022dTransportConfig::default()
     })
 }
@@ -2113,7 +2118,7 @@ impl CollectorHandle {
                 next_raw_offset: 0,
             },
         }));
-        let device_config = oe_config(device)?;
+        let device_config = oe_config(device, config)?;
         let CollectorArtifactPaths {
             raw_path,
             index_path,
@@ -2123,6 +2128,7 @@ impl CollectorHandle {
         let poll_interval = config.poll_interval_ms;
         let frame_exact_bytes = config.frame_exact_bytes;
         let frame_max_bytes = config.frame_max_bytes;
+        let zero_byte_retry_limit = config.zero_byte_retry_limit;
         let producer_stop = Arc::clone(&stop_flag);
         let consumer_stop = Arc::clone(&stop_flag);
         let producer_done_clone = Arc::clone(&producer_done);
@@ -2150,7 +2156,7 @@ impl CollectorHandle {
                         transport
                             .query_rall_frame_exact_with_zero_retry(
                                 frame_exact_bytes,
-                                COLLECTOR_ZERO_BYTE_RETRY_LIMIT,
+                                zero_byte_retry_limit,
                             )
                             .map(|outcome| {
                                 if outcome.zero_byte_retry_count > 0 {
@@ -2653,6 +2659,10 @@ mod tests {
             frame_max_bytes: 16384,
             ring_capacity_frames: 64,
             guard_margin_ms: 3000,
+            rall_chunk_timeout_ms: 5,
+            rall_first_byte_deadline_ms: 20,
+            rall_frame_deadline_ms: 120,
+            zero_byte_retry_limit: 1,
         };
         let smb_profile = Smb100aRunProfile {
             profile_id: "test".to_string(),
