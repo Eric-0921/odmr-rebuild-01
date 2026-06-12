@@ -21,6 +21,8 @@ const XY_JUMP_SCORE_THRESHOLD: f64 = 8.0;
 const B_X_INDEX: usize = 8;
 const B_Y_INDEX: usize = 9;
 const B_FREQ_INDEX: usize = 10;
+const DEVICE_PACKET_COUNTER_OFFSET: usize = 12287;
+const DEVICE_PACKET_COUNTER_SUSPECT_LIMIT: usize = 100;
 
 pub fn run_audit_continuity(run_dir: &Path, out_path: Option<&Path>) -> Result<PathBuf, String> {
     let parsed_path = run_dir.join("raw/oe1022d.frames.parsed.jsonl");
@@ -33,6 +35,8 @@ pub fn run_audit_continuity(run_dir: &Path, out_path: Option<&Path>) -> Result<P
 
     let (frames, parsed_frames_file) =
         load_parsed_frames(run_dir, &parsed_path, &raw_path, &index_path)?;
+    let device_packet_counter =
+        audit_device_packet_counter(&raw_path, &index_path, DEVICE_PACKET_COUNTER_OFFSET)?;
     let segments: Vec<SegmentRecord> = read_jsonl(&segments_path)?;
 
     let mut segment_reports = Vec::new();
@@ -67,7 +71,13 @@ pub fn run_audit_continuity(run_dir: &Path, out_path: Option<&Path>) -> Result<P
                 && frame.duplicate_hint.is_none()
         })
         .count();
-    let verdict = if suspected_missing_boundaries > 0 {
+    let device_counter_missing_boundaries = device_packet_counter
+        .as_ref()
+        .map(|audit| audit.delta_gt1_count)
+        .unwrap_or_default();
+    let verdict = if device_counter_missing_boundaries > 0 {
+        "device_counter_missing_windows"
+    } else if suspected_missing_boundaries > 0 {
         "suspected_missing_windows"
     } else if suspected_content_boundaries > 0 {
         "suspected_content_discontinuity"
@@ -85,6 +95,7 @@ pub fn run_audit_continuity(run_dir: &Path, out_path: Option<&Path>) -> Result<P
         frames_unique,
         segments_total: segments.len(),
         segments_audited: segment_reports.len(),
+        device_packet_counter,
         suspected_missing_boundaries,
         suspected_content_boundaries,
         max_observed_gap_ms: max_gap_ms,
@@ -108,6 +119,122 @@ pub fn run_audit_continuity(run_dir: &Path, out_path: Option<&Path>) -> Result<P
     println!("continuity audit 已写入: {}", out_path.display());
 
     Ok(out_path)
+}
+
+fn audit_device_packet_counter(
+    raw_path: &Path,
+    index_path: &Path,
+    offset: usize,
+) -> Result<Option<DevicePacketCounterAudit>, String> {
+    if !raw_path.exists() || !index_path.exists() {
+        return Ok(None);
+    }
+
+    let index: Vec<FrameIndexRecord> = read_jsonl(index_path)?;
+    let mut raw_file = File::open(raw_path)
+        .map_err(|err| format!("无法打开 raw 文件 {}: {err}", raw_path.display()))?;
+    let mut counters = Vec::with_capacity(index.len());
+
+    for record in &index {
+        if record.raw_len <= offset {
+            continue;
+        }
+        let mut byte = [0_u8; 1];
+        raw_file
+            .seek(SeekFrom::Start(record.raw_offset + offset as u64))
+            .map_err(|err| {
+                format!(
+                    "raw seek packet counter 失败 offset={}: {err}",
+                    record.raw_offset + offset as u64
+                )
+            })?;
+        raw_file.read_exact(&mut byte).map_err(|err| {
+            format!(
+                "raw 读取 packet counter 失败 frame_seq={}: {err}",
+                record.frame_seq
+            )
+        })?;
+        counters.push(DevicePacketCounterSample {
+            frame_seq: record.frame_seq,
+            monotonic_ns: record.monotonic_ns,
+            counter: byte[0],
+        });
+    }
+
+    if counters.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(build_device_packet_counter_audit(offset, &counters)))
+}
+
+fn build_device_packet_counter_audit(
+    offset: usize,
+    counters: &[DevicePacketCounterSample],
+) -> DevicePacketCounterAudit {
+    let mut delta_1_count = 0_usize;
+    let mut delta_0_count = 0_usize;
+    let mut delta_gt1_count = 0_usize;
+    let mut estimated_missing_windows = 0_usize;
+    let mut delta_counts = Vec::<DevicePacketCounterDeltaCount>::new();
+    let mut suspect_boundaries = Vec::new();
+
+    for pair in counters.windows(2) {
+        let prev = pair[0];
+        let next = pair[1];
+        let delta = next.counter.wrapping_sub(prev.counter);
+        increment_delta_count(&mut delta_counts, delta);
+        match delta {
+            0 => delta_0_count += 1,
+            1 => delta_1_count += 1,
+            other => {
+                delta_gt1_count += 1;
+                estimated_missing_windows += other.saturating_sub(1) as usize;
+                if suspect_boundaries.len() < DEVICE_PACKET_COUNTER_SUSPECT_LIMIT {
+                    suspect_boundaries.push(DevicePacketCounterBoundary {
+                        prev_frame_seq: prev.frame_seq,
+                        next_frame_seq: next.frame_seq,
+                        prev_counter: prev.counter,
+                        next_counter: next.counter,
+                        delta,
+                        estimated_missing_windows: other.saturating_sub(1) as usize,
+                        gap_ms: (next.monotonic_ns.saturating_sub(prev.monotonic_ns)) as f64
+                            / 1_000_000.0,
+                    });
+                }
+            }
+        }
+    }
+
+    delta_counts.sort_by(|left, right| {
+        right
+            .count
+            .cmp(&left.count)
+            .then_with(|| left.delta.cmp(&right.delta))
+    });
+    delta_counts.truncate(16);
+
+    DevicePacketCounterAudit {
+        offset,
+        frames_audited: counters.len(),
+        boundaries_evaluated: counters.len().saturating_sub(1),
+        first_counter: counters.first().map(|sample| sample.counter),
+        last_counter: counters.last().map(|sample| sample.counter),
+        delta_1_count,
+        delta_0_count,
+        delta_gt1_count,
+        estimated_missing_windows,
+        delta_counts,
+        suspect_boundaries,
+    }
+}
+
+fn increment_delta_count(delta_counts: &mut Vec<DevicePacketCounterDeltaCount>, delta: u8) {
+    if let Some(existing) = delta_counts.iter_mut().find(|record| record.delta == delta) {
+        existing.count += 1;
+    } else {
+        delta_counts.push(DevicePacketCounterDeltaCount { delta, count: 1 });
+    }
 }
 
 fn audit_segment(
@@ -422,11 +549,51 @@ struct ContinuityAuditReport {
     frames_unique: usize,
     segments_total: usize,
     segments_audited: usize,
+    device_packet_counter: Option<DevicePacketCounterAudit>,
     suspected_missing_boundaries: usize,
     suspected_content_boundaries: usize,
     max_observed_gap_ms: f64,
     verdict: String,
     segment_reports: Vec<SegmentContinuityReport>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DevicePacketCounterSample {
+    frame_seq: u64,
+    monotonic_ns: u64,
+    counter: u8,
+}
+
+#[derive(Debug, Serialize)]
+struct DevicePacketCounterAudit {
+    offset: usize,
+    frames_audited: usize,
+    boundaries_evaluated: usize,
+    first_counter: Option<u8>,
+    last_counter: Option<u8>,
+    delta_1_count: usize,
+    delta_0_count: usize,
+    delta_gt1_count: usize,
+    estimated_missing_windows: usize,
+    delta_counts: Vec<DevicePacketCounterDeltaCount>,
+    suspect_boundaries: Vec<DevicePacketCounterBoundary>,
+}
+
+#[derive(Debug, Serialize)]
+struct DevicePacketCounterDeltaCount {
+    delta: u8,
+    count: usize,
+}
+
+#[derive(Debug, Serialize)]
+struct DevicePacketCounterBoundary {
+    prev_frame_seq: u64,
+    next_frame_seq: u64,
+    prev_counter: u8,
+    next_counter: u8,
+    delta: u8,
+    estimated_missing_windows: usize,
+    gap_ms: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -547,5 +714,39 @@ mod tests {
             .reasons
             .iter()
             .any(|reason| reason == "content_jump_xy"));
+    }
+
+    #[test]
+    fn device_packet_counter_audit_counts_duplicates_and_missing_windows() {
+        let samples = [
+            DevicePacketCounterSample {
+                frame_seq: 0,
+                monotonic_ns: 0,
+                counter: 10,
+            },
+            DevicePacketCounterSample {
+                frame_seq: 1,
+                monotonic_ns: 50_000_000,
+                counter: 11,
+            },
+            DevicePacketCounterSample {
+                frame_seq: 2,
+                monotonic_ns: 100_000_000,
+                counter: 11,
+            },
+            DevicePacketCounterSample {
+                frame_seq: 3,
+                monotonic_ns: 150_000_000,
+                counter: 14,
+            },
+        ];
+
+        let audit = build_device_packet_counter_audit(12287, &samples);
+        assert_eq!(audit.delta_1_count, 1);
+        assert_eq!(audit.delta_0_count, 1);
+        assert_eq!(audit.delta_gt1_count, 1);
+        assert_eq!(audit.estimated_missing_windows, 2);
+        assert_eq!(audit.suspect_boundaries.len(), 1);
+        assert_eq!(audit.suspect_boundaries[0].delta, 3);
     }
 }
