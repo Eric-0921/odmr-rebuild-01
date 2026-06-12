@@ -62,6 +62,7 @@ impl M8812Transport {
         if config.dtr_on_open {
             port.write_data_terminal_ready(true)?;
         }
+        port.clear(ClearBuffer::All)?;
 
         Ok(Self {
             port,
@@ -83,6 +84,7 @@ impl M8812Transport {
     }
 
     pub fn query_idn(&mut self) -> Result<String> {
+        self.clear_input()?;
         self.query(m8812_query_idn())
     }
 
