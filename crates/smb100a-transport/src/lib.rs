@@ -23,6 +23,7 @@ use std::time::Duration;
 pub struct Smb100aTransportConfig {
     pub host: String,
     pub port: u16,
+    pub connect_timeout: Duration,
     pub read_timeout: Duration,
     pub write_timeout: Duration,
     pub response_max_bytes: usize,
@@ -42,6 +43,7 @@ impl Default for Smb100aTransportConfig {
         Self {
             host: "127.0.0.1".to_string(),
             port: 5025,
+            connect_timeout: Duration::from_millis(500),
             read_timeout: Duration::from_millis(500),
             write_timeout: Duration::from_millis(500),
             response_max_bytes: 4096,
@@ -61,7 +63,7 @@ impl Smb100aTransport {
             .to_socket_addrs()?
             .next()
             .expect("SMB100A 地址解析结果不能为空");
-        let stream = TcpStream::connect(address)?;
+        let stream = TcpStream::connect_timeout(&address, config.connect_timeout)?;
         stream.set_read_timeout(Some(config.read_timeout))?;
         stream.set_write_timeout(Some(config.write_timeout))?;
         stream.set_nodelay(true)?;

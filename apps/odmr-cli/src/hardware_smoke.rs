@@ -932,7 +932,7 @@ fn identity_matches(device: &DeviceSpec, observed: &str) -> bool {
 }
 
 fn tcp_config(device: &DeviceSpec) -> Result<Smb100aTransportConfig, String> {
-    let TransportHint::TcpSocket { host, port } = &device.transport_hint else {
+    let TransportHint::TcpSocket { host, port, .. } = &device.transport_hint else {
         return Err(format!(
             "设备 {} transport 不是 tcp_socket",
             device.device_id
@@ -1175,10 +1175,13 @@ mod tests {
                     transport_hint: TransportHint::TcpSocket {
                         host: "127.0.0.1".to_string(),
                         port: 5025,
+                        host_candidates: Vec::new(),
                     },
                     identity: Some(IdentityRule {
                         exact: None,
+                        exact_any: Vec::new(),
                         contains_all: vec!["SMB100A".to_string()],
+                        contains_any: Vec::new(),
                     }),
                 },
                 DeviceSpec {

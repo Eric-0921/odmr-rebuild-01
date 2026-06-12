@@ -76,7 +76,12 @@ pub enum DeviceKind {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "transport", rename_all = "snake_case")]
 pub enum TransportHint {
-    TcpSocket { host: String, port: u16 },
+    TcpSocket {
+        host: String,
+        port: u16,
+        #[serde(default)]
+        host_candidates: Vec<String>,
+    },
     SerialPort { port_path: String, baud_rate: u32 },
 }
 
@@ -85,17 +90,36 @@ pub struct IdentityRule {
     #[serde(default)]
     pub exact: Option<String>,
     #[serde(default)]
+    pub exact_any: Vec<String>,
+    #[serde(default)]
     pub contains_all: Vec<String>,
+    #[serde(default)]
+    pub contains_any: Vec<String>,
 }
 
 impl IdentityRule {
     pub fn matches(&self, observed: &str) -> bool {
-        if let Some(exact) = &self.exact {
-            return observed.trim() == exact.trim();
-        }
-        self.contains_all
+        let observed = observed.trim();
+        let exact_ok = self
+            .exact
+            .as_ref()
+            .map(|exact| observed == exact.trim())
+            .unwrap_or(true);
+        let exact_any_ok = self.exact_any.is_empty()
+            || self
+                .exact_any
+                .iter()
+                .any(|exact| observed == exact.trim());
+        let contains_all_ok = self
+            .contains_all
             .iter()
-            .all(|token| observed.contains(token))
+            .all(|token| observed.contains(token));
+        let contains_any_ok = self.contains_any.is_empty()
+            || self
+                .contains_any
+                .iter()
+                .any(|token| observed.contains(token));
+        exact_ok && exact_any_ok && contains_all_ok && contains_any_ok
     }
 }
 
@@ -202,35 +226,59 @@ pub fn resolve_station(spec: &StationSpec) -> StationResolveResult {
 }
 
 fn verify_smb100a(device: &DeviceSpec) -> DeviceSnapshot {
-    let TransportHint::TcpSocket { host, port } = &device.transport_hint else {
+    let TransportHint::TcpSocket {
+        host,
+        port,
+        host_candidates,
+    } = &device.transport_hint
+    else {
         unreachable!("SMB100A transport hint 必须是 tcp_socket");
     };
-    let config = Smb100aTransportConfig {
-        host: host.clone(),
-        port: *port,
-        ..Smb100aTransportConfig::default()
-    };
-    let result = (|| {
-        let mut transport = Smb100aTransport::connect(&config).map_err(|source| {
+    let mut attempted_hosts = Vec::new();
+    for candidate_host in tcp_candidate_hosts(host, host_candidates) {
+        attempted_hosts.push(candidate_host.clone());
+        let config = Smb100aTransportConfig {
+            host: candidate_host.clone(),
+            port: *port,
+            ..Smb100aTransportConfig::default()
+        };
+        let transport = Smb100aTransport::connect(&config).map_err(|source| {
             StationResolveError::Transport {
                 device_id: device.device_id.clone(),
                 source,
             }
-        })?;
+        });
+        let Ok(mut transport) = transport else {
+            continue;
+        };
         let observed = transport
             .query_idn()
             .map_err(|source| StationResolveError::Transport {
                 device_id: device.device_id.clone(),
                 source,
-            })?;
-        verify_identity_rule(device, &observed)?;
-        Ok::<String, StationResolveError>(observed)
-    })();
+            });
+        let Ok(observed) = observed else {
+            continue;
+        };
+        if verify_identity_rule(device, &observed).is_err() {
+            continue;
+        }
 
-    match result {
-        Ok(observed) => build_verified_snapshot(device, observed, "tcp_idn_query"),
-        Err(err) => build_failed_snapshot(device, "tcp_idn_query", err.to_string()),
+        let mut resolved_device = device.clone();
+        if let TransportHint::TcpSocket { host, .. } = &mut resolved_device.transport_hint {
+            *host = candidate_host;
+        }
+        return build_verified_snapshot(&resolved_device, observed, "tcp_idn_query");
     }
+
+    build_failed_snapshot(
+        device,
+        "tcp_idn_query",
+        format!(
+            "TCP host 候选全部失败: {}",
+            attempted_hosts.join(", ")
+        ),
+    )
 }
 
 fn verify_oe1022d(device: &DeviceSpec) -> DeviceSnapshot {
@@ -454,6 +502,17 @@ fn order_candidate_serial_ports(
     ordered
 }
 
+fn tcp_candidate_hosts(host: &str, host_candidates: &[String]) -> Vec<String> {
+    let mut ordered = Vec::with_capacity(1 + host_candidates.len());
+    ordered.push(host.to_string());
+    for candidate in host_candidates {
+        if !ordered.iter().any(|existing| existing == candidate) {
+            ordered.push(candidate.clone());
+        }
+    }
+    ordered
+}
+
 fn serial_port_priority(port: &str) -> u8 {
     if port.starts_with("/dev/cu.") {
         0
@@ -566,7 +625,9 @@ mod tests {
     fn identity_rule_exact_match_works() {
         let rule = IdentityRule {
             exact: Some("MAYNUO,M8812,SN,V2.7".to_string()),
+            exact_any: Vec::new(),
             contains_all: Vec::new(),
+            contains_any: Vec::new(),
         };
         assert!(rule.matches("MAYNUO,M8812,SN,V2.7"));
         assert!(!rule.matches("MAYNUO,M8812,OTHER,V2.7"));
@@ -576,10 +637,25 @@ mod tests {
     fn identity_rule_contains_all_works() {
         let rule = IdentityRule {
             exact: None,
+            exact_any: Vec::new(),
             contains_all: vec!["Rohde&Schwarz".to_string(), "SMB100A".to_string()],
+            contains_any: Vec::new(),
         };
         assert!(rule.matches("Rohde&Schwarz,SMB100A,123"));
         assert!(!rule.matches("Rohde&Schwarz,XYZ"));
+    }
+
+    #[test]
+    fn identity_rule_contains_any_works() {
+        let rule = IdentityRule {
+            exact: None,
+            exact_any: Vec::new(),
+            contains_all: vec!["SSI LIA-OE1022D".to_string()],
+            contains_any: vec!["SN:D6522078".to_string(), "SN:D6130220".to_string()],
+        };
+        assert!(rule.matches("SSI LIA-OE1022D,SN:D6522078,Version:Ver6.3"));
+        assert!(rule.matches("SSI LIA-OE1022D,SN:D6130220,Version:Ver6.3"));
+        assert!(!rule.matches("SSI LIA-OE1022D,SN:D0000000,Version:Ver6.3"));
     }
 
     #[test]
@@ -593,10 +669,13 @@ mod tests {
                 transport_hint: TransportHint::TcpSocket {
                     host: "169.254.2.20".to_string(),
                     port: 5025,
+                    host_candidates: vec!["169.254.1.20".to_string()],
                 },
                 identity: Some(IdentityRule {
                     exact: None,
+                    exact_any: Vec::new(),
                     contains_all: vec!["SMB100A".to_string()],
+                    contains_any: Vec::new(),
                 }),
             }],
         };
@@ -636,6 +715,26 @@ mod tests {
             vec![
                 "/dev/cu.usbserial-a".to_string(),
                 "/dev/cu.usbserial-b".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn tcp_candidate_hosts_keeps_primary_and_deduplicates() {
+        let ordered = tcp_candidate_hosts(
+            "169.254.2.20",
+            &[
+                "169.254.1.20".to_string(),
+                "169.254.2.20".to_string(),
+                "169.254.3.20".to_string(),
+            ],
+        );
+        assert_eq!(
+            ordered,
+            vec![
+                "169.254.2.20".to_string(),
+                "169.254.1.20".to_string(),
+                "169.254.3.20".to_string(),
             ]
         );
     }

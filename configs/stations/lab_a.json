@@ -7,14 +7,20 @@
       "required": true,
       "transport_hint": {
         "transport": "tcp_socket",
-        "host": "169.254.2.20",
-        "port": 5025
+        "host": "169.254.1.20",
+        "port": 5025,
+        "host_candidates": [
+          "169.254.2.20"
+        ]
       },
       "identity": {
         "contains_all": [
           "Rohde&Schwarz",
-          "SMB100A",
-          "1406.6000k02/101623"
+          "SMB100A"
+        ],
+        "contains_any": [
+          "1406.6000k02/101623",
+          "1406.6000k02/106789"
         ]
       }
     },
@@ -24,13 +30,16 @@
       "required": true,
       "transport_hint": {
         "transport": "serial_port",
-        "port_path": "/dev/cu.usbmodem3361358734371",
+        "port_path": "/dev/cu.usbmodem395D388533371",
         "baud_rate": 921600
       },
       "identity": {
         "contains_all": [
-          "SSI LIA-OE1022D",
-          "SN:D6522078"
+          "SSI LIA-OE1022D"
+        ],
+        "contains_any": [
+          "SN:D6522078",
+          "SN:D6130220"
         ]
       }
     },

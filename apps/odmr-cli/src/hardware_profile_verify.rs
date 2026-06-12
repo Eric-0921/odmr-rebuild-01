@@ -1365,7 +1365,7 @@ fn find_first_device(spec: &StationSpec, kind: DeviceKind) -> Result<&DeviceSpec
 
 fn tcp_config(device: &DeviceSpec) -> Result<Smb100aTransportConfig, String> {
     match &device.transport_hint {
-        TransportHint::TcpSocket { host, port } => Ok(Smb100aTransportConfig {
+        TransportHint::TcpSocket { host, port, .. } => Ok(Smb100aTransportConfig {
             host: host.clone(),
             port: *port,
             ..Smb100aTransportConfig::default()

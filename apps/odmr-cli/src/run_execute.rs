@@ -2186,7 +2186,7 @@ fn find_device_by_id<'a>(
 }
 
 fn tcp_config(device: &DeviceSpec) -> Result<Smb100aTransportConfig, String> {
-    let TransportHint::TcpSocket { host, port } = &device.transport_hint else {
+    let TransportHint::TcpSocket { host, port, .. } = &device.transport_hint else {
         return Err(format!("设备 {} 不是 tcp_socket", device.device_id));
     };
     Ok(Smb100aTransportConfig {
