@@ -809,10 +809,6 @@ pub struct FrameIndexRecord {
     pub raw_len: usize,
     pub parse_status: String,
     #[serde(default)]
-    pub packet_counter_candidate_u8: Option<u8>,
-    #[serde(default)]
-    pub packet_counter_gap: Option<i16>,
-    #[serde(default)]
     pub duplicate_of: Option<u64>,
 }
 
@@ -909,10 +905,6 @@ pub struct ParsedFrameRecord {
     pub padding_status: String,
     #[serde(default)]
     pub duplicate_hint: Option<u64>,
-    #[serde(default)]
-    pub packet_counter_candidate_u8: Option<u8>,
-    #[serde(default)]
-    pub packet_counter_gap: Option<i16>,
     #[serde(default)]
     pub parse_error: Option<String>,
     pub measurement_field_order: Vec<String>,
@@ -1082,11 +1074,7 @@ impl CollectorFrame {
         self.payload.len()
     }
 
-    pub fn index_record(
-        &self,
-        parse_status: impl Into<String>,
-        packet_counter_gap: Option<i16>,
-    ) -> FrameIndexRecord {
+    pub fn index_record(&self, parse_status: impl Into<String>) -> FrameIndexRecord {
         FrameIndexRecord {
             frame_seq: self.frame_seq,
             ts: self.ts.clone(),
@@ -1094,21 +1082,9 @@ impl CollectorFrame {
             raw_offset: self.raw_offset,
             raw_len: self.raw_len(),
             parse_status: parse_status.into(),
-            packet_counter_candidate_u8: rall_packet_counter_candidate(&self.payload),
-            packet_counter_gap,
             duplicate_of: self.duplicate_of,
         }
     }
-}
-
-pub fn rall_packet_counter_candidate(bytes: &[u8]) -> Option<u8> {
-    bytes.first().copied()
-}
-
-pub fn rall_packet_counter_gap(previous: Option<u8>, current: Option<u8>) -> Option<i16> {
-    let previous = previous?;
-    let current = current?;
-    Some(current.wrapping_sub(previous) as i16)
 }
 
 pub fn parse_rall_frame_minimal(bytes: &[u8]) -> Result<MinimalRallFrame, MinimalRallParseError> {
@@ -1182,8 +1158,6 @@ pub fn parse_rall_frame_full(bytes: &[u8]) -> Result<ParsedFrameRecord, MinimalR
         parse_status: "ok".to_string(),
         padding_status,
         duplicate_hint: None,
-        packet_counter_candidate_u8: rall_packet_counter_candidate(bytes),
-        packet_counter_gap: None,
         parse_error: None,
         measurement_field_order: layout
             .measurement_fields
@@ -1217,7 +1191,6 @@ pub fn build_parsed_frame_record(
             parsed.transport_status = transport_status.to_string();
             parsed.parse_status = parse_status.to_string();
             parsed.duplicate_hint = frame.duplicate_of;
-            parsed.packet_counter_candidate_u8 = rall_packet_counter_candidate(&frame.payload);
             parsed
         }
         Err(err) => ParsedFrameRecord {
@@ -1232,8 +1205,6 @@ pub fn build_parsed_frame_record(
             parse_status: parse_status.to_string(),
             padding_status: "not_checked".to_string(),
             duplicate_hint: frame.duplicate_of,
-            packet_counter_candidate_u8: rall_packet_counter_candidate(&frame.payload),
-            packet_counter_gap: None,
             parse_error: Some(err.to_string()),
             measurement_field_order: RALL_FIELD_ORDER
                 .iter()
@@ -2498,14 +2469,6 @@ mod tests {
         assert_eq!(parsed.status.b_input_overload, Some(false));
         assert_eq!(parsed.status.b_gain_overload, Some(true));
         assert_eq!(parsed.status.b_pll_locked, Some(true));
-    }
-
-    #[test]
-    fn rall_packet_counter_gap_uses_wrapping_delta() {
-        assert_eq!(rall_packet_counter_candidate(&[42, 0, 0]), Some(42));
-        assert_eq!(rall_packet_counter_gap(Some(41), Some(42)), Some(1));
-        assert_eq!(rall_packet_counter_gap(Some(255), Some(0)), Some(1));
-        assert_eq!(rall_packet_counter_gap(None, Some(0)), None);
     }
 
     #[test]

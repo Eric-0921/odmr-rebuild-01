@@ -95,7 +95,6 @@ OE1022D collector 是 run 级单实例。
 - 分配连续 frame sequence。
 - 写入 raw log。
 - 写入 `raw/oe1022d.frames.idx.jsonl`。
-- 记录 packet counter 候选值和相邻 gap，供连续性诊断使用。
 - 更新 ring buffer。
 - 报告 timeout、parse error、duplicate、last frame age。
 - 提供 committed cursor，作为 point durable 边界记录基础。
@@ -105,6 +104,7 @@ OE1022D collector 是 run 级单实例。
 - 同一 OE1022D 串口只能有一个 reader。
 - OE1022D collector 只在打开串口后清一次输入缓冲区；热循环内不逐帧清输入。
 - `RALL` 设备采样间隔按 `1ms/sample` 处理；host poll interval 不反推出采样点间隔。
+- 原厂 `SSI_check packet.vi` 的包序号逻辑已确认存在，但当前未映射到 `RALL?` 12288B raw payload 的稳定 offset；未确认前不进入 quality 判定。
 - producer 不使用 `try_send` 静默丢帧作为主链策略。
 - raw writer / health consumer 必须持续 drain。
 - stop 必须包含 request、observed、port close、thread joined 四个阶段。

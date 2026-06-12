@@ -425,7 +425,7 @@ run 结束后额外只读核验：
 
 因此 rebuild collector 只在打开串口后清一次输入缓冲区，不在每次 `RALL?` 读前清输入，避免丢弃已经到达的连续采集帧。
 
-采样时间轴按设备语义固定为 `1ms/sample`，不是 `poll_interval_ms / 50`。`frames.idx` 额外记录 `packet_counter_candidate_u8` 和 `packet_counter_gap`，用于验证原厂 `SSI_check packet.vi` 的包连续性逻辑是否能在真机 run 中复现。
+采样时间轴按设备语义固定为 `1ms/sample`，不是 `poll_interval_ms / 50`。原厂 `SSI_check packet.vi` 的包连续性逻辑已复核，但 `2026-06-12` 的 60 帧 OE 直读验证中，`payload[0]` 不是包序号，全 12288B payload 也未扫到稳定 `+1 mod 256` offset；因此暂不把 packet counter 写入正式 artifact 或 quality 判定。
 
 当前默认 `quality` / 诊断语义：
 
