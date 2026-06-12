@@ -2541,6 +2541,8 @@ impl CollectorHandle {
             device_id: device.device_id.clone(),
             run_start_instant,
         };
+        let labview_tight_loop =
+            matches!(device_config.backend, Oe1022dBackendKind::VisaPy) && frame_exact_bytes > 0;
 
         let producer_join = thread::spawn(move || {
             let mut transport = Oe1022dTransport::open(&device_config)
@@ -2669,7 +2671,9 @@ impl CollectorHandle {
                         }
                     }
 
-                    wait_remaining(read_start, poll_interval, &producer_stop);
+                    if !labview_tight_loop {
+                        wait_remaining(read_start, poll_interval, &producer_stop);
+                    }
                 }
                 Ok(())
             })();
