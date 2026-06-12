@@ -1864,13 +1864,11 @@ pub fn compute_quality_record(
 
     let quality_status = if frames_total == 0 {
         "failed_no_frames".to_string()
-    } else if frames_total < thresholds.min_frames {
+    } else if frames_unique < thresholds.min_frames {
         "failed_min_frames".to_string()
     } else if timeout_count > thresholds.max_timeout_count {
         "failed_timeout".to_string()
-    } else if duplicate_ratio > thresholds.max_duplicate_ratio
-        || last_frame_age_ms > thresholds.max_last_frame_age_ms
-    {
+    } else if last_frame_age_ms > thresholds.max_last_frame_age_ms {
         "failed_quality".to_string()
     } else {
         "passed".to_string()
@@ -2275,6 +2273,99 @@ mod tests {
         assert_eq!(quality.frame_coverage_ratio, Some(0.5));
         assert_eq!(quality.collector_health, "clean");
         assert_eq!(quality.timeout_budget_remaining, 0);
+    }
+
+    #[test]
+    fn quality_allows_duplicates_when_unique_frames_are_sufficient() {
+        let thresholds = RunQualityThresholds {
+            min_frames: 2,
+            max_timeout_count: 0,
+            max_duplicate_ratio: 0.1,
+            max_last_frame_age_ms: 100,
+        };
+        let frames = vec![
+            CollectorFrame {
+                frame_seq: 0,
+                ts: "t1".to_string(),
+                monotonic_ns: 1_000_000,
+                raw_offset: 0,
+                payload: vec![1; 16],
+                duplicate_of: None,
+            },
+            CollectorFrame {
+                frame_seq: 1,
+                ts: "t2".to_string(),
+                monotonic_ns: 5_000_000,
+                raw_offset: 16,
+                payload: vec![1; 16],
+                duplicate_of: Some(0),
+            },
+            CollectorFrame {
+                frame_seq: 2,
+                ts: "t3".to_string(),
+                monotonic_ns: 8_000_000,
+                raw_offset: 32,
+                payload: vec![2; 16],
+                duplicate_of: None,
+            },
+        ];
+
+        let quality = compute_quality_record(
+            "run_1",
+            "p1",
+            "seg1",
+            20_000_000,
+            &frames,
+            &thresholds,
+            0,
+            Some(4),
+        );
+        assert_eq!(quality.quality_status, "passed");
+        assert_eq!(quality.frames_total, 3);
+        assert_eq!(quality.frames_unique, 2);
+        assert_eq!(quality.duplicate_count, 1);
+    }
+
+    #[test]
+    fn quality_min_frames_uses_unique_frames() {
+        let thresholds = RunQualityThresholds {
+            min_frames: 2,
+            max_timeout_count: 0,
+            max_duplicate_ratio: 1.0,
+            max_last_frame_age_ms: 100,
+        };
+        let frames = vec![
+            CollectorFrame {
+                frame_seq: 0,
+                ts: "t1".to_string(),
+                monotonic_ns: 1_000_000,
+                raw_offset: 0,
+                payload: vec![1; 16],
+                duplicate_of: None,
+            },
+            CollectorFrame {
+                frame_seq: 1,
+                ts: "t2".to_string(),
+                monotonic_ns: 5_000_000,
+                raw_offset: 16,
+                payload: vec![1; 16],
+                duplicate_of: Some(0),
+            },
+        ];
+
+        let quality = compute_quality_record(
+            "run_1",
+            "p1",
+            "seg1",
+            20_000_000,
+            &frames,
+            &thresholds,
+            0,
+            Some(4),
+        );
+        assert_eq!(quality.quality_status, "failed_min_frames");
+        assert_eq!(quality.frames_total, 2);
+        assert_eq!(quality.frames_unique, 1);
     }
 
     #[test]
