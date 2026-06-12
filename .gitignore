@@ -2,3 +2,5 @@
 .DS_Store
 /out/
 /runs/
+__pycache__/
+*.pyc
