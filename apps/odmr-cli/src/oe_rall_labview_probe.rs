@@ -3,8 +3,8 @@
 //! This diagnostic path intentionally avoids point runtime, SMB, laser, parsing,
 //! first-byte deadlines, zero-byte retry, and hot-path input clearing.
 
-use acquisition_runtime::{FrameIndexRecord, RALL_FRAME_BYTES};
-use oe1022d_transport::{Oe1022dTransport, Oe1022dTransportConfig};
+use acquisition_runtime::{rall_device_packet_counter, FrameIndexRecord, RALL_FRAME_BYTES};
+use oe1022d_transport::{Oe1022dBackendKind, Oe1022dTransport, Oe1022dTransportConfig};
 use serde::Serialize;
 use serde_json::json;
 use station_resolver::{resolve_station, DeviceKind, DeviceSpec, StationSpec, TransportHint};
@@ -207,6 +207,7 @@ fn writer_loop(
                 monotonic_ns: frame.monotonic_ns,
                 raw_offset: next_raw_offset,
                 raw_len,
+                device_packet_counter: rall_device_packet_counter(&frame.payload),
                 parse_status: "not_parsed".to_string(),
                 duplicate_of: None,
             },
@@ -410,20 +411,35 @@ fn oe_config(
     post_write_delay_ms: u64,
     read_timeout_ms: u64,
 ) -> Result<Oe1022dTransportConfig, String> {
-    let TransportHint::SerialPort {
-        port_path,
-        baud_rate,
-    } = &device.transport_hint
-    else {
-        return Err(format!("设备 {} 不是 serial_port", device.device_id));
-    };
-    Ok(Oe1022dTransportConfig {
-        port_path: port_path.clone(),
-        baud_rate: *baud_rate,
-        timeout: Duration::from_millis(read_timeout_ms),
-        rall_post_write_delay: Duration::from_millis(post_write_delay_ms),
-        ..Oe1022dTransportConfig::default()
-    })
+    match &device.transport_hint {
+        TransportHint::SerialPort {
+            port_path,
+            baud_rate,
+        } => Ok(Oe1022dTransportConfig {
+            port_path: port_path.clone(),
+            baud_rate: *baud_rate,
+            timeout: Duration::from_millis(read_timeout_ms),
+            rall_post_write_delay: Duration::from_millis(post_write_delay_ms),
+            ..Oe1022dTransportConfig::default()
+        }),
+        TransportHint::VisaResource {
+            resource,
+            baud_rate,
+            ..
+        } => Ok(Oe1022dTransportConfig {
+            port_path: resource.clone(),
+            baud_rate: *baud_rate,
+            backend: Oe1022dBackendKind::VisaPy,
+            visa_resource: Some(resource.clone()),
+            timeout: Duration::from_millis(read_timeout_ms),
+            rall_post_write_delay: Duration::from_millis(post_write_delay_ms),
+            ..Oe1022dTransportConfig::default()
+        }),
+        TransportHint::TcpSocket { .. } => Err(format!(
+            "设备 {} 不是 serial_port 或 visa_resource",
+            device.device_id
+        )),
+    }
 }
 
 fn append_jsonl<T: Serialize>(file: &mut File, value: &T) -> Result<(), String> {

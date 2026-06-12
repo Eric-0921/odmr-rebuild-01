@@ -11,4 +11,7 @@ path = "src/lib.rs"
 [dependencies]
 device-transport = { path = "../device-transport" }
 oe1022d-commands = { path = "../oe1022d-commands" }
+base64 = "0.22"
+serde = { workspace = true }
+serde_json = { workspace = true }
 serialport = "4"

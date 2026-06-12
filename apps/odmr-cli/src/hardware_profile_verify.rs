@@ -3,7 +3,7 @@
 //! 目标不是做完整 runtime，而是把“手册里的固定配置命令”真打到设备上，
 //! 并把 readback / error queue / PLL 锁定结果记录成可审计产物。
 
-use oe1022d_transport::{Oe1022dTransport, Oe1022dTransportConfig};
+use oe1022d_transport::{Oe1022dBackendKind, Oe1022dTransport, Oe1022dTransportConfig};
 use serde::Serialize;
 use smb100a_transport::{Smb100aTransport, Smb100aTransportConfig};
 use station_resolver::{resolve_station, DeviceKind, DeviceSpec, StationSpec, TransportHint};
@@ -1387,8 +1387,20 @@ fn oe_config(device: &DeviceSpec) -> Result<Oe1022dTransportConfig, String> {
             baud_rate: *baud_rate,
             ..Oe1022dTransportConfig::default()
         }),
+        TransportHint::VisaResource {
+            resource,
+            baud_rate,
+            ..
+        } => Ok(Oe1022dTransportConfig {
+            port_path: resource.clone(),
+            baud_rate: *baud_rate,
+            backend: Oe1022dBackendKind::VisaPy,
+            visa_resource: Some(resource.clone()),
+            timeout: Duration::from_millis(10_000),
+            ..Oe1022dTransportConfig::default()
+        }),
         other => Err(format!(
-            "设备 {} 缺少串口 transport hint: {other:?}",
+            "设备 {} 缺少 serial_port 或 visa_resource transport hint: {other:?}",
             device.device_id
         )),
     }

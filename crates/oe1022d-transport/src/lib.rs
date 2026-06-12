@@ -10,19 +10,27 @@
 //! - 这里只提供“怎么连”和“怎么收”的能力
 //! - 不在这里实现 run 级 collector
 
+use base64::prelude::*;
 use device_transport::{
     query_ascii_line, write_command, LineTransportOptions, Result, TransportError,
 };
 use oe1022d_commands::{oe1022d_query_reference_source, oe1022d_rall_query};
+use serde_json::{json, Value as JsonValue};
 use serialport::{ClearBuffer, DataBits, FlowControl, Parity, SerialPort, StopBits};
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::thread;
 use std::time::Duration;
+
+const PYVISA_WORKER: &str = include_str!("pyvisa_worker.py");
 
 #[derive(Debug, Clone)]
 pub struct Oe1022dTransportConfig {
     pub port_path: String,
     pub baud_rate: u32,
+    pub backend: Oe1022dBackendKind,
+    pub visa_resource: Option<String>,
+    pub python_command: Option<String>,
     pub timeout: Duration,
     pub rall_post_write_delay: Duration,
     pub rall_chunk_timeout: Duration,
@@ -30,6 +38,12 @@ pub struct Oe1022dTransportConfig {
     pub rall_frame_deadline: Duration,
     pub response_max_bytes: usize,
     pub command_terminator: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Oe1022dBackendKind {
+    SerialPort,
+    VisaPy,
 }
 
 impl Oe1022dTransportConfig {
@@ -46,6 +60,9 @@ impl Default for Oe1022dTransportConfig {
         Self {
             port_path: "/dev/cu.usbmodem".to_string(),
             baud_rate: 921600,
+            backend: Oe1022dBackendKind::SerialPort,
+            visa_resource: None,
+            python_command: None,
             // RALL? 是 50ms 更新一次的定长快照。
             // ASCII query 可以容忍更保守的 timeout。
             timeout: Duration::from_millis(300),
@@ -64,7 +81,7 @@ impl Default for Oe1022dTransportConfig {
 }
 
 pub struct Oe1022dTransport {
-    port: Box<dyn SerialPort>,
+    backend: Oe1022dBackend,
     options: LineTransportOptions,
     query_timeout: Duration,
     rall_post_write_delay: Duration,
@@ -73,18 +90,40 @@ pub struct Oe1022dTransport {
     rall_frame_deadline: Duration,
 }
 
+enum Oe1022dBackend {
+    Serial(Box<dyn SerialPort>),
+    VisaPy(VisaPyBackend),
+}
+
 impl Oe1022dTransport {
     pub fn open(config: &Oe1022dTransportConfig) -> Result<Self> {
-        let port = serialport::new(&config.port_path, config.baud_rate)
-            .data_bits(DataBits::Eight)
-            .parity(Parity::None)
-            .stop_bits(StopBits::One)
-            .flow_control(FlowControl::None)
-            .timeout(config.timeout)
-            .open()?;
+        let backend = match config.backend {
+            Oe1022dBackendKind::SerialPort => {
+                let port = serialport::new(&config.port_path, config.baud_rate)
+                    .data_bits(DataBits::Eight)
+                    .parity(Parity::None)
+                    .stop_bits(StopBits::One)
+                    .flow_control(FlowControl::None)
+                    .timeout(config.timeout)
+                    .open()?;
+                Oe1022dBackend::Serial(port)
+            }
+            Oe1022dBackendKind::VisaPy => {
+                let resource = config
+                    .visa_resource
+                    .as_deref()
+                    .unwrap_or(config.port_path.as_str());
+                Oe1022dBackend::VisaPy(VisaPyBackend::open(
+                    resource,
+                    config.baud_rate,
+                    config.timeout,
+                    config.python_command.as_deref(),
+                )?)
+            }
+        };
 
         Ok(Self {
-            port,
+            backend,
             options: config.line_options(),
             query_timeout: config.timeout,
             rall_post_write_delay: config.rall_post_write_delay,
@@ -94,23 +133,45 @@ impl Oe1022dTransport {
         })
     }
 
+    pub fn list_visa_resources(python_command: Option<&str>) -> Result<Vec<String>> {
+        VisaPyBackend::list_resources(python_command)
+    }
+
     pub fn clear_input(&mut self) -> Result<()> {
-        self.port.clear(ClearBuffer::Input)?;
+        match &mut self.backend {
+            Oe1022dBackend::Serial(port) => port.clear(ClearBuffer::Input)?,
+            Oe1022dBackend::VisaPy(visa) => visa.clear()?,
+        }
         Ok(())
     }
 
     pub fn clear_all(&mut self) -> Result<()> {
-        self.port.clear(ClearBuffer::All)?;
+        match &mut self.backend {
+            Oe1022dBackend::Serial(port) => port.clear(ClearBuffer::All)?,
+            Oe1022dBackend::VisaPy(visa) => visa.clear()?,
+        }
         Ok(())
     }
 
     pub fn send(&mut self, command: &str) -> Result<()> {
-        write_command(&mut self.port, command, &self.options.command_terminator)
+        match &mut self.backend {
+            Oe1022dBackend::Serial(port) => {
+                write_command(port, command, &self.options.command_terminator)
+            }
+            Oe1022dBackend::VisaPy(visa) => visa.send(command),
+        }
     }
 
     pub fn query_text(&mut self, command: &str) -> Result<String> {
-        self.set_port_timeout(self.query_timeout)?;
-        query_ascii_line(&mut self.port, command, &self.options)
+        match &mut self.backend {
+            Oe1022dBackend::Serial(port) => {
+                port.set_timeout(self.query_timeout)?;
+                query_ascii_line(port, command, &self.options)
+            }
+            Oe1022dBackend::VisaPy(visa) => {
+                visa.query_text(command, self.options.max_response_bytes)
+            }
+        }
     }
 
     pub fn query_idn(&mut self) -> Result<String> {
@@ -125,17 +186,16 @@ impl Oe1022dTransport {
     ///
     /// `expected_len` 暂时由上层显式传入，避免在 transport 层过早锁死帧长度假设。
     pub fn query_rall_frame(&mut self, expected_len: usize) -> Result<Vec<u8>> {
+        if matches!(self.backend, Oe1022dBackend::VisaPy(_)) {
+            return self.query_rall_frame_labview_exact(expected_len);
+        }
         self.send_rall_query()?;
         self.wait_after_rall_write();
         self.read_rall_frame_exact(expected_len)
     }
 
     pub fn send_rall_query(&mut self) -> Result<()> {
-        write_command(
-            &mut self.port,
-            oe1022d_rall_query(),
-            &self.options.command_terminator,
-        )
+        self.send(oe1022d_rall_query())
     }
 
     pub fn read_rall_frame_exact(&mut self, expected_len: usize) -> Result<Vec<u8>> {
@@ -143,10 +203,18 @@ impl Oe1022dTransport {
     }
 
     pub fn query_rall_frame_labview_exact(&mut self, expected_len: usize) -> Result<Vec<u8>> {
-        self.set_port_timeout(self.query_timeout)?;
-        self.send_rall_query()?;
-        self.wait_after_rall_write();
-        self.read_rall_frame_blocking_exact(expected_len)
+        let post_write_delay = self.rall_post_write_delay;
+        match &mut self.backend {
+            Oe1022dBackend::Serial(port) => {
+                port.set_timeout(self.query_timeout)?;
+                write_command(port, oe1022d_rall_query(), &self.options.command_terminator)?;
+                if !post_write_delay.is_zero() {
+                    thread::sleep(post_write_delay);
+                }
+                read_rall_frame_blocking_exact_with_reader(port, expected_len)
+            }
+            Oe1022dBackend::VisaPy(visa) => visa.query_rall_exact(expected_len, post_write_delay),
+        }
     }
 
     pub fn query_rall_frame_exact_with_zero_retry(
@@ -154,6 +222,15 @@ impl Oe1022dTransport {
         expected_len: usize,
         max_zero_byte_retries: usize,
     ) -> Result<RallFrameReadOutcome> {
+        if let Oe1022dBackend::VisaPy(visa) = &mut self.backend {
+            return visa
+                .query_rall_exact(expected_len, self.rall_post_write_delay)
+                .map(|payload| RallFrameReadOutcome {
+                    payload,
+                    zero_byte_retry_count: 0,
+                });
+        }
+
         let mut zero_byte_retry_count = 0;
 
         loop {
@@ -183,19 +260,23 @@ impl Oe1022dTransport {
     /// - 只要求拿到非零 payload
     /// - 不在 transport 层强制假设固定帧长度
     pub fn query_rall_frame_until_timeout(&mut self, max_bytes: usize) -> Result<Vec<u8>> {
+        if let Oe1022dBackend::VisaPy(visa) = &mut self.backend {
+            let expected_len = max_bytes.min(12_288);
+            return visa.query_rall_exact(expected_len, self.rall_post_write_delay);
+        }
+
         self.set_port_timeout(self.query_timeout)?;
-        write_command(
-            &mut self.port,
-            oe1022d_rall_query(),
-            &self.options.command_terminator,
-        )?;
+        self.send_rall_query()?;
         self.wait_after_rall_write();
 
         let mut out = Vec::with_capacity(max_bytes.min(4096));
         let mut buf = [0_u8; 1024];
+        let Oe1022dBackend::Serial(port) = &mut self.backend else {
+            unreachable!("VISA backend returned above");
+        };
 
         loop {
-            match self.port.read(&mut buf) {
+            match port.read(&mut buf) {
                 Ok(0) => break,
                 Ok(read_len) => {
                     let remaining = max_bytes.saturating_sub(out.len());
@@ -230,7 +311,9 @@ impl Oe1022dTransport {
 
 impl Oe1022dTransport {
     fn set_port_timeout(&mut self, timeout: Duration) -> Result<()> {
-        self.port.set_timeout(timeout)?;
+        if let Oe1022dBackend::Serial(port) = &mut self.backend {
+            port.set_timeout(timeout)?;
+        }
         Ok(())
     }
 
@@ -242,42 +325,238 @@ impl Oe1022dTransport {
 
     fn read_rall_frame_fast(&mut self, expected_len: usize) -> Result<Vec<u8>> {
         self.set_port_timeout(self.rall_chunk_timeout)?;
+        let Oe1022dBackend::Serial(port) = &mut self.backend else {
+            return Err(transport_io_error(
+                "VISA backend does not support detached RALL reads",
+            ));
+        };
         read_rall_frame_fast_with_reader(
-            &mut self.port,
+            port,
             expected_len,
             self.rall_first_byte_deadline,
             self.rall_frame_deadline,
         )
     }
+}
 
-    fn read_rall_frame_blocking_exact(&mut self, expected_len: usize) -> Result<Vec<u8>> {
-        let mut out = Vec::with_capacity(expected_len);
-        let mut buf = [0_u8; 4096];
+struct VisaPyBackend {
+    _child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+    next_id: u64,
+}
 
-        while out.len() < expected_len {
-            let remaining = expected_len.saturating_sub(out.len());
-            let read_len = remaining.min(buf.len());
-            match self.port.read(&mut buf[..read_len]) {
-                Ok(0) => thread::sleep(Duration::from_millis(1)),
-                Ok(actual) => out.extend_from_slice(&buf[..actual]),
-                Err(err)
-                    if matches!(
-                        err.kind(),
-                        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
-                    ) =>
-                {
-                    return Err(TransportError::Timeout {
-                        context: "LabVIEW-style 读取 OE1022D RALL 定长帧",
-                        partial_len: out.len(),
-                    });
-                }
-                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
-                Err(err) => return Err(err.into()),
-            }
-        }
-
-        Ok(out)
+impl VisaPyBackend {
+    fn open(
+        resource: &str,
+        baud_rate: u32,
+        timeout: Duration,
+        python_command: Option<&str>,
+    ) -> Result<Self> {
+        let mut backend = Self::spawn(python_command)?;
+        backend.request(json!({
+            "op": "open",
+            "resource": resource,
+            "baud_rate": baud_rate,
+            "timeout_ms": duration_ms_u64(timeout)
+        }))?;
+        Ok(backend)
     }
+
+    fn list_resources(python_command: Option<&str>) -> Result<Vec<String>> {
+        let mut backend = Self::spawn(python_command)?;
+        let result = backend.request(json!({"op": "list_resources"}))?;
+        let resources = result
+            .as_array()
+            .ok_or_else(|| transport_io_error("PyVISA list_resources returned non-array"))?
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| transport_io_error("PyVISA resource is not a string"))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(resources)
+    }
+
+    fn spawn(python_command: Option<&str>) -> Result<Self> {
+        let (program, mut args) = python_invocation(python_command);
+        args.push("-u".to_string());
+        args.push("-c".to_string());
+        args.push(PYVISA_WORKER.to_string());
+        let mut child = Command::new(program)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| transport_io_error("failed to open PyVISA worker stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| transport_io_error("failed to open PyVISA worker stdout"))?;
+        Ok(Self {
+            _child: child,
+            stdin,
+            stdout: BufReader::new(stdout),
+            next_id: 1,
+        })
+    }
+
+    fn clear(&mut self) -> Result<()> {
+        self.request(json!({"op": "clear"})).map(|_| ())
+    }
+
+    fn send(&mut self, command: &str) -> Result<()> {
+        self.request(json!({"op": "send", "command": command}))
+            .map(|_| ())
+    }
+
+    fn query_text(&mut self, command: &str, max_response_bytes: usize) -> Result<String> {
+        let result = self.request(json!({
+            "op": "query_text",
+            "command": command,
+            "max_response_bytes": max_response_bytes
+        }))?;
+        result
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| transport_io_error("PyVISA query_text returned non-string"))
+    }
+
+    fn query_rall_exact(
+        &mut self,
+        expected_len: usize,
+        post_write_delay: Duration,
+    ) -> Result<Vec<u8>> {
+        let result = self.request(json!({
+            "op": "query_rall_exact",
+            "expected_len": expected_len,
+            "post_write_delay_ms": duration_ms_u64(post_write_delay)
+        }))?;
+        let encoded = result
+            .as_str()
+            .ok_or_else(|| transport_io_error("PyVISA query_rall_exact returned non-string"))?;
+        BASE64_STANDARD.decode(encoded).map_err(|err| {
+            transport_io_error(format!("PyVISA payload base64 decode failed: {err}"))
+        })
+    }
+
+    fn request(&mut self, mut request: JsonValue) -> Result<JsonValue> {
+        let id = self.next_id;
+        self.next_id += 1;
+        request["id"] = json!(id);
+        serde_json::to_writer(&mut self.stdin, &request)
+            .map_err(|err| transport_io_error(format!("PyVISA request serialize failed: {err}")))?;
+        self.stdin.write_all(b"\n")?;
+        self.stdin.flush()?;
+
+        let mut line = String::new();
+        let read_len = self.stdout.read_line(&mut line)?;
+        if read_len == 0 {
+            return Err(transport_io_error("PyVISA worker exited"));
+        }
+        let response: JsonValue = serde_json::from_str(&line).map_err(|err| {
+            transport_io_error(format!("PyVISA response parse failed: {err}: {line}"))
+        })?;
+        if response.get("id").and_then(JsonValue::as_u64) != Some(id) {
+            return Err(transport_io_error(format!(
+                "PyVISA response id mismatch: expected={id}, observed={response}"
+            )));
+        }
+        if response
+            .get("ok")
+            .and_then(JsonValue::as_bool)
+            .unwrap_or(false)
+        {
+            Ok(response.get("result").cloned().unwrap_or(JsonValue::Null))
+        } else if response.get("error_kind").and_then(JsonValue::as_str) == Some("timeout") {
+            Err(TransportError::Timeout {
+                context: "PyVISA OE1022D 操作",
+                partial_len: response
+                    .get("partial_len")
+                    .and_then(JsonValue::as_u64)
+                    .unwrap_or(0) as usize,
+            })
+        } else {
+            Err(transport_io_error(format!(
+                "PyVISA worker error: {}",
+                response
+                    .get("error")
+                    .and_then(JsonValue::as_str)
+                    .unwrap_or("unknown error")
+            )))
+        }
+    }
+}
+
+fn read_rall_frame_blocking_exact_with_reader<R: Read>(
+    reader: &mut R,
+    expected_len: usize,
+) -> Result<Vec<u8>> {
+    let mut out = Vec::with_capacity(expected_len);
+    let mut buf = [0_u8; 4096];
+
+    while out.len() < expected_len {
+        let remaining = expected_len.saturating_sub(out.len());
+        let read_len = remaining.min(buf.len());
+        match reader.read(&mut buf[..read_len]) {
+            Ok(0) => thread::sleep(Duration::from_millis(1)),
+            Ok(actual) => out.extend_from_slice(&buf[..actual]),
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                ) =>
+            {
+                return Err(TransportError::Timeout {
+                    context: "LabVIEW-style 读取 OE1022D RALL 定长帧",
+                    partial_len: out.len(),
+                });
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    Ok(out)
+}
+
+fn python_invocation(python_command: Option<&str>) -> (String, Vec<String>) {
+    let env_command = std::env::var("ODMR_PYTHON").ok();
+    let command = python_command.or(env_command.as_deref());
+    if let Some(command) = command.filter(|value| !value.trim().is_empty()) {
+        let mut parts = command
+            .split_whitespace()
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let program = parts.remove(0);
+        return (program, parts);
+    }
+
+    #[cfg(windows)]
+    {
+        ("py".to_string(), vec!["-3".to_string()])
+    }
+    #[cfg(not(windows))]
+    {
+        ("python3".to_string(), Vec::new())
+    }
+}
+
+fn duration_ms_u64(duration: Duration) -> u64 {
+    duration.as_millis().try_into().unwrap_or(u64::MAX)
+}
+
+fn transport_io_error(message: impl Into<String>) -> TransportError {
+    TransportError::Io(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        message.into(),
+    ))
 }
 
 #[derive(Debug)]

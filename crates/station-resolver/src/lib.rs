@@ -12,7 +12,7 @@
 use cni_laser_transport::{CniLaserTransport, CniLaserTransportConfig};
 use device_transport::TransportError;
 use m8812_transport::{M8812Transport, M8812TransportConfig};
-use oe1022d_transport::{Oe1022dTransport, Oe1022dTransportConfig};
+use oe1022d_transport::{Oe1022dBackendKind, Oe1022dTransport, Oe1022dTransportConfig};
 use serde::{Deserialize, Serialize};
 use smb100a_transport::{Smb100aTransport, Smb100aTransportConfig};
 use std::collections::HashSet;
@@ -82,7 +82,16 @@ pub enum TransportHint {
         #[serde(default)]
         host_candidates: Vec<String>,
     },
-    SerialPort { port_path: String, baud_rate: u32 },
+    SerialPort {
+        port_path: String,
+        baud_rate: u32,
+    },
+    VisaResource {
+        resource: String,
+        baud_rate: u32,
+        #[serde(default)]
+        resource_candidates: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -106,10 +115,7 @@ impl IdentityRule {
             .map(|exact| observed == exact.trim())
             .unwrap_or(true);
         let exact_any_ok = self.exact_any.is_empty()
-            || self
-                .exact_any
-                .iter()
-                .any(|exact| observed == exact.trim());
+            || self.exact_any.iter().any(|exact| observed == exact.trim());
         let contains_all_ok = self
             .contains_all
             .iter()
@@ -187,12 +193,19 @@ pub fn resolve_station(spec: &StationSpec) -> StationResolveResult {
     let mut devices_failed = 0_usize;
     let mut required_failures = 0_usize;
     let mut claimed_serial_ports: HashSet<String> = HashSet::new();
+    let mut claimed_visa_resources: HashSet<String> = HashSet::new();
     let available_serial_ports = list_available_serial_ports();
 
     for device in &mut resolved_spec.devices {
         let snapshot = match device.kind {
             DeviceKind::Smb100a => verify_smb100a(device),
-            DeviceKind::Oe1022d | DeviceKind::M8812 | DeviceKind::CniLaser => {
+            DeviceKind::Oe1022d => verify_oe1022d_with_scan(
+                device,
+                &available_serial_ports,
+                &mut claimed_serial_ports,
+                &mut claimed_visa_resources,
+            ),
+            DeviceKind::M8812 | DeviceKind::CniLaser => {
                 verify_serial_with_scan(device, &available_serial_ports, &mut claimed_serial_ports)
             }
         };
@@ -201,6 +214,9 @@ pub fn resolve_station(spec: &StationSpec) -> StationResolveResult {
             devices_verified += 1;
             if let TransportHint::SerialPort { port_path, .. } = &device.transport_hint {
                 claimed_serial_ports.insert(port_path.clone());
+            }
+            if let TransportHint::VisaResource { resource, .. } = &device.transport_hint {
+                claimed_visa_resources.insert(resource.clone());
             }
         } else {
             devices_failed += 1;
@@ -242,12 +258,11 @@ fn verify_smb100a(device: &DeviceSpec) -> DeviceSnapshot {
             port: *port,
             ..Smb100aTransportConfig::default()
         };
-        let transport = Smb100aTransport::connect(&config).map_err(|source| {
-            StationResolveError::Transport {
+        let transport =
+            Smb100aTransport::connect(&config).map_err(|source| StationResolveError::Transport {
                 device_id: device.device_id.clone(),
                 source,
-            }
-        });
+            });
         let Ok(mut transport) = transport else {
             continue;
         };
@@ -274,25 +289,41 @@ fn verify_smb100a(device: &DeviceSpec) -> DeviceSnapshot {
     build_failed_snapshot(
         device,
         "tcp_idn_query",
-        format!(
-            "TCP host 候选全部失败: {}",
-            attempted_hosts.join(", ")
-        ),
+        format!("TCP host 候选全部失败: {}", attempted_hosts.join(", ")),
     )
 }
 
 fn verify_oe1022d(device: &DeviceSpec) -> DeviceSnapshot {
-    let TransportHint::SerialPort {
-        port_path,
-        baud_rate,
-    } = &device.transport_hint
-    else {
-        unreachable!("OE1022D transport hint 必须是 serial_port");
-    };
-    let config = Oe1022dTransportConfig {
-        port_path: port_path.clone(),
-        baud_rate: *baud_rate,
-        ..Oe1022dTransportConfig::default()
+    let (config, verification_method) = match &device.transport_hint {
+        TransportHint::SerialPort {
+            port_path,
+            baud_rate,
+        } => (
+            Oe1022dTransportConfig {
+                port_path: port_path.clone(),
+                baud_rate: *baud_rate,
+                ..Oe1022dTransportConfig::default()
+            },
+            "serial_idn_query",
+        ),
+        TransportHint::VisaResource {
+            resource,
+            baud_rate,
+            ..
+        } => (
+            Oe1022dTransportConfig {
+                port_path: resource.clone(),
+                baud_rate: *baud_rate,
+                backend: Oe1022dBackendKind::VisaPy,
+                visa_resource: Some(resource.clone()),
+                timeout: std::time::Duration::from_millis(10_000),
+                ..Oe1022dTransportConfig::default()
+            },
+            "visa_idn_query",
+        ),
+        TransportHint::TcpSocket { .. } => {
+            unreachable!("OE1022D transport hint 必须是 serial_port 或 visa_resource")
+        }
     };
     let result = (|| {
         let mut transport =
@@ -318,8 +349,8 @@ fn verify_oe1022d(device: &DeviceSpec) -> DeviceSnapshot {
     })();
 
     match result {
-        Ok(observed) => build_verified_snapshot(device, observed, "serial_idn_query"),
-        Err(err) => build_failed_snapshot(device, "serial_idn_query", err.to_string()),
+        Ok(observed) => build_verified_snapshot(device, observed, verification_method),
+        Err(err) => build_failed_snapshot(device, verification_method, err.to_string()),
     }
 }
 
@@ -420,6 +451,29 @@ fn verify_serial_with_scan(
     )
 }
 
+fn verify_oe1022d_with_scan(
+    device: &mut DeviceSpec,
+    available_serial_ports: &[String],
+    claimed_serial_ports: &mut HashSet<String>,
+    claimed_visa_resources: &mut HashSet<String>,
+) -> DeviceSnapshot {
+    match device.transport_hint {
+        TransportHint::SerialPort { .. } => {
+            verify_serial_with_scan(device, available_serial_ports, claimed_serial_ports)
+        }
+        TransportHint::VisaResource { .. } => resolve_visa_resource_device_with(
+            device,
+            claimed_visa_resources,
+            verify_device_without_scan,
+        ),
+        TransportHint::TcpSocket { .. } => build_failed_snapshot(
+            device,
+            "oe1022d_transport_hint",
+            "OE1022D transport hint 必须是 serial_port 或 visa_resource".to_string(),
+        ),
+    }
+}
+
 fn verify_device_without_scan(device: &DeviceSpec) -> DeviceSnapshot {
     match device.kind {
         DeviceKind::Smb100a => verify_smb100a(device),
@@ -444,6 +498,18 @@ fn list_available_serial_ports() -> Vec<String> {
             .cmp(&serial_port_priority(right))
             .then_with(|| left.cmp(right))
     });
+    out
+}
+
+fn list_available_visa_resources() -> Vec<String> {
+    let Ok(resources) = Oe1022dTransport::list_visa_resources(None) else {
+        return Vec::new();
+    };
+    let mut out = resources
+        .into_iter()
+        .filter(|resource| resource.to_ascii_uppercase().starts_with("ASRL"))
+        .collect::<Vec<_>>();
+    out.sort();
     out
 }
 
@@ -486,6 +552,44 @@ where
     )
 }
 
+fn resolve_visa_resource_device_with<F>(
+    device: &mut DeviceSpec,
+    claimed_visa_resources: &mut HashSet<String>,
+    verify_fn: F,
+) -> DeviceSnapshot
+where
+    F: Fn(&DeviceSpec) -> DeviceSnapshot,
+{
+    let configured_resource = visa_resource(device).unwrap_or_default();
+    let candidate_resources = order_candidate_visa_resources(device);
+    let mut scan_failures = Vec::new();
+
+    for candidate_resource in candidate_resources {
+        if claimed_visa_resources.contains(&candidate_resource) {
+            scan_failures.push(format!("{candidate_resource}: already claimed"));
+            continue;
+        }
+
+        let mut candidate_device = device.clone();
+        set_visa_resource(&mut candidate_device, candidate_resource.clone());
+        let candidate_snapshot = verify_fn(&candidate_device);
+        if candidate_snapshot.verification_status == "verified" {
+            *device = candidate_device;
+            return candidate_snapshot;
+        }
+
+        if let Some(message) = candidate_snapshot.error_message {
+            scan_failures.push(format!("{candidate_resource}: {message}"));
+        }
+    }
+
+    build_failed_snapshot(
+        device,
+        "visa_identity_scan",
+        enrich_scan_failure_message(&configured_resource, &scan_failures),
+    )
+}
+
 fn order_candidate_serial_ports(
     available_serial_ports: &[String],
     configured_port: &str,
@@ -500,6 +604,31 @@ fn order_candidate_serial_ports(
         ordered.insert(0, hint_port);
     }
     ordered
+}
+
+fn order_candidate_visa_resources(device: &DeviceSpec) -> Vec<String> {
+    let mut ordered = Vec::new();
+    if let TransportHint::VisaResource {
+        resource,
+        resource_candidates,
+        ..
+    } = &device.transport_hint
+    {
+        push_unique(&mut ordered, resource.clone());
+        for candidate in resource_candidates {
+            push_unique(&mut ordered, candidate.clone());
+        }
+    }
+    for resource in list_available_visa_resources() {
+        push_unique(&mut ordered, resource);
+    }
+    ordered
+}
+
+fn push_unique(values: &mut Vec<String>, value: String) {
+    if !value.is_empty() && !values.iter().any(|existing| existing == &value) {
+        values.push(value);
+    }
 }
 
 fn tcp_candidate_hosts(host: &str, host_candidates: &[String]) -> Vec<String> {
@@ -524,7 +653,7 @@ fn serial_port_priority(port: &str) -> u8 {
 fn serial_port_path(device: &DeviceSpec) -> Option<String> {
     match &device.transport_hint {
         TransportHint::SerialPort { port_path, .. } => Some(port_path.clone()),
-        TransportHint::TcpSocket { .. } => None,
+        TransportHint::TcpSocket { .. } | TransportHint::VisaResource { .. } => None,
     }
 }
 
@@ -535,7 +664,29 @@ fn set_serial_port_path(device: &mut DeviceSpec, port_path: String) {
         } => {
             *current = port_path;
         }
-        TransportHint::TcpSocket { .. } => unreachable!("只能给 serial_port 设备改端口"),
+        TransportHint::TcpSocket { .. } | TransportHint::VisaResource { .. } => {
+            unreachable!("只能给 serial_port 设备改端口")
+        }
+    }
+}
+
+fn visa_resource(device: &DeviceSpec) -> Option<String> {
+    match &device.transport_hint {
+        TransportHint::VisaResource { resource, .. } => Some(resource.clone()),
+        TransportHint::TcpSocket { .. } | TransportHint::SerialPort { .. } => None,
+    }
+}
+
+fn set_visa_resource(device: &mut DeviceSpec, resource: String) {
+    match &mut device.transport_hint {
+        TransportHint::VisaResource {
+            resource: current, ..
+        } => {
+            *current = resource;
+        }
+        TransportHint::TcpSocket { .. } | TransportHint::SerialPort { .. } => {
+            unreachable!("只能给 visa_resource 设备改资源")
+        }
     }
 }
 
@@ -683,6 +834,69 @@ mod tests {
         let json = serde_json::to_string_pretty(&spec).unwrap();
         let restored: StationSpec = serde_json::from_str(&json).unwrap();
         assert_eq!(restored, spec);
+    }
+
+    #[test]
+    fn visa_resource_station_json_deserializes() {
+        let json = r#"{
+          "station_id": "lab_windows_oe_only",
+          "devices": [{
+            "device_id": "oe1022d_win",
+            "kind": "oe1022d",
+            "required": true,
+            "transport_hint": {
+              "transport": "visa_resource",
+              "resource": "ASRL8::INSTR",
+              "baud_rate": 921600,
+              "resource_candidates": ["ASRL9::INSTR"]
+            },
+            "identity": {
+              "contains_all": ["SSI LIA-OE1022D"],
+              "contains_any": ["SN:D6522078"]
+            }
+          }]
+        }"#;
+
+        let spec: StationSpec = serde_json::from_str(json).unwrap();
+        assert_eq!(spec.station_id, "lab_windows_oe_only");
+        assert_eq!(
+            spec.devices[0].transport_hint,
+            TransportHint::VisaResource {
+                resource: "ASRL8::INSTR".to_string(),
+                baud_rate: 921600,
+                resource_candidates: vec!["ASRL9::INSTR".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn visa_resource_snapshot_serializes_resolved_transport() {
+        let device = DeviceSpec {
+            device_id: "oe1022d_win".to_string(),
+            kind: DeviceKind::Oe1022d,
+            required: true,
+            transport_hint: TransportHint::VisaResource {
+                resource: "ASRL8::INSTR".to_string(),
+                baud_rate: 921600,
+                resource_candidates: Vec::new(),
+            },
+            identity: None,
+        };
+
+        let snapshot = build_verified_snapshot(
+            &device,
+            "SSI LIA-OE1022D,SN:D6522078".to_string(),
+            "visa_idn_query",
+        );
+        let json = serde_json::to_value(&snapshot).unwrap();
+        assert_eq!(
+            json["resolved_transport"]["transport"],
+            serde_json::json!("visa_resource")
+        );
+        assert_eq!(
+            json["resolved_transport"]["resource"],
+            serde_json::json!("ASRL8::INSTR")
+        );
     }
 
     #[test]

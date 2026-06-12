@@ -5,7 +5,7 @@
 use cni_laser_transport::{CniLaserTransport, CniLaserTransportConfig};
 use m8812_commands::{m8812_query_idn, m8812_query_meas_current_a};
 use m8812_transport::{M8812Transport, M8812TransportConfig};
-use oe1022d_transport::{Oe1022dTransport, Oe1022dTransportConfig};
+use oe1022d_transport::{Oe1022dBackendKind, Oe1022dTransport, Oe1022dTransportConfig};
 use serde::Serialize;
 use smb100a_commands::{
     smb100a_query_error_next, smb100a_query_frequency, smb100a_query_idn, smb100a_query_output,
@@ -968,21 +968,32 @@ fn serial_config(device: &DeviceSpec, default_baud: u32) -> Result<M8812Transpor
 }
 
 fn oe_config(device: &DeviceSpec) -> Result<Oe1022dTransportConfig, String> {
-    let TransportHint::SerialPort {
-        port_path,
-        baud_rate,
-    } = &device.transport_hint
-    else {
-        return Err(format!(
-            "设备 {} transport 不是 serial_port",
+    match &device.transport_hint {
+        TransportHint::SerialPort {
+            port_path,
+            baud_rate,
+        } => Ok(Oe1022dTransportConfig {
+            port_path: port_path.clone(),
+            baud_rate: *baud_rate,
+            ..Oe1022dTransportConfig::default()
+        }),
+        TransportHint::VisaResource {
+            resource,
+            baud_rate,
+            ..
+        } => Ok(Oe1022dTransportConfig {
+            port_path: resource.clone(),
+            baud_rate: *baud_rate,
+            backend: Oe1022dBackendKind::VisaPy,
+            visa_resource: Some(resource.clone()),
+            timeout: Duration::from_millis(10_000),
+            ..Oe1022dTransportConfig::default()
+        }),
+        TransportHint::TcpSocket { .. } => Err(format!(
+            "设备 {} transport 不是 serial_port 或 visa_resource",
             device.device_id
-        ));
-    };
-    Ok(Oe1022dTransportConfig {
-        port_path: port_path.clone(),
-        baud_rate: *baud_rate,
-        ..Oe1022dTransportConfig::default()
-    })
+        )),
+    }
 }
 
 fn laser_config(device: &DeviceSpec) -> Result<CniLaserTransportConfig, String> {

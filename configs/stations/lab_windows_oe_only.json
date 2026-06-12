@@ -1,0 +1,24 @@
+{
+  "station_id": "lab_windows_oe_only",
+  "devices": [
+    {
+      "device_id": "oe1022d_win",
+      "kind": "oe1022d",
+      "required": true,
+      "transport_hint": {
+        "transport": "visa_resource",
+        "resource": "ASRL8::INSTR",
+        "baud_rate": 921600,
+        "resource_candidates": []
+      },
+      "identity": {
+        "contains_all": [
+          "SSI LIA-OE1022D"
+        ],
+        "contains_any": [
+          "SN:D6522078"
+        ]
+      }
+    }
+  ]
+}

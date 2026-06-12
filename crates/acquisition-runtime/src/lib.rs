@@ -807,6 +807,8 @@ pub struct FrameIndexRecord {
     pub monotonic_ns: u64,
     pub raw_offset: u64,
     pub raw_len: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub device_packet_counter: Option<u8>,
     pub parse_status: String,
     #[serde(default)]
     pub duplicate_of: Option<u64>,
@@ -823,6 +825,7 @@ pub struct CollectorFrame {
 }
 
 pub const RALL_FRAME_BYTES: usize = 12288;
+pub const RALL_DEVICE_PACKET_COUNTER_OFFSET: usize = 12287;
 pub const RALL_PARAM_COUNT: usize = 20;
 pub const RALL_SAMPLE_COUNT: usize = 50;
 pub const RALL_SAMPLE_DT_MS: f64 = 1.0;
@@ -1081,10 +1084,15 @@ impl CollectorFrame {
             monotonic_ns: self.monotonic_ns,
             raw_offset: self.raw_offset,
             raw_len: self.raw_len(),
+            device_packet_counter: rall_device_packet_counter(&self.payload),
             parse_status: parse_status.into(),
             duplicate_of: self.duplicate_of,
         }
     }
+}
+
+pub fn rall_device_packet_counter(payload: &[u8]) -> Option<u8> {
+    payload.get(RALL_DEVICE_PACKET_COUNTER_OFFSET).copied()
 }
 
 pub fn parse_rall_frame_minimal(bytes: &[u8]) -> Result<MinimalRallFrame, MinimalRallParseError> {

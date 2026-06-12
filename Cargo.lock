@@ -765,8 +765,11 @@ version = "0.1.0"
 name = "oe1022d-transport"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "device-transport",
  "oe1022d-commands",
+ "serde",
+ "serde_json",
  "serialport",
 ]
 

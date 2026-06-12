@@ -31,7 +31,7 @@ use oe1022d_commands::{
     oe1022d_set_reference_source, oe1022d_set_sensitivity_index, oe1022d_set_sine_output_mode,
     oe1022d_set_sine_output_voltage_vrms, oe1022d_set_sync_filter, oe1022d_set_time_constant_index,
 };
-use oe1022d_transport::{Oe1022dTransport, Oe1022dTransportConfig};
+use oe1022d_transport::{Oe1022dBackendKind, Oe1022dTransport, Oe1022dTransportConfig};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::json;
@@ -2298,22 +2298,40 @@ fn oe_config(
     device: &DeviceSpec,
     collector: &CollectorConfig,
 ) -> Result<Oe1022dTransportConfig, String> {
-    let TransportHint::SerialPort {
-        port_path,
-        baud_rate,
-    } = &device.transport_hint
-    else {
-        return Err(format!("设备 {} 不是 serial_port", device.device_id));
-    };
-    Ok(Oe1022dTransportConfig {
-        port_path: port_path.clone(),
-        baud_rate: *baud_rate,
-        rall_post_write_delay: Duration::from_millis(collector.rall_post_write_delay_ms),
-        rall_chunk_timeout: Duration::from_millis(collector.rall_chunk_timeout_ms),
-        rall_first_byte_deadline: Duration::from_millis(collector.rall_first_byte_deadline_ms),
-        rall_frame_deadline: Duration::from_millis(collector.rall_frame_deadline_ms),
-        ..Oe1022dTransportConfig::default()
-    })
+    match &device.transport_hint {
+        TransportHint::SerialPort {
+            port_path,
+            baud_rate,
+        } => Ok(Oe1022dTransportConfig {
+            port_path: port_path.clone(),
+            baud_rate: *baud_rate,
+            rall_post_write_delay: Duration::from_millis(collector.rall_post_write_delay_ms),
+            rall_chunk_timeout: Duration::from_millis(collector.rall_chunk_timeout_ms),
+            rall_first_byte_deadline: Duration::from_millis(collector.rall_first_byte_deadline_ms),
+            rall_frame_deadline: Duration::from_millis(collector.rall_frame_deadline_ms),
+            ..Oe1022dTransportConfig::default()
+        }),
+        TransportHint::VisaResource {
+            resource,
+            baud_rate,
+            ..
+        } => Ok(Oe1022dTransportConfig {
+            port_path: resource.clone(),
+            baud_rate: *baud_rate,
+            backend: Oe1022dBackendKind::VisaPy,
+            visa_resource: Some(resource.clone()),
+            timeout: Duration::from_millis(10_000),
+            rall_post_write_delay: Duration::from_millis(collector.rall_post_write_delay_ms),
+            rall_chunk_timeout: Duration::from_millis(collector.rall_chunk_timeout_ms),
+            rall_first_byte_deadline: Duration::from_millis(collector.rall_first_byte_deadline_ms),
+            rall_frame_deadline: Duration::from_millis(collector.rall_frame_deadline_ms),
+            ..Oe1022dTransportConfig::default()
+        }),
+        TransportHint::TcpSocket { .. } => Err(format!(
+            "设备 {} 不是 serial_port 或 visa_resource",
+            device.device_id
+        )),
+    }
 }
 
 fn serial_m8812_config(device: &DeviceSpec) -> Result<M8812TransportConfig, String> {
@@ -2950,6 +2968,7 @@ mod tests {
                 monotonic_ns: 100,
                 raw_offset: 0,
                 raw_len: frame_a.len(),
+                device_packet_counter: None,
                 parse_status: "ok".to_string(),
                 duplicate_of: None,
             },
@@ -2959,6 +2978,7 @@ mod tests {
                 monotonic_ns: 200,
                 raw_offset: frame_a.len() as u64,
                 raw_len: frame_b.len(),
+                device_packet_counter: None,
                 parse_status: "ok".to_string(),
                 duplicate_of: None,
             },

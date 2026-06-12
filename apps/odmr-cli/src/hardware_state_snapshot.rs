@@ -5,7 +5,7 @@
 //! - 慢速读取 SMB100A / OE1022D 的当前状态
 //! - 把实际 readback 落盘，便于和 Windows 原厂软件配置后的状态做对比
 
-use oe1022d_transport::{Oe1022dTransport, Oe1022dTransportConfig};
+use oe1022d_transport::{Oe1022dBackendKind, Oe1022dTransport, Oe1022dTransportConfig};
 use serde::Serialize;
 use smb100a_transport::{Smb100aTransport, Smb100aTransportConfig};
 use station_resolver::{resolve_station, DeviceKind, DeviceSpec, StationSpec, TransportHint};
@@ -321,8 +321,20 @@ fn oe_config(device: &DeviceSpec) -> Result<Oe1022dTransportConfig, String> {
             baud_rate: *baud_rate,
             ..Oe1022dTransportConfig::default()
         }),
+        TransportHint::VisaResource {
+            resource,
+            baud_rate,
+            ..
+        } => Ok(Oe1022dTransportConfig {
+            port_path: resource.clone(),
+            baud_rate: *baud_rate,
+            backend: Oe1022dBackendKind::VisaPy,
+            visa_resource: Some(resource.clone()),
+            timeout: Duration::from_millis(10_000),
+            ..Oe1022dTransportConfig::default()
+        }),
         other => Err(format!(
-            "设备 {} 缺少串口 transport hint: {other:?}",
+            "设备 {} 缺少 serial_port 或 visa_resource transport hint: {other:?}",
             device.device_id
         )),
     }
