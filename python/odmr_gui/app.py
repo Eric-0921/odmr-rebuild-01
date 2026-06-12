@@ -9,7 +9,7 @@ from typing import Any
 import pyqtgraph as pg
 from PySide6.QtCore import QProcess, QStandardPaths, QTimer, Qt, QUrl, QObject, Signal
 from PySide6.QtGui import QAction, QDesktopServices
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequest
+from PySide6.QtNetwork import QAbstractSocket, QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWebSockets import QWebSocket
 from PySide6.QtWidgets import (
     QApplication,
@@ -153,7 +153,7 @@ class RuntimeServiceClient(QObject):
         self._post("/v1/run/stop", "run_stop", {}, self.run_stopped.emit)
 
     def connect_live(self) -> None:
-        if self.socket.state() == QWebSocket.SocketState.ConnectedState:
+        if self.socket.state() == QAbstractSocket.SocketState.ConnectedState:
             return
         self.socket.open(QUrl(SERVICE_WS))
 
