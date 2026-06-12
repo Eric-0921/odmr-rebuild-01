@@ -77,6 +77,35 @@
   - `collector_timeout_total = 0`
   - `max(frame_gap_ms) ≈ 54.3 ~ 54.6ms`
 
+GUI 本地环境与启动约束：
+
+- GUI 首版依赖本机 Python 虚拟环境，不走系统 Python 直接运行
+- GUI 技术栈固定为 `PySide6 + pyqtgraph`
+- GUI 只连接本机 `odmr gui-bridge serve`，不直接碰硬件
+- 第一次启动前必须先建虚拟环境并安装 `python/` 包
+
+GUI 首次安装：
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -U pip
+python3 -m pip install -e ./python
+```
+
+GUI 启动方式：
+
+```bash
+cargo run -p odmr-cli -- gui-bridge serve
+```
+
+新开一个终端：
+
+```bash
+source .venv/bin/activate
+odmr-gui
+```
+
 当前可执行命令：
 
 ```bash
@@ -106,6 +135,8 @@ cargo run -p odmr-cli -- run execute \
   --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json \
   --laser-profile configs/profiles/cni_laser_run_on_background.json \
   --out-dir runs/x_axis_1d_bounce_15min
+
+cargo run -p odmr-cli -- gui-bridge serve
 ```
 
 第一版 runtime 默认配置：

@@ -2,5 +2,7 @@
 .DS_Store
 /out/
 /runs/
+.venv/
+*.egg-info/
 __pycache__/
 *.pyc
