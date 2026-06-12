@@ -10,12 +10,12 @@
 
 use acquisition_runtime::{
     build_parsed_frame_record, build_point_field_bundle, compute_quality_record,
-    parse_rall_frame_full, AcquisitionRunPlan, BaselineAxisSnapshot, BaselineSnapshot,
-    CalibrationProfile, CollectorConfig, CollectorCursor, CollectorFrame, EventRecord,
-    FrameIndexRecord, FrameRingBuffer, LaserBackgroundMode, LaserRunProfile, Oe1022dRunProfile,
-    ParsedFrameRecord, PlanSnapshot, PointFieldSidecarData, PointFieldSidecarManifest, PointRecord,
-    ResolvedRunPlan, ResolvedSmbSweep, RunManifest, SegmentRecord, SettleRecord, Smb100aRunProfile,
-    SummaryRecord,
+    parse_rall_frame_full, rall_packet_counter_candidate, rall_packet_counter_gap,
+    AcquisitionRunPlan, BaselineAxisSnapshot, BaselineSnapshot, CalibrationProfile,
+    CollectorConfig, CollectorCursor, CollectorFrame, EventRecord, FrameIndexRecord,
+    FrameRingBuffer, LaserBackgroundMode, LaserRunProfile, Oe1022dRunProfile, ParsedFrameRecord,
+    PlanSnapshot, PointFieldSidecarData, PointFieldSidecarManifest, PointRecord, ResolvedRunPlan,
+    ResolvedSmbSweep, RunManifest, SegmentRecord, SettleRecord, Smb100aRunProfile, SummaryRecord,
 };
 use chrono::{DateTime, Local};
 use cni_laser_transport::{CniLaserTransport, CniLaserTransportConfig};
@@ -2594,11 +2594,21 @@ impl CollectorHandle {
             };
             let mut previous_duplicate_key: Option<DuplicateHintKey> = None;
             let mut previous_duplicate_frame_seq: Option<u64> = None;
+            let mut previous_packet_counter_candidate: Option<u8> = None;
 
             loop {
                 match frame_rx.recv_timeout(Duration::from_millis(50)) {
                     Ok(produced) => {
                         let parsed_result = parse_rall_frame_full(&produced.payload);
+                        let packet_counter_candidate = parsed_result
+                            .as_ref()
+                            .ok()
+                            .and_then(|parsed| parsed.packet_counter_candidate_u8)
+                            .or_else(|| rall_packet_counter_candidate(&produced.payload));
+                        let packet_counter_gap = rall_packet_counter_gap(
+                            previous_packet_counter_candidate,
+                            packet_counter_candidate,
+                        );
                         let duplicate_of = derive_duplicate_hint(
                             &parsed_result,
                             previous_duplicate_key.as_ref(),
@@ -2627,11 +2637,16 @@ impl CollectorHandle {
                             parse_status,
                             parsed_result,
                         );
+                        let mut parsed_record = parsed_record;
+                        parsed_record.packet_counter_gap = packet_counter_gap;
 
                         raw_file
                             .write_all(&frame.payload)
                             .map_err(|err| format!("写入 raw 文件失败: {err}"))?;
-                        append_jsonl(&mut index_file, &frame.index_record(parse_status))?;
+                        append_jsonl(
+                            &mut index_file,
+                            &frame.index_record(parse_status, packet_counter_gap),
+                        )?;
                         if let Some(parsed_file) = parsed_file.as_mut() {
                             append_jsonl(parsed_file, &parsed_record)?;
                         }
@@ -2647,6 +2662,7 @@ impl CollectorHandle {
                             previous_duplicate_key = None;
                             previous_duplicate_frame_seq = None;
                         }
+                        previous_packet_counter_candidate = packet_counter_candidate;
                     }
                     Err(RecvTimeoutError::Timeout) => {
                         if producer_done.load(Ordering::SeqCst) {
@@ -2855,6 +2871,8 @@ mod tests {
                 raw_offset: 0,
                 raw_len: frame_a.len(),
                 parse_status: "ok".to_string(),
+                packet_counter_candidate_u8: Some(1),
+                packet_counter_gap: None,
                 duplicate_of: None,
             },
             FrameIndexRecord {
@@ -2864,6 +2882,8 @@ mod tests {
                 raw_offset: frame_a.len() as u64,
                 raw_len: frame_b.len(),
                 parse_status: "ok".to_string(),
+                packet_counter_candidate_u8: Some(5),
+                packet_counter_gap: Some(4),
                 duplicate_of: None,
             },
         ];
@@ -2918,6 +2938,8 @@ mod tests {
                 parse_status: "ok".to_string(),
                 padding_status: "all_zero".to_string(),
                 duplicate_hint: None,
+                packet_counter_candidate_u8: Some(1),
+                packet_counter_gap: None,
                 parse_error: None,
                 measurement_field_order: vec!["A-X".to_string()],
                 measurement_matrix: Some(vec![vec![1.0]]),
@@ -2941,6 +2963,8 @@ mod tests {
                 parse_status: "ok".to_string(),
                 padding_status: "all_zero".to_string(),
                 duplicate_hint: Some(0),
+                packet_counter_candidate_u8: Some(2),
+                packet_counter_gap: Some(1),
                 parse_error: None,
                 measurement_field_order: vec!["A-X".to_string()],
                 measurement_matrix: Some(vec![vec![1.0]]),

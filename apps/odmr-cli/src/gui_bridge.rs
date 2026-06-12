@@ -8,7 +8,7 @@ use crate::live_bridge::{
 use crate::run_execute::{request_run_interrupt, run_execute, RunArtifactMode};
 use acquisition_runtime::{
     parse_rall_frame_minimal, CollectorConfig, EventRecord, FrameIndexRecord, LaserRunProfile,
-    Oe1022dRunProfile, Smb100aRunProfile, SummaryRecord, RALL_SAMPLE_COUNT,
+    Oe1022dRunProfile, Smb100aRunProfile, SummaryRecord, RALL_SAMPLE_DT_MS,
 };
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
@@ -612,7 +612,7 @@ impl LiveReducer {
             live,
             run_id,
             output_dir,
-            sample_dt_ms: collector.poll_interval_ms as f64 / RALL_SAMPLE_COUNT as f64,
+            sample_dt_ms: RALL_SAMPLE_DT_MS,
             ring_capacity_frames: collector.ring_capacity_frames,
             total_points,
             started_at: Instant::now(),

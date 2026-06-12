@@ -397,6 +397,8 @@ fn load_parsed_frames(
             transport_status: "payload_committed".to_string(),
             parse_status: record.parse_status,
             duplicate_hint: record.duplicate_of,
+            packet_counter_candidate_u8: record.packet_counter_candidate_u8,
+            packet_counter_gap: record.packet_counter_gap,
             ..parsed
         });
     }
@@ -502,6 +504,8 @@ mod tests {
             parse_status: "ok".to_string(),
             padding_status: "zero".to_string(),
             duplicate_hint,
+            packet_counter_candidate_u8: Some(frame_seq as u8),
+            packet_counter_gap: None,
             parse_error: None,
             measurement_field_order: Vec::new(),
             measurement_matrix: Some(matrix),
