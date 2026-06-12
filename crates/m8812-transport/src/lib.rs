@@ -12,13 +12,14 @@ use m8812_commands::{
     m8812_set_local, m8812_set_output, m8812_set_remote,
 };
 use serialport::{ClearBuffer, DataBits, FlowControl, Parity, SerialPort, StopBits};
-use std::time::Duration;
+use std::{thread, time::Duration};
 
 #[derive(Debug, Clone)]
 pub struct M8812TransportConfig {
     pub port_path: String,
     pub baud_rate: u32,
     pub timeout: Duration,
+    pub open_settle_delay: Duration,
     pub dtr_on_open: bool,
     pub response_max_bytes: usize,
 }
@@ -38,6 +39,7 @@ impl Default for M8812TransportConfig {
             port_path: "/dev/cu.PL2303G-USBtoUART".to_string(),
             baud_rate: 9600,
             timeout: Duration::from_millis(300),
+            open_settle_delay: Duration::from_millis(100),
             dtr_on_open: true,
             response_max_bytes: 4096,
         }
@@ -62,6 +64,7 @@ impl M8812Transport {
         if config.dtr_on_open {
             port.write_data_terminal_ready(true)?;
         }
+        thread::sleep(config.open_settle_delay);
         port.clear(ClearBuffer::All)?;
 
         Ok(Self {

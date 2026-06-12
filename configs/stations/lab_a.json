@@ -51,10 +51,7 @@
         "transport": "serial_port",
         "port_path": "COM4",
         "baud_rate": 9600,
-        "port_candidates": [
-          "COM3",
-          "COM5"
-        ]
+        "port_candidates": []
       },
       "identity": {
         "contains_all": [
@@ -72,10 +69,7 @@
         "transport": "serial_port",
         "port_path": "COM6",
         "baud_rate": 9600,
-        "port_candidates": [
-          "COM3",
-          "COM5"
-        ]
+        "port_candidates": []
       },
       "identity": {
         "contains_all": [
@@ -93,9 +87,7 @@
         "transport": "serial_port",
         "port_path": "COM3",
         "baud_rate": 9600,
-        "port_candidates": [
-          "COM5"
-        ]
+        "port_candidates": []
       },
       "identity": {
         "contains_all": [
@@ -113,9 +105,7 @@
         "transport": "serial_port",
         "port_path": "COM9",
         "baud_rate": 9600,
-        "port_candidates": [
-          "COM6"
-        ]
+        "port_candidates": []
       }
     }
   ]
