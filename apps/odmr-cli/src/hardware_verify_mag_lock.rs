@@ -542,6 +542,7 @@ fn serial_m8812_config(device: &DeviceSpec) -> Result<M8812TransportConfig, Stri
     let TransportHint::SerialPort {
         port_path,
         baud_rate,
+        ..
     } = &device.transport_hint
     else {
         return Err(format!("设备 {} 不是 serial_port", device.device_id));

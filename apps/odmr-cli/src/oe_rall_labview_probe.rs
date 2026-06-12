@@ -415,6 +415,7 @@ fn oe_config(
         TransportHint::SerialPort {
             port_path,
             baud_rate,
+            ..
         } => Ok(Oe1022dTransportConfig {
             port_path: port_path.clone(),
             baud_rate: *baud_rate,

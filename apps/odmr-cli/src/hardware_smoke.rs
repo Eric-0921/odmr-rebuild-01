@@ -949,6 +949,7 @@ fn serial_config(device: &DeviceSpec, default_baud: u32) -> Result<M8812Transpor
     let TransportHint::SerialPort {
         port_path,
         baud_rate,
+        ..
     } = &device.transport_hint
     else {
         return Err(format!(
@@ -972,6 +973,7 @@ fn oe_config(device: &DeviceSpec) -> Result<Oe1022dTransportConfig, String> {
         TransportHint::SerialPort {
             port_path,
             baud_rate,
+            ..
         } => Ok(Oe1022dTransportConfig {
             port_path: port_path.clone(),
             baud_rate: *baud_rate,
@@ -1000,6 +1002,7 @@ fn laser_config(device: &DeviceSpec) -> Result<CniLaserTransportConfig, String> 
     let TransportHint::SerialPort {
         port_path,
         baud_rate,
+        ..
     } = &device.transport_hint
     else {
         return Err(format!(
@@ -1202,6 +1205,7 @@ mod tests {
                     transport_hint: TransportHint::SerialPort {
                         port_path: "/dev/null".to_string(),
                         baud_rate: 9600,
+                        port_candidates: Vec::new(),
                     },
                     identity: None,
                 },
@@ -1212,6 +1216,7 @@ mod tests {
                     transport_hint: TransportHint::SerialPort {
                         port_path: "/dev/null".to_string(),
                         baud_rate: 9600,
+                        port_candidates: Vec::new(),
                     },
                     identity: None,
                 },
@@ -1222,6 +1227,7 @@ mod tests {
                     transport_hint: TransportHint::SerialPort {
                         port_path: "/dev/null".to_string(),
                         baud_rate: 9600,
+                        port_candidates: Vec::new(),
                     },
                     identity: None,
                 },
@@ -1232,6 +1238,7 @@ mod tests {
                     transport_hint: TransportHint::SerialPort {
                         port_path: "/dev/null".to_string(),
                         baud_rate: 921600,
+                        port_candidates: Vec::new(),
                     },
                     identity: None,
                 },
@@ -1242,6 +1249,7 @@ mod tests {
                     transport_hint: TransportHint::SerialPort {
                         port_path: "/dev/null".to_string(),
                         baud_rate: 9600,
+                        port_candidates: Vec::new(),
                     },
                     identity: None,
                 },

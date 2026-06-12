@@ -85,6 +85,8 @@ pub enum TransportHint {
     SerialPort {
         port_path: String,
         baud_rate: u32,
+        #[serde(default)]
+        port_candidates: Vec<String>,
     },
     VisaResource {
         resource: String,
@@ -194,19 +196,17 @@ pub fn resolve_station(spec: &StationSpec) -> StationResolveResult {
     let mut required_failures = 0_usize;
     let mut claimed_serial_ports: HashSet<String> = HashSet::new();
     let mut claimed_visa_resources: HashSet<String> = HashSet::new();
-    let available_serial_ports = list_available_serial_ports();
 
     for device in &mut resolved_spec.devices {
         let snapshot = match device.kind {
             DeviceKind::Smb100a => verify_smb100a(device),
             DeviceKind::Oe1022d => verify_oe1022d_with_scan(
                 device,
-                &available_serial_ports,
                 &mut claimed_serial_ports,
                 &mut claimed_visa_resources,
             ),
             DeviceKind::M8812 | DeviceKind::CniLaser => {
-                verify_serial_with_scan(device, &available_serial_ports, &mut claimed_serial_ports)
+                verify_serial_with_scan(device, &mut claimed_serial_ports)
             }
         };
 
@@ -298,6 +298,7 @@ fn verify_oe1022d(device: &DeviceSpec) -> DeviceSnapshot {
         TransportHint::SerialPort {
             port_path,
             baud_rate,
+            ..
         } => (
             Oe1022dTransportConfig {
                 port_path: port_path.clone(),
@@ -358,6 +359,7 @@ fn verify_m8812(device: &DeviceSpec) -> DeviceSnapshot {
     let TransportHint::SerialPort {
         port_path,
         baud_rate,
+        ..
     } = &device.transport_hint
     else {
         unreachable!("M8812 transport hint 必须是 serial_port");
@@ -393,6 +395,7 @@ fn verify_cni_laser(device: &DeviceSpec) -> DeviceSnapshot {
     let TransportHint::SerialPort {
         port_path,
         baud_rate,
+        ..
     } = &device.transport_hint
     else {
         unreachable!("CNI Laser transport hint 必须是 serial_port");
@@ -440,27 +443,18 @@ fn verify_cni_laser(device: &DeviceSpec) -> DeviceSnapshot {
 
 fn verify_serial_with_scan(
     device: &mut DeviceSpec,
-    available_serial_ports: &[String],
     claimed_serial_ports: &mut HashSet<String>,
 ) -> DeviceSnapshot {
-    resolve_serial_device_with(
-        device,
-        available_serial_ports,
-        claimed_serial_ports,
-        verify_device_without_scan,
-    )
+    resolve_serial_device_with(device, claimed_serial_ports, verify_device_without_scan)
 }
 
 fn verify_oe1022d_with_scan(
     device: &mut DeviceSpec,
-    available_serial_ports: &[String],
     claimed_serial_ports: &mut HashSet<String>,
     claimed_visa_resources: &mut HashSet<String>,
 ) -> DeviceSnapshot {
     match device.transport_hint {
-        TransportHint::SerialPort { .. } => {
-            verify_serial_with_scan(device, available_serial_ports, claimed_serial_ports)
-        }
+        TransportHint::SerialPort { .. } => verify_serial_with_scan(device, claimed_serial_ports),
         TransportHint::VisaResource { .. } => resolve_visa_resource_device_with(
             device,
             claimed_visa_resources,
@@ -483,28 +477,6 @@ fn verify_device_without_scan(device: &DeviceSpec) -> DeviceSnapshot {
     }
 }
 
-fn list_available_serial_ports() -> Vec<String> {
-    let Ok(ports) = serialport::available_ports() else {
-        return Vec::new();
-    };
-
-    let mut out = ports
-        .into_iter()
-        .map(|port| port.port_name)
-        .filter(|port| {
-            port.starts_with("/dev/cu.")
-                || port.starts_with("/dev/tty.")
-                || is_windows_com_port(port)
-        })
-        .collect::<Vec<_>>();
-    out.sort_by(|left, right| {
-        serial_port_priority(left)
-            .cmp(&serial_port_priority(right))
-            .then_with(|| left.cmp(right))
-    });
-    out
-}
-
 fn list_available_visa_resources() -> Vec<String> {
     let Ok(resources) = Oe1022dTransport::list_visa_resources(None) else {
         return Vec::new();
@@ -519,7 +491,6 @@ fn list_available_visa_resources() -> Vec<String> {
 
 fn resolve_serial_device_with<F>(
     device: &mut DeviceSpec,
-    available_serial_ports: &[String],
     claimed_serial_ports: &mut HashSet<String>,
     verify_fn: F,
 ) -> DeviceSnapshot
@@ -527,7 +498,7 @@ where
     F: Fn(&DeviceSpec) -> DeviceSnapshot,
 {
     let configured_port = serial_port_path(device).unwrap_or_default();
-    let candidate_ports = order_candidate_serial_ports(available_serial_ports, &configured_port);
+    let candidate_ports = configured_serial_candidate_ports(device);
     let mut scan_failures = Vec::new();
 
     for candidate_port in candidate_ports {
@@ -594,18 +565,18 @@ where
     )
 }
 
-fn order_candidate_serial_ports(
-    available_serial_ports: &[String],
-    configured_port: &str,
-) -> Vec<String> {
-    let mut ordered = available_serial_ports.to_vec();
-    if configured_port.is_empty() {
-        return ordered;
-    }
-
-    if let Some(position) = ordered.iter().position(|port| port == configured_port) {
-        let hint_port = ordered.remove(position);
-        ordered.insert(0, hint_port);
+fn configured_serial_candidate_ports(device: &DeviceSpec) -> Vec<String> {
+    let mut ordered = Vec::new();
+    if let TransportHint::SerialPort {
+        port_path,
+        port_candidates,
+        ..
+    } = &device.transport_hint
+    {
+        push_unique(&mut ordered, port_path.clone());
+        for candidate in port_candidates {
+            push_unique(&mut ordered, candidate.clone());
+        }
     }
     ordered
 }
@@ -644,23 +615,6 @@ fn tcp_candidate_hosts(host: &str, host_candidates: &[String]) -> Vec<String> {
         }
     }
     ordered
-}
-
-fn serial_port_priority(port: &str) -> u8 {
-    if port.starts_with("/dev/cu.") {
-        0
-    } else if is_windows_com_port(port) {
-        1
-    } else {
-        2
-    }
-}
-
-fn is_windows_com_port(port: &str) -> bool {
-    let Some(suffix) = port.strip_prefix("COM") else {
-        return false;
-    };
-    !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn serial_port_path(device: &DeviceSpec) -> Option<String> {
@@ -921,6 +875,7 @@ mod tests {
             transport_hint: TransportHint::SerialPort {
                 port_path: "/dev/null".to_string(),
                 baud_rate: 9600,
+                port_candidates: Vec::new(),
             },
             identity: None,
         };
@@ -931,18 +886,22 @@ mod tests {
     }
 
     #[test]
-    fn candidate_order_uses_hint_only_for_sorting() {
-        let ports = vec![
-            "/dev/cu.usbserial-b".to_string(),
-            "/dev/cu.usbserial-a".to_string(),
-        ];
-        let ordered = order_candidate_serial_ports(&ports, "/dev/cu.usbserial-a");
+    fn serial_candidate_ports_use_only_configured_ports() {
+        let device = DeviceSpec {
+            device_id: "mag_x".to_string(),
+            kind: DeviceKind::M8812,
+            required: true,
+            transport_hint: TransportHint::SerialPort {
+                port_path: "COM3".to_string(),
+                baud_rate: 9600,
+                port_candidates: vec!["COM4".to_string(), "COM3".to_string(), "COM5".to_string()],
+            },
+            identity: None,
+        };
+        let ordered = configured_serial_candidate_ports(&device);
         assert_eq!(
             ordered,
-            vec![
-                "/dev/cu.usbserial-a".to_string(),
-                "/dev/cu.usbserial-b".to_string()
-            ]
+            vec!["COM3".to_string(), "COM4".to_string(), "COM5".to_string()]
         );
     }
 
@@ -975,13 +934,13 @@ mod tests {
             transport_hint: TransportHint::SerialPort {
                 port_path: "/dev/cu.wrong".to_string(),
                 baud_rate: 9600,
+                port_candidates: vec!["/dev/cu.correct".to_string()],
             },
             identity: None,
         };
-        let ports = vec!["/dev/cu.wrong".to_string(), "/dev/cu.correct".to_string()];
         let mut claimed = HashSet::new();
 
-        let snapshot = resolve_serial_device_with(&mut device, &ports, &mut claimed, |candidate| {
+        let snapshot = resolve_serial_device_with(&mut device, &mut claimed, |candidate| {
             match serial_port_path(candidate).as_deref() {
                 Some("/dev/cu.correct") => build_verified_snapshot(
                     candidate,
@@ -1006,13 +965,13 @@ mod tests {
             Some(TransportHint::SerialPort {
                 port_path: "/dev/cu.correct".to_string(),
                 baud_rate: 9600,
+                port_candidates: vec!["/dev/cu.correct".to_string()],
             })
         );
     }
 
     #[test]
     fn claimed_port_is_not_reused_for_second_device() {
-        let ports = vec!["/dev/cu.shared".to_string(), "/dev/cu.other".to_string()];
         let mut claimed = vec!["/dev/cu.shared".to_string()]
             .into_iter()
             .collect::<HashSet<_>>();
@@ -1023,11 +982,12 @@ mod tests {
             transport_hint: TransportHint::SerialPort {
                 port_path: "/dev/cu.shared".to_string(),
                 baud_rate: 9600,
+                port_candidates: vec!["/dev/cu.other".to_string()],
             },
             identity: None,
         };
 
-        let snapshot = resolve_serial_device_with(&mut device, &ports, &mut claimed, |candidate| {
+        let snapshot = resolve_serial_device_with(&mut device, &mut claimed, |candidate| {
             match serial_port_path(candidate).as_deref() {
                 Some("/dev/cu.other") => build_verified_snapshot(
                     candidate,

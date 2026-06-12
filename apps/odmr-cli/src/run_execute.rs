@@ -2302,6 +2302,7 @@ fn oe_config(
         TransportHint::SerialPort {
             port_path,
             baud_rate,
+            ..
         } => Ok(Oe1022dTransportConfig {
             port_path: port_path.clone(),
             baud_rate: *baud_rate,
@@ -2338,6 +2339,7 @@ fn serial_m8812_config(device: &DeviceSpec) -> Result<M8812TransportConfig, Stri
     let TransportHint::SerialPort {
         port_path,
         baud_rate,
+        ..
     } = &device.transport_hint
     else {
         return Err(format!("设备 {} 不是 serial_port", device.device_id));
@@ -2353,6 +2355,7 @@ fn laser_config(device: &DeviceSpec) -> Result<CniLaserTransportConfig, String> 
     let TransportHint::SerialPort {
         port_path,
         baud_rate,
+        ..
     } = &device.transport_hint
     else {
         return Err(format!("设备 {} 不是 serial_port", device.device_id));
