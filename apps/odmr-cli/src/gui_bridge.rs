@@ -513,7 +513,8 @@ fn spawn_run_thread(
             &launch.plan_path,
             &launch.smb_profile_path,
             &launch.oe_profile_path,
-            &launch.laser_profile_path,
+            Some(&launch.laser_profile_path),
+            false,
             Some(&output_dir),
             launch.artifact_mode,
         );

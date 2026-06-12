@@ -171,7 +171,8 @@ pub fn run_execute(
     plan_path: &Path,
     smb_profile_path: &Path,
     oe_profile_path: &Path,
-    laser_profile_path: &Path,
+    laser_profile_path: Option<&Path>,
+    skip_laser: bool,
     out_dir: Option<&Path>,
     artifact_mode: RunArtifactMode,
 ) -> Result<PathBuf, String> {
@@ -182,7 +183,11 @@ pub fn run_execute(
     let plan: AcquisitionRunPlan = read_json_file(plan_path)?;
     let smb_profile: Smb100aRunProfile = read_json_file(smb_profile_path)?;
     let oe_profile: Oe1022dRunProfile = read_json_file(oe_profile_path)?;
-    let laser_profile: LaserRunProfile = read_json_file(laser_profile_path)?;
+    let laser_profile: LaserRunProfile = match laser_profile_path {
+        Some(path) => read_json_file(path)?,
+        None if skip_laser => disabled_laser_profile(),
+        None => return Err("缺少 laser profile；如需无 laser 运行请传 --skip-laser".to_string()),
+    };
     let resolved_plan = plan
         .resolve_points(&smb_profile)
         .map_err(|err| format!("plan 展开失败: {err}"))?;
@@ -286,7 +291,9 @@ pub fn run_execute(
 
     let smb_device = find_first_device(&resolved, DeviceKind::Smb100a)?;
     let oe_device = find_first_device(&resolved, DeviceKind::Oe1022d)?;
-    let laser_device = find_optional_device(&resolved, DeviceKind::CniLaser);
+    let laser_device = (!skip_laser)
+        .then(|| find_optional_device(&resolved, DeviceKind::CniLaser))
+        .flatten();
     let mut smb = Smb100aTransport::connect(&tcp_config(smb_device)?)
         .map_err(|err| format!("无法连接 SMB100A {}: {err}", smb_device.device_id))?;
 
@@ -340,6 +347,7 @@ pub fn run_execute(
     apply_laser_background_policy(
         &mut laser,
         &laser_profile,
+        skip_laser,
         &mut events_file,
         &start_instant,
         &plan.run_id,
@@ -1329,13 +1337,41 @@ fn open_optional_laser(
     }))
 }
 
+fn disabled_laser_profile() -> LaserRunProfile {
+    LaserRunProfile {
+        profile_id: "laser_disabled_for_run".to_string(),
+        mode: LaserBackgroundMode::OffBackground,
+        power_mw: 0,
+        settle_ms: 0,
+    }
+}
+
 fn apply_laser_background_policy(
     laser: &mut Option<LaserHandle>,
     profile: &LaserRunProfile,
+    skipped_by_user: bool,
     events_file: &mut File,
     start_instant: &Instant,
     run_id: &str,
 ) -> Result<(), String> {
+    if skipped_by_user {
+        return append_event(
+            events_file,
+            start_instant,
+            run_id,
+            "laser_profile_applied",
+            "laser",
+            None,
+            None,
+            json!({
+                "profile_id": profile.profile_id,
+                "mode": profile.mode.as_str(),
+                "power_mw": profile.power_mw,
+                "status": "laser_skipped_by_user"
+            }),
+        );
+    }
+
     match (laser.as_mut(), &profile.mode) {
         (Some(laser), LaserBackgroundMode::OnBackground) => {
             laser
