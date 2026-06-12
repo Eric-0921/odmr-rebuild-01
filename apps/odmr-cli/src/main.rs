@@ -611,7 +611,7 @@ fn parse_hardware_oe_rall_labview_probe(args: &[String]) -> Result<CliCommand, S
     let mut out_dir: Option<PathBuf> = None;
     let mut frames = 1200_usize;
     let mut post_write_delay_ms = 30_u64;
-    let mut read_timeout_ms = 2_000_u64;
+    let mut read_timeout_ms = 10_000_u64;
     let mut max_read_errors = 1_usize;
     let mut index = 3_usize;
 
