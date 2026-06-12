@@ -99,6 +99,11 @@ impl Oe1022dTransport {
         Ok(())
     }
 
+    pub fn clear_all(&mut self) -> Result<()> {
+        self.port.clear(ClearBuffer::All)?;
+        Ok(())
+    }
+
     pub fn send(&mut self, command: &str) -> Result<()> {
         write_command(&mut self.port, command, &self.options.command_terminator)
     }
@@ -135,6 +140,13 @@ impl Oe1022dTransport {
 
     pub fn read_rall_frame_exact(&mut self, expected_len: usize) -> Result<Vec<u8>> {
         self.read_rall_frame_fast(expected_len)
+    }
+
+    pub fn query_rall_frame_labview_exact(&mut self, expected_len: usize) -> Result<Vec<u8>> {
+        self.set_port_timeout(self.query_timeout)?;
+        self.send_rall_query()?;
+        self.wait_after_rall_write();
+        self.read_rall_frame_blocking_exact(expected_len)
     }
 
     pub fn query_rall_frame_exact_with_zero_retry(
@@ -236,6 +248,35 @@ impl Oe1022dTransport {
             self.rall_first_byte_deadline,
             self.rall_frame_deadline,
         )
+    }
+
+    fn read_rall_frame_blocking_exact(&mut self, expected_len: usize) -> Result<Vec<u8>> {
+        let mut out = Vec::with_capacity(expected_len);
+        let mut buf = [0_u8; 4096];
+
+        while out.len() < expected_len {
+            let remaining = expected_len.saturating_sub(out.len());
+            let read_len = remaining.min(buf.len());
+            match self.port.read(&mut buf[..read_len]) {
+                Ok(0) => thread::sleep(Duration::from_millis(1)),
+                Ok(actual) => out.extend_from_slice(&buf[..actual]),
+                Err(err)
+                    if matches!(
+                        err.kind(),
+                        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                    ) =>
+                {
+                    return Err(TransportError::Timeout {
+                        context: "LabVIEW-style 读取 OE1022D RALL 定长帧",
+                        partial_len: out.len(),
+                    });
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(err) => return Err(err.into()),
+            }
+        }
+
+        Ok(out)
     }
 }
 

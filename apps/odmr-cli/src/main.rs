@@ -14,6 +14,7 @@ mod hardware_smoke;
 mod hardware_state_snapshot;
 mod hardware_verify_mag_lock;
 mod live_bridge;
+mod oe_rall_labview_probe;
 mod run_audit_continuity;
 mod run_execute;
 
@@ -23,6 +24,7 @@ use hardware_profile_verify::run_hardware_profile_verify;
 use hardware_smoke::run_hardware_smoke;
 use hardware_state_snapshot::run_hardware_state_snapshot;
 use hardware_verify_mag_lock::run_hardware_verify_mag_lock;
+use oe_rall_labview_probe::{run_oe_rall_labview_probe, LabviewProbeOptions};
 use run_audit_continuity::run_audit_continuity;
 use run_execute::{run_execute, RunArtifactMode};
 use station_resolver::{resolve_station, StationSpec};
@@ -60,6 +62,20 @@ fn run(args: Vec<String>) -> Result<(), String> {
             out_dir,
         } => run_hardware_verify_mag_lock(&station, &calibration, &plan, out_dir.as_deref())
             .map(|_| ()),
+        CliCommand::HardwareOeRallLabviewProbe {
+            station,
+            out_dir,
+            frames,
+            post_write_delay_ms,
+            read_timeout_ms,
+        } => run_oe_rall_labview_probe(&LabviewProbeOptions {
+            station,
+            out_dir,
+            frames,
+            post_write_delay_ms,
+            read_timeout_ms,
+        })
+        .map(|_| ()),
         CliCommand::RunExecute {
             station,
             calibration,
@@ -156,6 +172,13 @@ enum CliCommand {
         plan: PathBuf,
         out_dir: Option<PathBuf>,
     },
+    HardwareOeRallLabviewProbe {
+        station: PathBuf,
+        out_dir: PathBuf,
+        frames: usize,
+        post_write_delay_ms: u64,
+        read_timeout_ms: u64,
+    },
     RunExecute {
         station: PathBuf,
         calibration: PathBuf,
@@ -205,6 +228,7 @@ fn parse_hardware_command(args: &[String]) -> Result<CliCommand, String> {
         Some("arm-pll-verify-state") => parse_hardware_arm_pll_verify_state(args),
         Some("snapshot-pll-state") => parse_hardware_snapshot_pll_state(args),
         Some("verify-mag-lock") => parse_hardware_verify_mag_lock(args),
+        Some("oe-rall-labview-probe") => parse_hardware_oe_rall_labview_probe(args),
         _ => Err(usage()),
     }
 }
@@ -579,6 +603,84 @@ fn parse_hardware_verify_mag_lock(args: &[String]) -> Result<CliCommand, String>
     })
 }
 
+fn parse_hardware_oe_rall_labview_probe(args: &[String]) -> Result<CliCommand, String> {
+    let mut station: Option<PathBuf> = None;
+    let mut out_dir: Option<PathBuf> = None;
+    let mut frames = 1200_usize;
+    let mut post_write_delay_ms = 30_u64;
+    let mut read_timeout_ms = 2_000_u64;
+    let mut index = 3_usize;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--station" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--station 缺少路径参数".to_string());
+                };
+                station = Some(PathBuf::from(value));
+                index += 2;
+            }
+            "--out-dir" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--out-dir 缺少路径参数".to_string());
+                };
+                out_dir = Some(PathBuf::from(value));
+                index += 2;
+            }
+            "--frames" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--frames 缺少数量参数".to_string());
+                };
+                frames = value
+                    .parse()
+                    .map_err(|err| format!("--frames 解析失败 `{value}`: {err}"))?;
+                index += 2;
+            }
+            "--post-write-delay-ms" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--post-write-delay-ms 缺少毫秒参数".to_string());
+                };
+                post_write_delay_ms = value
+                    .parse()
+                    .map_err(|err| format!("--post-write-delay-ms 解析失败 `{value}`: {err}"))?;
+                index += 2;
+            }
+            "--read-timeout-ms" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--read-timeout-ms 缺少毫秒参数".to_string());
+                };
+                read_timeout_ms = value
+                    .parse()
+                    .map_err(|err| format!("--read-timeout-ms 解析失败 `{value}`: {err}"))?;
+                index += 2;
+            }
+            "--help" | "-h" => return Err(usage()),
+            other => return Err(format!("未知参数: {other}\n\n{}", usage())),
+        }
+    }
+
+    let Some(station) = station else {
+        return Err(format!("缺少 --station 参数\n\n{}", usage()));
+    };
+    let Some(out_dir) = out_dir else {
+        return Err(format!("缺少 --out-dir 参数\n\n{}", usage()));
+    };
+    if frames == 0 {
+        return Err("--frames 必须大于 0".to_string());
+    }
+    if read_timeout_ms == 0 {
+        return Err("--read-timeout-ms 必须大于 0".to_string());
+    }
+
+    Ok(CliCommand::HardwareOeRallLabviewProbe {
+        station,
+        out_dir,
+        frames,
+        post_write_delay_ms,
+        read_timeout_ms,
+    })
+}
+
 fn parse_run_audit_continuity(args: &[String]) -> Result<CliCommand, String> {
     let mut run_dir: Option<PathBuf> = None;
     let mut out: Option<PathBuf> = None;
@@ -642,6 +744,7 @@ fn usage() -> String {
         "  odmr hardware arm-pll-verify-state --station <path> [--out-dir <path>]",
         "  odmr hardware snapshot-pll-state --station <path> [--out-dir <path>]",
         "  odmr hardware verify-mag-lock --station <path> --calibration <path> --plan <path> [--out-dir <path>]",
+        "  odmr hardware oe-rall-labview-probe --station <path> --out-dir <path> [--frames <n>] [--post-write-delay-ms <ms>] [--read-timeout-ms <ms>]",
         "  odmr run execute --station <path> --calibration <path> --plan <path> --smb-profile <path> [--skip-smb] --oe-profile <path> (--laser-profile <path>|--skip-laser) [--out-dir <path>] [--artifact-mode <lightweight|debug>]",
         "  odmr run audit-continuity --run <run-dir> [--out <path>]",
         "  odmr gui-bridge serve [--bind <127.0.0.1:8787>]",
@@ -654,6 +757,7 @@ fn usage() -> String {
         "  odmr hardware arm-pll-verify-state --station configs/stations/lab_a.json --out-dir out/hardware_pll_arm/manual",
         "  odmr hardware snapshot-pll-state --station configs/stations/lab_a.json --out-dir out/hardware_state_snapshot/manual",
         "  odmr hardware verify-mag-lock --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/mag_zero_lock_verify.json --out-dir out/hardware_verify_mag_lock/manual",
+        "  odmr hardware oe-rall-labview-probe --station configs/stations/lab_a.json --out-dir runs/verify_oe_rall_labview_probe_1200 --frames 1200",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/manual",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/x_axis_1d_bounce_15min --artifact-mode debug",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_tc100ms.json --skip-laser --out-dir runs/no_laser_long",
@@ -813,6 +917,37 @@ mod tests {
                 calibration: PathBuf::from("configs/calibrations/main.json"),
                 plan: PathBuf::from("configs/plans/mag_zero_lock_verify.json"),
                 out_dir: Some(PathBuf::from("out/hardware_verify_mag_lock/manual")),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_hardware_oe_rall_labview_probe_command() {
+        let args = vec![
+            "odmr".to_string(),
+            "hardware".to_string(),
+            "oe-rall-labview-probe".to_string(),
+            "--station".to_string(),
+            "configs/stations/lab_a.json".to_string(),
+            "--out-dir".to_string(),
+            "runs/verify_oe_rall_labview_probe_1200".to_string(),
+            "--frames".to_string(),
+            "1200".to_string(),
+            "--post-write-delay-ms".to_string(),
+            "30".to_string(),
+            "--read-timeout-ms".to_string(),
+            "10000".to_string(),
+        ];
+
+        let command = parse_command(&args).unwrap();
+        assert_eq!(
+            command,
+            CliCommand::HardwareOeRallLabviewProbe {
+                station: PathBuf::from("configs/stations/lab_a.json"),
+                out_dir: PathBuf::from("runs/verify_oe_rall_labview_probe_1200"),
+                frames: 1200,
+                post_write_delay_ms: 30,
+                read_timeout_ms: 10_000,
             }
         );
     }
