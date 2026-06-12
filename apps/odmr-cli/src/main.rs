@@ -65,6 +65,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
             calibration,
             plan,
             smb_profile,
+            skip_smb,
             oe_profile,
             laser_profile,
             skip_laser,
@@ -75,6 +76,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
             &calibration,
             &plan,
             &smb_profile,
+            skip_smb,
             &oe_profile,
             laser_profile.as_deref(),
             skip_laser,
@@ -159,6 +161,7 @@ enum CliCommand {
         calibration: PathBuf,
         plan: PathBuf,
         smb_profile: PathBuf,
+        skip_smb: bool,
         oe_profile: PathBuf,
         laser_profile: Option<PathBuf>,
         skip_laser: bool,
@@ -393,6 +396,7 @@ fn parse_run_execute(args: &[String]) -> Result<CliCommand, String> {
     let mut calibration: Option<PathBuf> = None;
     let mut plan: Option<PathBuf> = None;
     let mut smb_profile: Option<PathBuf> = None;
+    let mut skip_smb = false;
     let mut oe_profile: Option<PathBuf> = None;
     let mut laser_profile: Option<PathBuf> = None;
     let mut skip_laser = false;
@@ -429,6 +433,10 @@ fn parse_run_execute(args: &[String]) -> Result<CliCommand, String> {
                 };
                 smb_profile = Some(PathBuf::from(value));
                 index += 2;
+            }
+            "--skip-smb" => {
+                skip_smb = true;
+                index += 1;
             }
             "--oe-profile" => {
                 let Some(value) = args.get(index + 1) else {
@@ -502,6 +510,7 @@ fn parse_run_execute(args: &[String]) -> Result<CliCommand, String> {
         calibration,
         plan,
         smb_profile,
+        skip_smb,
         oe_profile,
         laser_profile,
         skip_laser,
@@ -633,7 +642,7 @@ fn usage() -> String {
         "  odmr hardware arm-pll-verify-state --station <path> [--out-dir <path>]",
         "  odmr hardware snapshot-pll-state --station <path> [--out-dir <path>]",
         "  odmr hardware verify-mag-lock --station <path> --calibration <path> --plan <path> [--out-dir <path>]",
-        "  odmr run execute --station <path> --calibration <path> --plan <path> --smb-profile <path> --oe-profile <path> (--laser-profile <path>|--skip-laser) [--out-dir <path>] [--artifact-mode <lightweight|debug>]",
+        "  odmr run execute --station <path> --calibration <path> --plan <path> --smb-profile <path> [--skip-smb] --oe-profile <path> (--laser-profile <path>|--skip-laser) [--out-dir <path>] [--artifact-mode <lightweight|debug>]",
         "  odmr run audit-continuity --run <run-dir> [--out <path>]",
         "  odmr gui-bridge serve [--bind <127.0.0.1:8787>]",
         "",
@@ -648,6 +657,7 @@ fn usage() -> String {
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/manual",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/x_axis_1d_bounce_15min --artifact-mode debug",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_tc100ms.json --skip-laser --out-dir runs/no_laser_long",
+        "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --skip-smb --oe-profile configs/profiles/oe1022d_run_ch_b_tc100ms.json --skip-laser --out-dir runs/oe_only",
         "  odmr run audit-continuity --run runs/manual_live_recheck_20260612_retry2",
         "  odmr gui-bridge serve --bind 127.0.0.1:8787",
     ]
@@ -837,6 +847,7 @@ mod tests {
                 calibration: PathBuf::from("configs/calibrations/main.json"),
                 plan: PathBuf::from("configs/plans/minimal_3point_runtime.json"),
                 smb_profile: PathBuf::from("configs/profiles/smb100a_run_pll_default.json"),
+                skip_smb: false,
                 oe_profile: PathBuf::from("configs/profiles/oe1022d_run_ch_b_observed.json"),
                 laser_profile: Some(PathBuf::from(
                     "configs/profiles/cni_laser_run_on_background.json"
@@ -878,6 +889,7 @@ mod tests {
                 calibration: PathBuf::from("configs/calibrations/main.json"),
                 plan: PathBuf::from("configs/plans/minimal_3point_runtime.json"),
                 smb_profile: PathBuf::from("configs/profiles/smb100a_run_pll_default.json"),
+                skip_smb: false,
                 oe_profile: PathBuf::from("configs/profiles/oe1022d_run_ch_b_observed.json"),
                 laser_profile: Some(PathBuf::from(
                     "configs/profiles/cni_laser_run_on_background.json"
@@ -938,6 +950,45 @@ mod tests {
                 calibration: PathBuf::from("configs/calibrations/main.json"),
                 plan: PathBuf::from("configs/plans/minimal_3point_runtime.json"),
                 smb_profile: PathBuf::from("configs/profiles/smb100a_run_pll_default.json"),
+                skip_smb: false,
+                oe_profile: PathBuf::from("configs/profiles/oe1022d_run_ch_b_observed.json"),
+                laser_profile: None,
+                skip_laser: true,
+                out_dir: None,
+                artifact_mode: RunArtifactMode::Lightweight,
+            }
+        );
+    }
+
+    #[test]
+    fn parse_run_execute_skip_smb_and_laser() {
+        let args = vec![
+            "odmr".to_string(),
+            "run".to_string(),
+            "execute".to_string(),
+            "--station".to_string(),
+            "configs/stations/lab_a.json".to_string(),
+            "--calibration".to_string(),
+            "configs/calibrations/main.json".to_string(),
+            "--plan".to_string(),
+            "configs/plans/minimal_3point_runtime.json".to_string(),
+            "--smb-profile".to_string(),
+            "configs/profiles/smb100a_run_pll_default.json".to_string(),
+            "--skip-smb".to_string(),
+            "--oe-profile".to_string(),
+            "configs/profiles/oe1022d_run_ch_b_observed.json".to_string(),
+            "--skip-laser".to_string(),
+        ];
+
+        let command = parse_command(&args).unwrap();
+        assert_eq!(
+            command,
+            CliCommand::RunExecute {
+                station: PathBuf::from("configs/stations/lab_a.json"),
+                calibration: PathBuf::from("configs/calibrations/main.json"),
+                plan: PathBuf::from("configs/plans/minimal_3point_runtime.json"),
+                smb_profile: PathBuf::from("configs/profiles/smb100a_run_pll_default.json"),
+                skip_smb: true,
                 oe_profile: PathBuf::from("configs/profiles/oe1022d_run_ch_b_observed.json"),
                 laser_profile: None,
                 skip_laser: true,

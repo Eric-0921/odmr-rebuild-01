@@ -512,6 +512,7 @@ fn spawn_run_thread(
             &launch.calibration_path,
             &launch.plan_path,
             &launch.smb_profile_path,
+            false,
             &launch.oe_profile_path,
             Some(&launch.laser_profile_path),
             false,

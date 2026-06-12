@@ -170,6 +170,7 @@ pub fn run_execute(
     calibration_path: &Path,
     plan_path: &Path,
     smb_profile_path: &Path,
+    skip_smb: bool,
     oe_profile_path: &Path,
     laser_profile_path: Option<&Path>,
     skip_laser: bool,
@@ -214,7 +215,7 @@ pub fn run_execute(
         &target_dir.join("station_snapshot.json"),
         &resolved.snapshot,
     )?;
-    if resolved.snapshot.has_required_failures() {
+    if station_has_required_failures_for_run(&resolved, skip_smb) {
         return Err(format!(
             "station verify 失败，required_failures={}",
             resolved.snapshot.required_failures
@@ -289,23 +290,43 @@ pub fn run_execute(
     ));
     print_run_eta_summary(&eta_summary);
 
-    let smb_device = find_first_device(&resolved, DeviceKind::Smb100a)?;
+    let smb_device = (!skip_smb)
+        .then(|| find_first_device(&resolved, DeviceKind::Smb100a))
+        .transpose()?;
     let oe_device = find_first_device(&resolved, DeviceKind::Oe1022d)?;
     let laser_device = (!skip_laser)
         .then(|| find_optional_device(&resolved, DeviceKind::CniLaser))
         .flatten();
-    let mut smb = Smb100aTransport::connect(&tcp_config(smb_device)?)
-        .map_err(|err| format!("无法连接 SMB100A {}: {err}", smb_device.device_id))?;
-
-    apply_smb_fixed_profile(
-        &mut smb,
-        smb_device,
-        &smb_profile,
-        &mut events_file,
-        &start_instant,
-        &plan.run_id,
-    )?;
-    print_stage(&format!("SMB profile 已下发: {}", smb_profile.profile_id));
+    let mut smb = if let Some(smb_device) = smb_device {
+        let mut transport = Smb100aTransport::connect(&tcp_config(smb_device)?)
+            .map_err(|err| format!("无法连接 SMB100A {}: {err}", smb_device.device_id))?;
+        apply_smb_fixed_profile(
+            &mut transport,
+            smb_device,
+            &smb_profile,
+            &mut events_file,
+            &start_instant,
+            &plan.run_id,
+        )?;
+        print_stage(&format!("SMB profile 已下发: {}", smb_profile.profile_id));
+        Some(transport)
+    } else {
+        append_event(
+            &mut events_file,
+            &start_instant,
+            &plan.run_id,
+            "smb_profile_skipped",
+            "profile",
+            None,
+            None,
+            json!({"profile_id": smb_profile.profile_id, "status": "smb_skipped_by_user"}),
+        )?;
+        print_stage(&format!(
+            "SMB 已跳过: profile={} 仅用于时间窗估算",
+            smb_profile.profile_id
+        ));
+        None
+    };
     append_event(
         &mut events_file,
         &start_instant,
@@ -314,7 +335,11 @@ pub fn run_execute(
         "preflight",
         None,
         None,
-        json!({"smb_profile_id": smb_profile.profile_id, "oe_profile_id": oe_profile.profile_id}),
+        json!({
+            "smb_profile_id": smb_profile.profile_id,
+            "oe_profile_id": oe_profile.profile_id,
+            "smb_skipped": skip_smb
+        }),
     )?;
 
     {
@@ -462,7 +487,8 @@ pub fn run_execute(
             index,
             &plan,
             &smb_profile,
-            &mut smb,
+            smb.as_mut(),
+            skip_smb,
             &mut mag_axes,
             &mut collector,
             &mut raw_replay,
@@ -590,8 +616,10 @@ pub fn run_execute(
     print_stage("cleanup 开始");
 
     let mut cleanup_errors = Vec::new();
-    if let Err(err) = cleanup_smb(&mut smb) {
-        cleanup_errors.push(format!("SMB cleanup 失败: {err}"));
+    if let Some(smb) = smb.as_mut() {
+        if let Err(err) = cleanup_smb(smb) {
+            cleanup_errors.push(format!("SMB cleanup 失败: {err}"));
+        }
     }
     if let Err(err) = cleanup_laser(laser.as_mut()) {
         cleanup_errors.push(format!("Laser cleanup 失败: {err}"));
@@ -709,7 +737,8 @@ fn execute_point(
     index: usize,
     plan: &AcquisitionRunPlan,
     smb_profile: &Smb100aRunProfile,
-    smb: &mut Smb100aTransport,
+    smb: Option<&mut Smb100aTransport>,
+    skip_smb: bool,
     mag_axes: &mut [MagAxisHandle],
     collector: &mut CollectorHandle,
     raw_replay: &mut RawReplayReader,
@@ -740,7 +769,15 @@ fn execute_point(
     let sweep = smb_profile
         .default_sweep
         .apply_override(point.smb_override.as_ref());
-    configure_smb_for_point(smb, smb_profile, &sweep)?;
+    let sweep_estimate = sweep
+        .estimate()
+        .map_err(|err| format!("SMB sweep 时长估算失败: {err}"))?;
+    let mut smb = smb;
+    if let Some(smb) = smb.as_deref_mut() {
+        configure_smb_for_point(smb, smb_profile, &sweep)?;
+    } else if !skip_smb {
+        return Err("SMB transport 未打开；如需 OE-only 测试请传 --skip-smb".to_string());
+    }
 
     append_event(
         events_file,
@@ -784,17 +821,30 @@ fn execute_point(
         json!({
             "segment_id": segment_id,
             "resolved_point_count": resolved_plan.resolved_point_count,
-            "estimated_sweep_duration_ms": sweep.estimate().ok().map(|estimate| estimate.sweep_duration_ms)
+            "estimated_sweep_duration_ms": sweep_estimate.sweep_duration_ms,
+            "smb_skipped": skip_smb
         }),
     )?;
 
-    smb.send(smb100a_execute_frequency_sweep())
-        .map_err(|err| format!("SMB 执行扫频失败: {err}"))?;
-    let sweep_completion = wait_for_sweep_complete(smb, &sweep, &interrupt_flag)?;
-
-    if smb_profile.error_check_after_write {
-        ensure_smb_no_error(smb)?;
-    }
+    let sweep_completion = if let Some(smb) = smb.as_deref_mut() {
+        smb.send(smb100a_execute_frequency_sweep())
+            .map_err(|err| format!("SMB 执行扫频失败: {err}"))?;
+        let completion = wait_for_sweep_complete(smb, &sweep, &interrupt_flag)?;
+        if smb_profile.error_check_after_write {
+            ensure_smb_no_error(smb)?;
+        }
+        completion
+    } else {
+        sleep_with_interrupt(
+            Duration::from_millis(sweep_estimate.sweep_duration_ms),
+            &interrupt_flag,
+        )?;
+        SweepCompletionObservation {
+            estimated_sweep_duration_ms: sweep_estimate.sweep_duration_ms,
+            opc_wait_ms: sweep_estimate.sweep_duration_ms,
+            fallback_used: true,
+        }
+    };
 
     let end_ts = now_ts_string();
     let end_monotonic_ns = monotonic_ns(start_instant);
@@ -802,9 +852,10 @@ fn execute_point(
     let committed_end_cursor = collector.wait_until_committed(end_cursor)?;
     let timeouts_after = collector.timeout_count()?;
     collector.drain_diag_events(events_file)?;
-    let estimated_frames_expected = sweep.estimate().ok().map(|estimate| {
-        estimate_frames_for_quality(estimate.sweep_duration_ms, collector_poll_interval_ms)
-    });
+    let estimated_frames_expected = Some(estimate_frames_for_quality(
+        sweep_estimate.sweep_duration_ms,
+        collector_poll_interval_ms,
+    ));
 
     append_event(
         events_file,
@@ -818,7 +869,8 @@ fn execute_point(
             "segment_id": segment_id,
             "estimated_sweep_duration_ms": sweep_completion.estimated_sweep_duration_ms,
             "opc_wait_ms": sweep_completion.opc_wait_ms,
-            "fallback_used": sweep_completion.fallback_used
+            "fallback_used": sweep_completion.fallback_used,
+            "smb_skipped": skip_smb
         }),
     )?;
 
@@ -2201,6 +2253,14 @@ fn find_first_device(
         .iter()
         .find(|device| device.kind == kind)
         .ok_or_else(|| format!("station 中缺少设备 kind={kind:?}"))
+}
+
+fn station_has_required_failures_for_run(resolved: &StationResolveResult, skip_smb: bool) -> bool {
+    resolved.snapshot.devices.iter().any(|device| {
+        device.required
+            && device.verification_status != "verified"
+            && !(skip_smb && device.kind == DeviceKind::Smb100a)
+    })
 }
 
 fn find_optional_device(resolved: &StationResolveResult, kind: DeviceKind) -> Option<&DeviceSpec> {
