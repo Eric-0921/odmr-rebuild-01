@@ -861,7 +861,7 @@ class MainWindow(QMainWindow):
         for widget in watched:
             if isinstance(widget, QComboBox):
                 widget.currentIndexChanged.connect(self.save_draft)
-            elif isinstance(widget, (QLineEdit, QTextEdit, QPlainTextEdit)):
+            elif isinstance(widget, (QLineEdit, QPlainTextEdit)):
                 widget.textChanged.connect(self.save_draft)
             elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
                 widget.valueChanged.connect(self.save_draft)
