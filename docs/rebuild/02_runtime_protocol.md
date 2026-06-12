@@ -89,7 +89,7 @@ OE1022D collector 是 run 级单实例。
 
 职责：
 
-- 固定节拍发送 `RALL?`。
+- 固定节拍发送 `RALL?`，写后按 profile 等待再读定长 frame。
 - 读取完整 frame。
 - 打 monotonic timestamp 和 wall timestamp。
 - 分配连续 frame sequence。
@@ -102,6 +102,7 @@ OE1022D collector 是 run 级单实例。
 约束：
 
 - 同一 OE1022D 串口只能有一个 reader。
+- OE1022D collector 只在打开串口后清一次输入缓冲区；热循环内不逐帧清输入。
 - producer 不使用 `try_send` 静默丢帧作为主链策略。
 - raw writer / health consumer 必须持续 drain。
 - stop 必须包含 request、observed、port close、thread joined 四个阶段。

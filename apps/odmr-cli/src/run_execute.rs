@@ -382,6 +382,7 @@ pub fn run_execute(
         Some(oe_device.device_id.clone()),
         json!({
             "poll_interval_ms": effective_collector_config.poll_interval_ms,
+            "rall_post_write_delay_ms": effective_collector_config.rall_post_write_delay_ms,
             "ring_capacity_frames": effective_collector_config.ring_capacity_frames,
             "estimated_frames_max": ring_capacity_plan.estimated_frames_max,
             "guard_frames": ring_capacity_plan.guard_frames,
@@ -390,8 +391,9 @@ pub fn run_execute(
         }),
     )?;
     print_stage(&format!(
-        "collector 已启动: poll_interval_ms={}, ring_capacity_frames={}, estimated_frames_max={}, guard_frames={}, artifact_mode={}",
+        "collector 已启动: poll_interval_ms={}, rall_post_write_delay_ms={}, ring_capacity_frames={}, estimated_frames_max={}, guard_frames={}, artifact_mode={}",
         effective_collector_config.poll_interval_ms,
+        effective_collector_config.rall_post_write_delay_ms,
         effective_collector_config.ring_capacity_frames,
         ring_capacity_plan.estimated_frames_max,
         ring_capacity_plan.guard_frames,
@@ -2210,6 +2212,7 @@ fn oe_config(
     Ok(Oe1022dTransportConfig {
         port_path: port_path.clone(),
         baud_rate: *baud_rate,
+        rall_post_write_delay: Duration::from_millis(collector.rall_post_write_delay_ms),
         rall_chunk_timeout: Duration::from_millis(collector.rall_chunk_timeout_ms),
         rall_first_byte_deadline: Duration::from_millis(collector.rall_first_byte_deadline_ms),
         rall_frame_deadline: Duration::from_millis(collector.rall_frame_deadline_ms),
@@ -2425,6 +2428,7 @@ impl CollectorHandle {
         let producer_join = thread::spawn(move || {
             let mut transport = Oe1022dTransport::open(&device_config)
                 .map_err(|err| format!("collector 打开 OE1022D 失败: {err}"))?;
+            let _ = transport.clear_input();
             let mut consecutive_timeouts = 0_usize;
             let mut timeout_streak_started_at: Option<Instant> = None;
             let result = (|| -> Result<(), String> {
@@ -2433,7 +2437,6 @@ impl CollectorHandle {
                         break;
                     }
 
-                    let _ = transport.clear_input();
                     let read_start = Instant::now();
                     match if frame_exact_bytes > 0 {
                         transport.query_rall_frame_exact_with_zero_retry(
@@ -2992,6 +2995,7 @@ mod tests {
             frame_max_bytes: 16384,
             ring_capacity_frames: 64,
             guard_margin_ms: 3000,
+            rall_post_write_delay_ms: 30,
             rall_chunk_timeout_ms: 5,
             rall_first_byte_deadline_ms: 20,
             rall_frame_deadline_ms: 120,

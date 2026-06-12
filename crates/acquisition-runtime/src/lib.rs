@@ -228,6 +228,8 @@ pub struct CollectorConfig {
     pub frame_max_bytes: usize,
     pub ring_capacity_frames: usize,
     pub guard_margin_ms: u64,
+    #[serde(default = "default_rall_post_write_delay_ms")]
+    pub rall_post_write_delay_ms: u64,
     #[serde(default = "default_rall_chunk_timeout_ms")]
     pub rall_chunk_timeout_ms: u64,
     #[serde(default = "default_rall_first_byte_deadline_ms")]
@@ -240,6 +242,10 @@ pub struct CollectorConfig {
 
 const fn default_rall_chunk_timeout_ms() -> u64 {
     5
+}
+
+const fn default_rall_post_write_delay_ms() -> u64 {
+    30
 }
 
 const fn default_rall_first_byte_deadline_ms() -> u64 {

@@ -410,10 +410,20 @@ run 结束后额外只读核验：
 当前默认 `OE1022D` 热路径参数：
 
 - `ASCII query timeout = 300ms`
+- `rall_post_write_delay = 30ms`
 - `rall_chunk_timeout = 5ms`
 - `rall_first_byte_deadline = 30ms`
 - `rall_frame_deadline = 120ms`
 - `zero_byte_retry_limit = 1`
+
+原厂 LabVIEW `OE1022D_USB_Query Data.vi` 的 RALL 热路径是：
+
+- 写 `RALL?`
+- 等 `30ms`
+- 固定读 `12288B`
+- 转 `U8[]` 后交给 `OE1022D_DATA Transmit.vi`
+
+因此 rebuild collector 只在打开串口后清一次输入缓冲区，不在每次 `RALL?` 读前清输入，避免丢弃已经到达的连续采集帧。
 
 当前默认 `quality` / 诊断语义：
 

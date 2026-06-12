@@ -24,6 +24,7 @@ pub struct Oe1022dTransportConfig {
     pub port_path: String,
     pub baud_rate: u32,
     pub timeout: Duration,
+    pub rall_post_write_delay: Duration,
     pub rall_chunk_timeout: Duration,
     pub rall_first_byte_deadline: Duration,
     pub rall_frame_deadline: Duration,
@@ -48,6 +49,7 @@ impl Default for Oe1022dTransportConfig {
             // RALL? 是 50ms 更新一次的定长快照。
             // ASCII query 可以容忍更保守的 timeout。
             timeout: Duration::from_millis(300),
+            rall_post_write_delay: Duration::from_millis(30),
             // RALL? 热路径不能把一次空读放大成 300ms 级黑洞。
             // 单次 chunk 只等很短时间，整帧再用单独 deadline 控制。
             rall_chunk_timeout: Duration::from_millis(5),
@@ -65,6 +67,7 @@ pub struct Oe1022dTransport {
     port: Box<dyn SerialPort>,
     options: LineTransportOptions,
     query_timeout: Duration,
+    rall_post_write_delay: Duration,
     rall_chunk_timeout: Duration,
     rall_first_byte_deadline: Duration,
     rall_frame_deadline: Duration,
@@ -84,6 +87,7 @@ impl Oe1022dTransport {
             port,
             options: config.line_options(),
             query_timeout: config.timeout,
+            rall_post_write_delay: config.rall_post_write_delay,
             rall_chunk_timeout: config.rall_chunk_timeout,
             rall_first_byte_deadline: config.rall_first_byte_deadline,
             rall_frame_deadline: config.rall_frame_deadline,
@@ -117,6 +121,7 @@ impl Oe1022dTransport {
     /// `expected_len` 暂时由上层显式传入，避免在 transport 层过早锁死帧长度假设。
     pub fn query_rall_frame(&mut self, expected_len: usize) -> Result<Vec<u8>> {
         self.send_rall_query()?;
+        self.wait_after_rall_write();
         self.read_rall_frame_exact(expected_len)
     }
 
@@ -141,6 +146,7 @@ impl Oe1022dTransport {
 
         loop {
             self.send_rall_query()?;
+            self.wait_after_rall_write();
             match self.read_rall_frame_exact(expected_len) {
                 Ok(payload) => {
                     return Ok(RallFrameReadOutcome {
@@ -171,6 +177,7 @@ impl Oe1022dTransport {
             oe1022d_rall_query(),
             &self.options.command_terminator,
         )?;
+        self.wait_after_rall_write();
 
         let mut out = Vec::with_capacity(max_bytes.min(4096));
         let mut buf = [0_u8; 1024];
@@ -213,6 +220,12 @@ impl Oe1022dTransport {
     fn set_port_timeout(&mut self, timeout: Duration) -> Result<()> {
         self.port.set_timeout(timeout)?;
         Ok(())
+    }
+
+    fn wait_after_rall_write(&self) {
+        if !self.rall_post_write_delay.is_zero() {
+            thread::sleep(self.rall_post_write_delay);
+        }
     }
 
     fn read_rall_frame_fast(&mut self, expected_len: usize) -> Result<Vec<u8>> {
