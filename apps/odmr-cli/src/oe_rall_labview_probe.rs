@@ -25,6 +25,7 @@ pub struct LabviewProbeOptions {
     pub frames: usize,
     pub post_write_delay_ms: u64,
     pub read_timeout_ms: u64,
+    pub max_read_errors: usize,
 }
 
 pub fn run_oe_rall_labview_probe(options: &LabviewProbeOptions) -> Result<ProbeSummary, String> {
@@ -74,14 +75,16 @@ pub fn run_oe_rall_labview_probe(options: &LabviewProbeOptions) -> Result<ProbeS
         let mut read_errors = 0_usize;
         let mut timeout_count = 0_usize;
 
-        for frame_seq in 0..options.frames as u64 {
+        let mut read_attempts = 0_usize;
+        while frames_ok < options.frames {
             let read_started = Instant::now();
+            read_attempts += 1;
             match transport.query_rall_frame_labview_exact(RALL_FRAME_BYTES) {
                 Ok(payload) => {
                     frames_ok += 1;
                     frame_tx
                         .send(ProbeFrame {
-                            frame_seq,
+                            frame_seq: (frames_ok - 1) as u64,
                             ts: now_ts_string(),
                             monotonic_ns: monotonic_ns(&run_start),
                             payload,
@@ -100,13 +103,16 @@ pub fn run_oe_rall_labview_probe(options: &LabviewProbeOptions) -> Result<ProbeS
                             monotonic_ns: monotonic_ns(&run_start),
                             event: "rall_read_error".to_string(),
                             data: json!({
-                                "frame_seq": frame_seq,
+                                "read_attempt": read_attempts,
+                                "frames_ok": frames_ok,
                                 "elapsed_ms": read_started.elapsed().as_secs_f64() * 1000.0,
                                 "error": err.to_string()
                             }),
                         },
                     )?;
-                    break;
+                    if read_errors >= options.max_read_errors {
+                        break;
+                    }
                 }
             }
         }
@@ -115,6 +121,7 @@ pub fn run_oe_rall_labview_probe(options: &LabviewProbeOptions) -> Result<ProbeS
         Ok(ProducerSummary {
             frames_requested: options.frames,
             frames_ok,
+            read_attempts,
             read_errors,
             timeout_count,
         })
@@ -136,11 +143,13 @@ pub fn run_oe_rall_labview_probe(options: &LabviewProbeOptions) -> Result<ProbeS
         frame_bytes: RALL_FRAME_BYTES,
         post_write_delay_ms: options.post_write_delay_ms,
         read_timeout_ms: options.read_timeout_ms,
+        max_read_errors: options.max_read_errors,
         started_at,
         ended_at,
         elapsed_ms: run_start.elapsed().as_secs_f64() * 1000.0,
         frames_requested: producer_summary.frames_requested,
         frames_ok: producer_summary.frames_ok,
+        read_attempts: producer_summary.read_attempts,
         read_errors: producer_summary.read_errors,
         timeout_count: producer_summary.timeout_count,
         writer: writer_summary,
@@ -240,6 +249,7 @@ struct ProbeEvent {
 struct ProducerSummary {
     frames_requested: usize,
     frames_ok: usize,
+    read_attempts: usize,
     read_errors: usize,
     timeout_count: usize,
 }
@@ -255,11 +265,13 @@ pub struct ProbeSummary {
     frame_bytes: usize,
     post_write_delay_ms: u64,
     read_timeout_ms: u64,
+    max_read_errors: usize,
     started_at: String,
     ended_at: String,
     elapsed_ms: f64,
     frames_requested: usize,
     frames_ok: usize,
+    read_attempts: usize,
     read_errors: usize,
     timeout_count: usize,
     writer: WriterSummary,

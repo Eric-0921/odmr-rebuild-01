@@ -68,12 +68,14 @@ fn run(args: Vec<String>) -> Result<(), String> {
             frames,
             post_write_delay_ms,
             read_timeout_ms,
+            max_read_errors,
         } => run_oe_rall_labview_probe(&LabviewProbeOptions {
             station,
             out_dir,
             frames,
             post_write_delay_ms,
             read_timeout_ms,
+            max_read_errors,
         })
         .map(|_| ()),
         CliCommand::RunExecute {
@@ -178,6 +180,7 @@ enum CliCommand {
         frames: usize,
         post_write_delay_ms: u64,
         read_timeout_ms: u64,
+        max_read_errors: usize,
     },
     RunExecute {
         station: PathBuf,
@@ -609,6 +612,7 @@ fn parse_hardware_oe_rall_labview_probe(args: &[String]) -> Result<CliCommand, S
     let mut frames = 1200_usize;
     let mut post_write_delay_ms = 30_u64;
     let mut read_timeout_ms = 2_000_u64;
+    let mut max_read_errors = 1_usize;
     let mut index = 3_usize;
 
     while index < args.len() {
@@ -654,6 +658,15 @@ fn parse_hardware_oe_rall_labview_probe(args: &[String]) -> Result<CliCommand, S
                     .map_err(|err| format!("--read-timeout-ms 解析失败 `{value}`: {err}"))?;
                 index += 2;
             }
+            "--max-read-errors" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--max-read-errors 缺少数量参数".to_string());
+                };
+                max_read_errors = value
+                    .parse()
+                    .map_err(|err| format!("--max-read-errors 解析失败 `{value}`: {err}"))?;
+                index += 2;
+            }
             "--help" | "-h" => return Err(usage()),
             other => return Err(format!("未知参数: {other}\n\n{}", usage())),
         }
@@ -678,6 +691,7 @@ fn parse_hardware_oe_rall_labview_probe(args: &[String]) -> Result<CliCommand, S
         frames,
         post_write_delay_ms,
         read_timeout_ms,
+        max_read_errors,
     })
 }
 
@@ -744,7 +758,7 @@ fn usage() -> String {
         "  odmr hardware arm-pll-verify-state --station <path> [--out-dir <path>]",
         "  odmr hardware snapshot-pll-state --station <path> [--out-dir <path>]",
         "  odmr hardware verify-mag-lock --station <path> --calibration <path> --plan <path> [--out-dir <path>]",
-        "  odmr hardware oe-rall-labview-probe --station <path> --out-dir <path> [--frames <n>] [--post-write-delay-ms <ms>] [--read-timeout-ms <ms>]",
+        "  odmr hardware oe-rall-labview-probe --station <path> --out-dir <path> [--frames <n>] [--post-write-delay-ms <ms>] [--read-timeout-ms <ms>] [--max-read-errors <n>]",
         "  odmr run execute --station <path> --calibration <path> --plan <path> --smb-profile <path> [--skip-smb] --oe-profile <path> (--laser-profile <path>|--skip-laser) [--out-dir <path>] [--artifact-mode <lightweight|debug>]",
         "  odmr run audit-continuity --run <run-dir> [--out <path>]",
         "  odmr gui-bridge serve [--bind <127.0.0.1:8787>]",
@@ -937,6 +951,8 @@ mod tests {
             "30".to_string(),
             "--read-timeout-ms".to_string(),
             "10000".to_string(),
+            "--max-read-errors".to_string(),
+            "7".to_string(),
         ];
 
         let command = parse_command(&args).unwrap();
@@ -948,6 +964,7 @@ mod tests {
                 frames: 1200,
                 post_write_delay_ms: 30,
                 read_timeout_ms: 10_000,
+                max_read_errors: 7,
             }
         );
     }
