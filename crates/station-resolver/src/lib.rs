@@ -491,7 +491,11 @@ fn list_available_serial_ports() -> Vec<String> {
     let mut out = ports
         .into_iter()
         .map(|port| port.port_name)
-        .filter(|port| port.starts_with("/dev/cu.") || port.starts_with("/dev/tty."))
+        .filter(|port| {
+            port.starts_with("/dev/cu.")
+                || port.starts_with("/dev/tty.")
+                || is_windows_com_port(port)
+        })
         .collect::<Vec<_>>();
     out.sort_by(|left, right| {
         serial_port_priority(left)
@@ -645,9 +649,18 @@ fn tcp_candidate_hosts(host: &str, host_candidates: &[String]) -> Vec<String> {
 fn serial_port_priority(port: &str) -> u8 {
     if port.starts_with("/dev/cu.") {
         0
-    } else {
+    } else if is_windows_com_port(port) {
         1
+    } else {
+        2
     }
+}
+
+fn is_windows_com_port(port: &str) -> bool {
+    let Some(suffix) = port.strip_prefix("COM") else {
+        return false;
+    };
+    !suffix.is_empty() && suffix.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn serial_port_path(device: &DeviceSpec) -> Option<String> {
