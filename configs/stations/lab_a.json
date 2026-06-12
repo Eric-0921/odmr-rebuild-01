@@ -1,5 +1,5 @@
 {
-  "station_id": "lab_windows_full",
+  "station_id": "lab_a",
   "devices": [
     {
       "device_id": "smb100a_main",
@@ -49,12 +49,11 @@
       "required": true,
       "transport_hint": {
         "transport": "serial_port",
-        "port_path": "COM3",
+        "port_path": "COM4",
         "baud_rate": 9600,
         "port_candidates": [
-          "COM4",
-          "COM5",
-          "COM6"
+          "COM3",
+          "COM5"
         ]
       },
       "identity": {
@@ -71,12 +70,11 @@
       "required": true,
       "transport_hint": {
         "transport": "serial_port",
-        "port_path": "COM4",
+        "port_path": "COM6",
         "baud_rate": 9600,
         "port_candidates": [
           "COM3",
-          "COM5",
-          "COM6"
+          "COM5"
         ]
       },
       "identity": {
@@ -93,12 +91,10 @@
       "required": true,
       "transport_hint": {
         "transport": "serial_port",
-        "port_path": "COM5",
+        "port_path": "COM3",
         "baud_rate": 9600,
         "port_candidates": [
-          "COM3",
-          "COM4",
-          "COM6"
+          "COM5"
         ]
       },
       "identity": {

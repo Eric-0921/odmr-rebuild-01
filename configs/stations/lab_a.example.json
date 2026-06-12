@@ -29,17 +29,17 @@
       "kind": "oe1022d",
       "required": true,
       "transport_hint": {
-        "transport": "serial_port",
-        "port_path": "/dev/cu.usbmodem395D388533371",
-        "baud_rate": 921600
+        "transport": "visa_resource",
+        "resource": "ASRL8::INSTR",
+        "baud_rate": 921600,
+        "resource_candidates": []
       },
       "identity": {
         "contains_all": [
           "SSI LIA-OE1022D"
         ],
         "contains_any": [
-          "SN:D6522078",
-          "SN:D6130220"
+          "SN:D6522078"
         ]
       }
     },
@@ -49,8 +49,12 @@
       "required": true,
       "transport_hint": {
         "transport": "serial_port",
-        "port_path": "/dev/cu.PL2303G-USBtoUART11120",
-        "baud_rate": 9600
+        "port_path": "COM4",
+        "baud_rate": 9600,
+        "port_candidates": [
+          "COM3",
+          "COM5"
+        ]
       },
       "identity": {
         "contains_all": [
@@ -66,8 +70,12 @@
       "required": true,
       "transport_hint": {
         "transport": "serial_port",
-        "port_path": "/dev/cu.PL2303G-USBtoUART11110",
-        "baud_rate": 9600
+        "port_path": "COM6",
+        "baud_rate": 9600,
+        "port_candidates": [
+          "COM3",
+          "COM5"
+        ]
       },
       "identity": {
         "contains_all": [
@@ -83,8 +91,11 @@
       "required": true,
       "transport_hint": {
         "transport": "serial_port",
-        "port_path": "/dev/cu.PL2303G-USBtoUART11130",
-        "baud_rate": 9600
+        "port_path": "COM3",
+        "baud_rate": 9600,
+        "port_candidates": [
+          "COM5"
+        ]
       },
       "identity": {
         "contains_all": [
@@ -100,8 +111,9 @@
       "required": false,
       "transport_hint": {
         "transport": "serial_port",
-        "port_path": "/dev/cu.usbserial-FTE86EB2",
-        "baud_rate": 9600
+        "port_path": "COM9",
+        "baud_rate": 9600,
+        "port_candidates": []
       }
     }
   ]
