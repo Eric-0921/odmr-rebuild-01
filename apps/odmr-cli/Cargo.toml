@@ -25,3 +25,6 @@ oe1022d-transport = { path = "../../crates/oe1022d-transport" }
 cni-laser-transport = { path = "../../crates/cni-laser-transport" }
 ctrlc = "3.4"
 device-transport = { path = "../../crates/device-transport" }
+axum = { version = "0.7", features = ["json", "ws"] }
+futures-util = "0.3"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }

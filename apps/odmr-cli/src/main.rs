@@ -8,13 +8,16 @@
 //!
 //! 这不是最终产品 CLI，但已经覆盖当前重建路线的核心 bring-up / runtime 链路。
 
+mod gui_bridge;
 mod hardware_profile_verify;
 mod hardware_smoke;
 mod hardware_state_snapshot;
 mod hardware_verify_mag_lock;
+mod live_bridge;
 mod run_audit_continuity;
 mod run_execute;
 
+use gui_bridge::run_gui_bridge_serve;
 use hardware_profile_verify::run_hardware_arm_pll_verify_state;
 use hardware_profile_verify::run_hardware_profile_verify;
 use hardware_smoke::run_hardware_smoke;
@@ -80,6 +83,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
         CliCommand::RunAuditContinuity { run_dir, out } => {
             run_audit_continuity(&run_dir, out.as_deref()).map(|_| ())
         }
+        CliCommand::GuiBridgeServe { bind } => run_gui_bridge_serve(&bind),
     }
 }
 
@@ -162,6 +166,9 @@ enum CliCommand {
         run_dir: PathBuf,
         out: Option<PathBuf>,
     },
+    GuiBridgeServe {
+        bind: String,
+    },
 }
 
 fn parse_command(args: &[String]) -> Result<CliCommand, String> {
@@ -173,6 +180,7 @@ fn parse_command(args: &[String]) -> Result<CliCommand, String> {
         Some("station") => parse_station_command(args),
         Some("hardware") => parse_hardware_command(args),
         Some("run") => parse_run_command(args),
+        Some("gui-bridge") => parse_gui_bridge_command(args),
         _ => Err(usage()),
     }
 }
@@ -199,6 +207,13 @@ fn parse_run_command(args: &[String]) -> Result<CliCommand, String> {
     match args.get(2).map(String::as_str) {
         Some("execute") => parse_run_execute(args),
         Some("audit-continuity") => parse_run_audit_continuity(args),
+        _ => Err(usage()),
+    }
+}
+
+fn parse_gui_bridge_command(args: &[String]) -> Result<CliCommand, String> {
+    match args.get(2).map(String::as_str) {
+        Some("serve") => parse_gui_bridge_serve(args),
         _ => Err(usage()),
     }
 }
@@ -576,6 +591,27 @@ fn parse_run_audit_continuity(args: &[String]) -> Result<CliCommand, String> {
     Ok(CliCommand::RunAuditContinuity { run_dir, out })
 }
 
+fn parse_gui_bridge_serve(args: &[String]) -> Result<CliCommand, String> {
+    let mut bind = "127.0.0.1:8787".to_string();
+    let mut index = 3_usize;
+
+    while index < args.len() {
+        match args[index].as_str() {
+            "--bind" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--bind 缺少地址参数".to_string());
+                };
+                bind = value.clone();
+                index += 2;
+            }
+            "--help" | "-h" => return Err(usage()),
+            other => return Err(format!("未知参数: {other}\n\n{}", usage())),
+        }
+    }
+
+    Ok(CliCommand::GuiBridgeServe { bind })
+}
+
 fn usage() -> String {
     [
         "用法:",
@@ -587,6 +623,7 @@ fn usage() -> String {
         "  odmr hardware verify-mag-lock --station <path> --calibration <path> --plan <path> [--out-dir <path>]",
         "  odmr run execute --station <path> --calibration <path> --plan <path> --smb-profile <path> --oe-profile <path> --laser-profile <path> [--out-dir <path>] [--artifact-mode <lightweight|debug>]",
         "  odmr run audit-continuity --run <run-dir> [--out <path>]",
+        "  odmr gui-bridge serve [--bind <127.0.0.1:8787>]",
         "",
         "示例:",
         "  odmr station verify --station configs/stations/lab_a.json",
@@ -599,6 +636,7 @@ fn usage() -> String {
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/manual",
         "  odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/x_axis_1d_bounce_15min.json --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_on_background.json --out-dir runs/x_axis_1d_bounce_15min --artifact-mode debug",
         "  odmr run audit-continuity --run runs/manual_live_recheck_20260612_retry2",
+        "  odmr gui-bridge serve --bind 127.0.0.1:8787",
     ]
     .join("\n")
 }
@@ -872,6 +910,24 @@ mod tests {
             CliCommand::RunAuditContinuity {
                 run_dir: PathBuf::from("runs/manual"),
                 out: Some(PathBuf::from("runs/manual/continuity_audit.json")),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_gui_bridge_serve_command() {
+        let args = vec![
+            "odmr".to_string(),
+            "gui-bridge".to_string(),
+            "serve".to_string(),
+            "--bind".to_string(),
+            "127.0.0.1:9001".to_string(),
+        ];
+
+        assert_eq!(
+            parse_command(&args).unwrap(),
+            CliCommand::GuiBridgeServe {
+                bind: "127.0.0.1:9001".to_string(),
             }
         );
     }

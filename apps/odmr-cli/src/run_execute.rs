@@ -109,6 +109,12 @@ fn run_interrupt_flag() -> Result<Arc<AtomicBool>, String> {
     Ok(RUN_INTERRUPT_FLAG.get().map(Arc::clone).unwrap_or(flag))
 }
 
+pub fn request_run_interrupt() -> Result<(), String> {
+    let flag = run_interrupt_flag()?;
+    flag.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
 fn check_interrupted(interrupt_flag: &Arc<AtomicBool>) -> Result<(), String> {
     if interrupt_flag.load(Ordering::SeqCst) {
         Err(USER_INTERRUPTED.to_string())
