@@ -12,10 +12,11 @@ from PySide6.QtGui import QAction, QDesktopServices
 from PySide6.QtNetwork import QAbstractSocket, QNetworkAccessManager, QNetworkReply, QNetworkRequest
 from PySide6.QtWebSockets import QWebSocket
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QApplication,
     QComboBox,
-    QFileDialog,
     QFormLayout,
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -28,14 +29,15 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
+    QScrollArea,
     QSpinBox,
     QDoubleSpinBox,
+    QSplitter,
     QStackedWidget,
     QStatusBar,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -245,15 +247,160 @@ class MainWindow(QMainWindow):
         self.recent_runs: list[dict[str, Any]] = []
         self.live_traces: dict[str, tuple[list[float], list[float]]] = {}
         self.curves: dict[str, Any] = {}
+        self.metric_labels: dict[str, QLabel] = {}
         self.service_boot_attempted = False
 
         self.setWindowTitle("ODMR GUI")
         self.resize(1600, 980)
+        self.setMinimumSize(1320, 860)
+        self._apply_style()
         self._build_ui()
         self._wire_signals()
         self.reload_config_lists()
         self.restore_draft()
         QTimer.singleShot(0, self.bootstrap_service)
+
+    def _apply_style(self) -> None:
+        self.setStyleSheet(
+            """
+            QMainWindow, QWidget {
+                background: #f4f6f8;
+                color: #16202a;
+                font-size: 13px;
+            }
+            QTabWidget::pane {
+                border: none;
+            }
+            QTabBar::tab {
+                background: #e8edf2;
+                border: 1px solid #d6dde5;
+                border-bottom: none;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                padding: 8px 18px;
+                min-width: 110px;
+                font-weight: 600;
+            }
+            QTabBar::tab:selected {
+                background: #ffffff;
+                color: #0b5cad;
+            }
+            QGroupBox {
+                background: #ffffff;
+                border: 1px solid #d7e0e8;
+                border-radius: 12px;
+                font-weight: 600;
+                margin-top: 14px;
+                padding-top: 14px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 14px;
+                padding: 0 6px;
+                color: #4a6178;
+            }
+            QLabel[role="muted"] {
+                color: #6c8298;
+                font-size: 12px;
+            }
+            QLabel[role="metricValue"] {
+                font-size: 22px;
+                font-weight: 700;
+                color: #13273a;
+            }
+            QLabel[role="metricTitle"] {
+                color: #6a8096;
+                font-size: 11px;
+                text-transform: uppercase;
+                font-weight: 700;
+            }
+            QFrame[card="true"] {
+                background: #ffffff;
+                border: 1px solid #d7e0e8;
+                border-radius: 12px;
+            }
+            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QPlainTextEdit, QListWidget, QTableWidget {
+                background: #fbfcfd;
+                border: 1px solid #ccd7e2;
+                border-radius: 8px;
+                padding: 6px 8px;
+            }
+            QPlainTextEdit {
+                padding: 10px;
+            }
+            QPushButton {
+                background: #edf3f8;
+                border: 1px solid #cfd9e3;
+                border-radius: 10px;
+                padding: 8px 14px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: #e3edf6;
+            }
+            QPushButton#primaryAction {
+                background: #0b74da;
+                color: white;
+                border-color: #0b74da;
+            }
+            QPushButton#primaryAction:hover {
+                background: #0868c2;
+            }
+            QPushButton#successAction {
+                background: #0aa84f;
+                color: white;
+                border-color: #0aa84f;
+            }
+            QPushButton#successAction:hover {
+                background: #099246;
+            }
+            QPushButton#warningAction {
+                background: #f28a18;
+                color: white;
+                border-color: #f28a18;
+            }
+            QPushButton#warningAction:hover {
+                background: #db7a11;
+            }
+            QListWidget::item {
+                padding: 6px 8px;
+                border-bottom: 1px solid #eef2f6;
+            }
+            QHeaderView::section {
+                background: #eef3f7;
+                border: none;
+                border-right: 1px solid #dde5ec;
+                border-bottom: 1px solid #dde5ec;
+                padding: 8px;
+                font-weight: 700;
+            }
+            """
+        )
+
+    def _make_metric_card(self, title: str, key: str, initial: str = "-") -> QFrame:
+        card = QFrame()
+        card.setProperty("card", True)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(4)
+        title_label = QLabel(title)
+        title_label.setProperty("role", "metricTitle")
+        value_label = QLabel(initial)
+        value_label.setProperty("role", "metricValue")
+        value_label.setWordWrap(True)
+        layout.addWidget(title_label)
+        layout.addWidget(value_label)
+        self.metric_labels[key] = value_label
+        return card
+
+    def _set_metric(self, key: str, value: str) -> None:
+        if key in self.metric_labels:
+            self.metric_labels[key].setText(value)
+
+    def _set_muted(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setProperty("role", "muted")
+        return label
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -274,25 +421,118 @@ class MainWindow(QMainWindow):
     def _build_setup_tab(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
 
-        config_group = QGroupBox("Config Selection")
+        action_strip = QFrame()
+        action_strip.setProperty("card", True)
+        action_layout = QHBoxLayout(action_strip)
+        action_layout.setContentsMargins(16, 14, 16, 14)
+        action_layout.setSpacing(10)
+
+        action_copy = QVBoxLayout()
+        action_copy.setSpacing(2)
+        title = QLabel("Run Setup")
+        title.setStyleSheet("font-size: 20px; font-weight: 700;")
+        subtitle = self._set_muted("先选配置，再只改高频字段。runtime 仍是唯一真相。")
+        action_copy.addWidget(title)
+        action_copy.addWidget(subtitle)
+        action_layout.addLayout(action_copy)
+        action_layout.addStretch(1)
+
+        self.verify_button = QPushButton("Verify Station")
+        self.verify_button.setObjectName("primaryAction")
+        self.snapshot_button = QPushButton("Snapshot")
+        self.start_button = QPushButton("Start Run")
+        self.start_button.setObjectName("successAction")
+        self.stop_button = QPushButton("Stop Run")
+        self.stop_button.setObjectName("warningAction")
+        self.open_button = QPushButton("Open Latest Artifacts")
+        self.reload_button = QPushButton("Reload Configs")
+        for button in [
+            self.verify_button,
+            self.snapshot_button,
+            self.start_button,
+            self.stop_button,
+            self.open_button,
+            self.reload_button,
+        ]:
+            action_layout.addWidget(button)
+        layout.addWidget(action_strip)
+
+        top_metrics = QHBoxLayout()
+        top_metrics.setSpacing(10)
+        top_metrics.addWidget(self._make_metric_card("Connection", "setup_connection"))
+        top_metrics.addWidget(self._make_metric_card("Runtime", "setup_runtime"))
+        top_metrics.addWidget(self._make_metric_card("Draft Points", "setup_points"))
+        top_metrics.addWidget(self._make_metric_card("Latest Artifacts", "setup_artifacts"))
+        layout.addLayout(top_metrics)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        content = QWidget()
+        content_layout = QHBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(12)
+
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        content_layout.addWidget(splitter)
+        scroll.setWidget(content)
+        layout.addWidget(scroll, 1)
+
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(12)
+
+        config_group = QGroupBox("Configuration")
         config_form = QFormLayout(config_group)
+        config_form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        config_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.station_combo = QComboBox()
         self.calibration_combo = QComboBox()
         self.plan_combo = QComboBox()
         self.smb_combo = QComboBox()
         self.oe_combo = QComboBox()
         self.laser_combo = QComboBox()
+        for combo in [
+            self.station_combo,
+            self.calibration_combo,
+            self.plan_combo,
+            self.smb_combo,
+            self.oe_combo,
+            self.laser_combo,
+        ]:
+            combo.setMinimumWidth(320)
         config_form.addRow("Station", self.station_combo)
         config_form.addRow("Calibration", self.calibration_combo)
         config_form.addRow("Plan Template", self.plan_combo)
         config_form.addRow("SMB Profile", self.smb_combo)
         config_form.addRow("OE Profile", self.oe_combo)
         config_form.addRow("Laser Profile", self.laser_combo)
-        layout.addWidget(config_group)
+        left_layout.addWidget(config_group)
 
-        runtime_group = QGroupBox("Common Run Fields")
-        runtime_form = QFormLayout(runtime_group)
+        config_note = QGroupBox("Current Context")
+        config_note_layout = QVBoxLayout(config_note)
+        config_note_layout.setSpacing(8)
+        config_note_layout.addWidget(self._set_muted("GUI 不回写源配置文件。"))
+        config_note_layout.addWidget(self._set_muted("只在启动 run 时提交完整 draft_plan。"))
+        config_note_layout.addWidget(self._set_muted("OE 仍只允许切 preset profile。"))
+        left_layout.addWidget(config_note)
+        left_layout.addStretch(1)
+
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(12)
+
+        runtime_group = QGroupBox("Run Draft")
+        runtime_layout = QGridLayout(runtime_group)
+        runtime_layout.setContentsMargins(16, 18, 16, 16)
+        runtime_layout.setHorizontalSpacing(14)
+        runtime_layout.setVerticalSpacing(10)
         self.run_id_edit = QLineEdit()
         self.operator_edit = QLineEdit()
         self.point_settle_spin = QSpinBox()
@@ -300,39 +540,52 @@ class MainWindow(QMainWindow):
         self.failure_policy_combo = QComboBox()
         self.failure_policy_combo.addItem("abort_run")
         self.failure_policy_combo.addItem("continue")
-        runtime_form.addRow("Run ID", self.run_id_edit)
-        runtime_form.addRow("Operator", self.operator_edit)
-        runtime_form.addRow("Point Settle (ms)", self.point_settle_spin)
-        runtime_form.addRow("Failure Policy", self.failure_policy_combo)
-        layout.addWidget(runtime_group)
+        runtime_layout.addWidget(self._set_muted("Run ID"), 0, 0)
+        runtime_layout.addWidget(self.run_id_edit, 1, 0)
+        runtime_layout.addWidget(self._set_muted("Operator"), 0, 1)
+        runtime_layout.addWidget(self.operator_edit, 1, 1)
+        runtime_layout.addWidget(self._set_muted("Point Settle (ms)"), 2, 0)
+        runtime_layout.addWidget(self.point_settle_spin, 3, 0)
+        runtime_layout.addWidget(self._set_muted("Failure Policy"), 2, 1)
+        runtime_layout.addWidget(self.failure_policy_combo, 3, 1)
 
-        quality_group = QGroupBox("Quality Thresholds")
-        quality_form = QFormLayout(quality_group)
+        runtime_layout.addWidget(self._set_muted("Min Frames"), 0, 2)
         self.min_frames_spin = QSpinBox()
         self.min_frames_spin.setRange(0, 1_000_000)
+        runtime_layout.addWidget(self.min_frames_spin, 1, 2)
+        runtime_layout.addWidget(self._set_muted("Max Timeout Count"), 0, 3)
         self.max_timeout_spin = QSpinBox()
         self.max_timeout_spin.setRange(0, 1_000_000)
+        runtime_layout.addWidget(self.max_timeout_spin, 1, 3)
+        runtime_layout.addWidget(self._set_muted("Max Duplicate Ratio"), 2, 2)
         self.max_duplicate_spin = QDoubleSpinBox()
         self.max_duplicate_spin.setRange(0.0, 1.0)
         self.max_duplicate_spin.setSingleStep(0.01)
+        runtime_layout.addWidget(self.max_duplicate_spin, 3, 2)
+        runtime_layout.addWidget(self._set_muted("Max Last Frame Age (ms)"), 2, 3)
         self.max_last_age_spin = QSpinBox()
         self.max_last_age_spin.setRange(0, 1_000_000)
-        quality_form.addRow("Min Frames", self.min_frames_spin)
-        quality_form.addRow("Max Timeout Count", self.max_timeout_spin)
-        quality_form.addRow("Max Duplicate Ratio", self.max_duplicate_spin)
-        quality_form.addRow("Max Last Frame Age (ms)", self.max_last_age_spin)
-        layout.addWidget(quality_group)
+        runtime_layout.addWidget(self.max_last_age_spin, 3, 3)
+        right_layout.addWidget(runtime_group)
 
-        point_group = QGroupBox("Point Source")
+        point_group = QGroupBox("Point Plan")
         point_layout = QVBoxLayout(point_group)
+        point_layout.setContentsMargins(16, 18, 16, 16)
+        point_layout.setSpacing(10)
+        point_header = QHBoxLayout()
+        point_header.addWidget(self._set_muted("Point Source Mode"))
         self.point_mode_combo = QComboBox()
         self.point_mode_combo.addItem("cartesian_grid", "cartesian_grid")
         self.point_mode_combo.addItem("explicit_points", "explicit_points")
-        point_layout.addWidget(self.point_mode_combo)
+        point_header.addStretch(1)
+        point_header.addWidget(self.point_mode_combo)
+        point_layout.addLayout(point_header)
         self.point_stack = QStackedWidget()
 
         grid_page = QWidget()
-        grid_form = QFormLayout(grid_page)
+        grid_form = QGridLayout(grid_page)
+        grid_form.setHorizontalSpacing(12)
+        grid_form.setVerticalSpacing(10)
         self.grid_x_edit = QLineEdit("0")
         self.grid_y_edit = QLineEdit("0")
         self.grid_z_edit = QLineEdit("0")
@@ -341,24 +594,39 @@ class MainWindow(QMainWindow):
         self.grid_cycle_combo.addItem("bounce_1d_x", "bounce_1d_x")
         self.grid_total_points_spin = QSpinBox()
         self.grid_total_points_spin.setRange(1, 10_000_000)
-        grid_form.addRow("X (comma-separated)", self.grid_x_edit)
-        grid_form.addRow("Y", self.grid_y_edit)
-        grid_form.addRow("Z", self.grid_z_edit)
-        grid_form.addRow("Cycle Mode", self.grid_cycle_combo)
-        grid_form.addRow("Fixed Total Points", self.grid_total_points_spin)
+        grid_form.addWidget(self._set_muted("X (comma-separated)"), 0, 0)
+        grid_form.addWidget(self.grid_x_edit, 1, 0, 1, 2)
+        grid_form.addWidget(self._set_muted("Y"), 2, 0)
+        grid_form.addWidget(self.grid_y_edit, 3, 0)
+        grid_form.addWidget(self._set_muted("Z"), 2, 1)
+        grid_form.addWidget(self.grid_z_edit, 3, 1)
+        grid_form.addWidget(self._set_muted("Cycle Mode"), 4, 0)
+        grid_form.addWidget(self.grid_cycle_combo, 5, 0)
+        grid_form.addWidget(self._set_muted("Fixed Total Points"), 4, 1)
+        grid_form.addWidget(self.grid_total_points_spin, 5, 1)
         self.point_stack.addWidget(grid_page)
 
         explicit_page = QWidget()
         explicit_layout = QVBoxLayout(explicit_page)
+        explicit_layout.setContentsMargins(0, 0, 0, 0)
+        explicit_layout.addWidget(self._set_muted("Explicit points JSON"))
         self.explicit_points_edit = QPlainTextEdit(pretty_json(DEFAULT_PLAN["points"]))
+        self.explicit_points_edit.setMinimumHeight(220)
         explicit_layout.addWidget(self.explicit_points_edit)
         self.point_stack.addWidget(explicit_page)
 
         point_layout.addWidget(self.point_stack)
-        layout.addWidget(point_group)
+        right_layout.addWidget(point_group)
 
         override_group = QGroupBox("High-Frequency Overrides")
-        override_grid = QGridLayout(override_group)
+        override_layout = QVBoxLayout(override_group)
+        override_layout.setContentsMargins(16, 18, 16, 16)
+        override_layout.setSpacing(10)
+        override_note = self._set_muted("只覆盖 sweep / laser 的少数字段；留空表示沿用 profile。")
+        override_layout.addWidget(override_note)
+        override_grid = QGridLayout()
+        override_grid.setHorizontalSpacing(12)
+        override_grid.setVerticalSpacing(10)
         self.smb_start_edit = QLineEdit()
         self.smb_stop_edit = QLineEdit()
         self.smb_step_edit = QLineEdit()
@@ -371,46 +639,56 @@ class MainWindow(QMainWindow):
         self.laser_power_edit = QLineEdit()
         self.laser_settle_edit = QLineEdit()
 
-        override_grid.addWidget(QLabel("SMB Start Hz"), 0, 0)
-        override_grid.addWidget(self.smb_start_edit, 0, 1)
-        override_grid.addWidget(QLabel("SMB Stop Hz"), 0, 2)
-        override_grid.addWidget(self.smb_stop_edit, 0, 3)
-        override_grid.addWidget(QLabel("SMB Step Hz"), 1, 0)
-        override_grid.addWidget(self.smb_step_edit, 1, 1)
-        override_grid.addWidget(QLabel("SMB Dwell ms"), 1, 2)
-        override_grid.addWidget(self.smb_dwell_edit, 1, 3)
-        override_grid.addWidget(QLabel("SMB Power dBm"), 2, 0)
-        override_grid.addWidget(self.smb_power_edit, 2, 1)
-        override_grid.addWidget(QLabel("Laser Mode"), 2, 2)
-        override_grid.addWidget(self.laser_mode_combo, 2, 3)
-        override_grid.addWidget(QLabel("Laser Power mW"), 3, 0)
-        override_grid.addWidget(self.laser_power_edit, 3, 1)
-        override_grid.addWidget(QLabel("Laser Settle ms"), 3, 2)
-        override_grid.addWidget(self.laser_settle_edit, 3, 3)
-        layout.addWidget(override_group)
+        override_grid.addWidget(self._set_muted("SMB Start Hz"), 0, 0)
+        override_grid.addWidget(self.smb_start_edit, 1, 0)
+        override_grid.addWidget(self._set_muted("SMB Stop Hz"), 0, 1)
+        override_grid.addWidget(self.smb_stop_edit, 1, 1)
+        override_grid.addWidget(self._set_muted("SMB Step Hz"), 2, 0)
+        override_grid.addWidget(self.smb_step_edit, 3, 0)
+        override_grid.addWidget(self._set_muted("SMB Dwell ms"), 2, 1)
+        override_grid.addWidget(self.smb_dwell_edit, 3, 1)
+        override_grid.addWidget(self._set_muted("SMB Power dBm"), 4, 0)
+        override_grid.addWidget(self.smb_power_edit, 5, 0)
+        override_grid.addWidget(self._set_muted("Laser Mode"), 4, 1)
+        override_grid.addWidget(self.laser_mode_combo, 5, 1)
+        override_grid.addWidget(self._set_muted("Laser Power mW"), 6, 0)
+        override_grid.addWidget(self.laser_power_edit, 7, 0)
+        override_grid.addWidget(self._set_muted("Laser Settle ms"), 6, 1)
+        override_grid.addWidget(self.laser_settle_edit, 7, 1)
+        override_layout.addLayout(override_grid)
+        right_layout.addWidget(override_group)
+        right_layout.addStretch(1)
 
-        buttons = QHBoxLayout()
-        self.verify_button = QPushButton("Verify Station")
-        self.snapshot_button = QPushButton("Snapshot")
-        self.start_button = QPushButton("Start Run")
-        self.stop_button = QPushButton("Stop Run")
-        self.open_button = QPushButton("Open Latest Artifacts")
-        self.reload_button = QPushButton("Reload Configs")
-        buttons.addWidget(self.verify_button)
-        buttons.addWidget(self.snapshot_button)
-        buttons.addWidget(self.start_button)
-        buttons.addWidget(self.stop_button)
-        buttons.addWidget(self.open_button)
-        buttons.addWidget(self.reload_button)
-        layout.addLayout(buttons)
-        layout.addStretch(1)
+        splitter.addWidget(left_panel)
+        splitter.addWidget(right_panel)
+        splitter.setSizes([360, 940])
         return page
 
     def _build_live_tab(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
-        status_group = QGroupBox("Runtime State")
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        title_row = QFrame()
+        title_row.setProperty("card", True)
+        title_layout = QHBoxLayout(title_row)
+        title_layout.setContentsMargins(16, 14, 16, 14)
+        title_copy = QVBoxLayout()
+        live_title = QLabel("Live Monitor")
+        live_title.setStyleSheet("font-size: 20px; font-weight: 700;")
+        live_subtitle = self._set_muted("只显示 runtime 广播的真实 readback、collector 健康和最近窗口。")
+        title_copy.addWidget(live_title)
+        title_copy.addWidget(live_subtitle)
+        title_layout.addLayout(title_copy)
+        title_layout.addStretch(1)
+        layout.addWidget(title_row)
+
+        status_group = QGroupBox("Runtime Summary")
         status_grid = QGridLayout(status_group)
+        status_grid.setContentsMargins(16, 18, 16, 16)
+        status_grid.setHorizontalSpacing(10)
+        status_grid.setVerticalSpacing(10)
         self.connection_label = QLabel("Disconnected")
         self.run_state_label = QLabel("-")
         self.point_label = QLabel("-")
@@ -422,26 +700,41 @@ class MainWindow(QMainWindow):
         self.timeout_label = QLabel("-")
         self.duplicate_label = QLabel("-")
         self.frame_rate_label = QLabel("-")
-        fields = [
+        live_cards = [
             ("Connection", self.connection_label),
             ("Run State", self.run_state_label),
-            ("Current Point", self.point_label),
             ("Progress", self.progress_label),
             ("ETA", self.eta_label),
+            ("Collector", self.collector_label),
+            ("Frame Rate", self.frame_rate_label),
+            ("Current Point", self.point_label),
             ("Target B (nT)", self.target_label),
             ("Measured Current (A)", self.measured_label),
-            ("Collector", self.collector_label),
             ("Timeouts", self.timeout_label),
             ("Duplicates", self.duplicate_label),
-            ("Frame Rate", self.frame_rate_label),
         ]
-        for index, (label, widget) in enumerate(fields):
-            status_grid.addWidget(QLabel(label), index // 2, (index % 2) * 2)
-            status_grid.addWidget(widget, index // 2, (index % 2) * 2 + 1)
+        for index, (label_text, value_label) in enumerate(live_cards):
+            value_label.setProperty("role", "metricValue")
+            value_label.setStyleSheet("font-size: 18px;")
+            card = QFrame()
+            card.setProperty("card", True)
+            card_layout = QVBoxLayout(card)
+            card_layout.setContentsMargins(12, 10, 12, 10)
+            title_label = QLabel(label_text)
+            title_label.setProperty("role", "metricTitle")
+            card_layout.addWidget(title_label)
+            card_layout.addWidget(value_label)
+            status_grid.addWidget(card, index // 4, index % 4)
         layout.addWidget(status_group)
+
+        body_splitter = QSplitter(Qt.Orientation.Horizontal)
+        body_splitter.setChildrenCollapsible(False)
 
         plots_group = QGroupBox("Live Traces")
         plots_layout = QGridLayout(plots_group)
+        plots_layout.setContentsMargins(14, 18, 14, 14)
+        plots_layout.setHorizontalSpacing(10)
+        plots_layout.setVerticalSpacing(10)
         pg.setConfigOptions(antialias=False)
         for index, field in enumerate(TRACE_FIELDS):
             plot = pg.PlotWidget()
@@ -449,21 +742,43 @@ class MainWindow(QMainWindow):
             plot.showGrid(x=True, y=True, alpha=0.2)
             plot.setLabel("bottom", "Seconds")
             plot.setLabel("left", field)
+            plot.setMinimumHeight(180)
             curve = plot.plot(pen=pg.mkPen(width=1.5, color=(20, 80 + index * 30, 160)))
             self.curves[field] = curve
             plots_layout.addWidget(plot, index // 2, index % 2)
-        layout.addWidget(plots_group, 1)
+        body_splitter.addWidget(plots_group)
 
         events_group = QGroupBox("Recent Events")
         events_layout = QVBoxLayout(events_group)
+        events_layout.setContentsMargins(14, 18, 14, 14)
         self.event_list = QListWidget()
+        self.event_list.setMinimumWidth(340)
         events_layout.addWidget(self.event_list)
-        layout.addWidget(events_group, 1)
+        body_splitter.addWidget(events_group)
+        body_splitter.setSizes([1080, 360])
+        layout.addWidget(body_splitter, 1)
         return page
 
     def _build_recent_runs_tab(self) -> QWidget:
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
+
+        header_card = QFrame()
+        header_card.setProperty("card", True)
+        header_layout = QHBoxLayout(header_card)
+        header_layout.setContentsMargins(16, 14, 16, 14)
+        header_copy = QVBoxLayout()
+        recent_title = QLabel("Recent Runs")
+        recent_title.setStyleSheet("font-size: 20px; font-weight: 700;")
+        recent_subtitle = self._set_muted("只做目录入口，不在 GUI 内做 replay 和复杂回放。")
+        header_copy.addWidget(recent_title)
+        header_copy.addWidget(recent_subtitle)
+        header_layout.addLayout(header_copy)
+        header_layout.addStretch(1)
+        layout.addWidget(header_card)
+
         top = QHBoxLayout()
         self.refresh_recent_button = QPushButton("Refresh")
         self.open_selected_run_button = QPushButton("Open Selected")
@@ -474,6 +789,11 @@ class MainWindow(QMainWindow):
 
         self.recent_runs_table = QTableWidget(0, 4)
         self.recent_runs_table.setHorizontalHeaderLabels(["Run ID", "Status", "Started", "Output Dir"])
+        self.recent_runs_table.setAlternatingRowColors(True)
+        self.recent_runs_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.recent_runs_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.recent_runs_table.verticalHeader().setVisible(False)
+        self.recent_runs_table.setWordWrap(False)
         header = self.recent_runs_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
@@ -605,6 +925,7 @@ class MainWindow(QMainWindow):
     def restore_draft(self) -> None:
         draft = self.draft_store.load()
         if not draft:
+            self.update_setup_summary()
             return
         self.restore_path_selections(draft.get("paths", {}))
         self.run_id_edit.setText(draft.get("run_id", ""))
@@ -635,6 +956,7 @@ class MainWindow(QMainWindow):
         self.laser_mode_combo.setCurrentIndex(max(0, self.laser_mode_combo.findData(draft.get("laser_mode", ""))))
         self.laser_power_edit.setText(draft.get("laser_power_mw", ""))
         self.laser_settle_edit.setText(draft.get("laser_settle_ms", ""))
+        self.update_setup_summary()
 
     def save_draft(self) -> None:
         payload = {
@@ -668,6 +990,7 @@ class MainWindow(QMainWindow):
             "laser_settle_ms": self.laser_settle_edit.text(),
         }
         self.draft_store.save(payload)
+        self.update_setup_summary()
 
     def load_plan_template(self) -> None:
         path = self.plan_combo.currentData()
@@ -703,6 +1026,7 @@ class MainWindow(QMainWindow):
             self.point_mode_combo.setCurrentIndex(1)
             self.explicit_points_edit.setPlainText(pretty_json(self.base_plan.get("points", [])))
         self.save_draft()
+        self.update_setup_summary()
 
     def on_point_mode_changed(self) -> None:
         self.point_stack.setCurrentIndex(0 if self.point_mode_combo.currentData() == "cartesian_grid" else 1)
@@ -810,6 +1134,27 @@ class MainWindow(QMainWindow):
             "laser_override": laser_override or None,
         }
 
+    def estimate_draft_points(self) -> str:
+        if self.point_mode_combo.currentData() == "cartesian_grid":
+            return str(self.grid_total_points_spin.value())
+        try:
+            points = json.loads(self.explicit_points_edit.toPlainText())
+            if isinstance(points, list):
+                return str(len(points))
+        except Exception:
+            return "invalid"
+        return "-"
+
+    def update_setup_summary(self) -> None:
+        connection = "Connected" if self.service_status else "Disconnected"
+        runtime = self.service_status.get("service_state", "idle") if self.service_status else "offline"
+        artifacts = self.latest_output_dir()
+        artifact_text = Path(artifacts).name if artifacts else "none"
+        self._set_metric("setup_connection", connection)
+        self._set_metric("setup_runtime", runtime)
+        self._set_metric("setup_points", self.estimate_draft_points())
+        self._set_metric("setup_artifacts", artifact_text)
+
     def on_service_status(self, payload: dict[str, Any]) -> None:
         self.service_status = payload
         self.connection_label.setText("Connected")
@@ -819,6 +1164,7 @@ class MainWindow(QMainWindow):
         self.client.connect_live()
         self.update_button_state(active_run_id is not None)
         self.on_recent_runs(payload.get("recent_runs", []))
+        self.update_setup_summary()
 
     def on_recent_runs(self, runs: list[dict[str, Any]]) -> None:
         self.recent_runs = runs
@@ -828,6 +1174,7 @@ class MainWindow(QMainWindow):
             self.recent_runs_table.setItem(row, 1, QTableWidgetItem(run.get("status", "")))
             self.recent_runs_table.setItem(row, 2, QTableWidgetItem(run.get("started_at", "")))
             self.recent_runs_table.setItem(row, 3, QTableWidgetItem(run.get("output_dir", "")))
+        self.update_setup_summary()
 
     def on_verify_finished(self, payload: dict[str, Any]) -> None:
         self.status_bar.showMessage(f"Station verify saved to {payload.get('snapshot_path', '')}")
@@ -867,6 +1214,7 @@ class MainWindow(QMainWindow):
         if op != "status":
             self.show_error(message)
         self.update_button_state(False)
+        self.update_setup_summary()
 
     def on_live_message(self, payload: dict[str, Any]) -> None:
         event_type = payload.get("type")
@@ -874,12 +1222,14 @@ class MainWindow(QMainWindow):
         if event_type == "service_status":
             self.service_status = data
             self.update_button_state(bool(data.get("active_run_id")))
+            self.update_setup_summary()
         elif event_type in {"run_state", "run_finished"}:
             self.run_state_label.setText(data.get("status", "-"))
             if event_type == "run_finished":
                 self.update_button_state(False)
                 self.client.fetch_status()
                 self.client.fetch_recent_runs()
+            self.update_setup_summary()
         elif event_type == "point_progress":
             current = data.get("current_point_id") or "-"
             self.point_label.setText(current)
