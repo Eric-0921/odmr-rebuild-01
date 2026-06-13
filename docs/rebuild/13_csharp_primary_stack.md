@@ -4,6 +4,7 @@
 
 当前实验主链路的 RF sweep window、point device context 和暂缓 live frontend 边界见
 [`14_experiment_reliability_without_live_frontend.md`](14_experiment_reliability_without_live_frontend.md)。
+Rust 归档退出边界见 [`15_rust_archive_exit.md`](15_rust_archive_exit.md)。
 
 ## 主栈
 

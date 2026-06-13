@@ -1,3 +1,8 @@
+# Archive-only Rust workspace.
+# The Windows C# stack under tools/win-csharp is the current experiment runtime,
+# artifact checker, and continuity audit path. Keep this workspace for historical
+# reference and command-catalog provenance only; do not use it for daily runs.
+
 [workspace]
 members = [
     "crates/smb100a-commands",

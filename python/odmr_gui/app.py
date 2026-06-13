@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -214,6 +215,11 @@ class RuntimeProcess(QObject):
 
     def ensure_running(self) -> None:
         if self.process.state() != QProcess.ProcessState.NotRunning:
+            return
+        if os.environ.get("ODMR_ENABLE_LEGACY_RUST_GUI") != "1":
+            self.log_message.emit(
+                "Legacy Rust gui-bridge is archived. Set ODMR_ENABLE_LEGACY_RUST_GUI=1 only for historical debugging."
+            )
             return
         binary = WORKSPACE_ROOT / "target" / "debug" / "odmr"
         if binary.exists():

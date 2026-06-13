@@ -1,155 +1,115 @@
 # Station Verify 与真机连通清单
 
-本文只服务当前阶段目标：
+本文只服务当前 Windows C# 主栈目标：
 
-- 用 `odmr-cli` 跑通 `station verify`
-- 对 4 类设备做最小真机连通验证准备
-- 用 `hardware smoke` 跑通 `RF + Mag + OE` 核心链路，`Laser` 只做 `OFF` 验证
+- 用 C# probe 跑通 4 类设备最小真机连通验证
+- 用 C# `run-resolve` 检查 JSON 配置
+- 用 C# `run-execute` 跑通 `RF + Mag + OE + Laser background` 核心链路
+- 用 C# `artifact-check` 和 `audit-continuity` 做离线审查
 
 当前已经真机验证过的命令和链路汇总见：
 
 - `08_verified_command_and_runtime_baseline.md`
+- `13_csharp_primary_stack.md`
+- `14_experiment_reliability_without_live_frontend.md`
 
 它不是 run launcher，也不是 runtime checklist。
 
 ## 当前命令
 
-```bash
-cargo run -p odmr-cli -- station verify --station configs/stations/lab_a.json
+```powershell
+dotnet build tools/win-csharp/Odmr.Win.sln
 
-cargo run -p odmr-cli -- \
-  station verify \
-  --station configs/stations/lab_a.json \
-  --out out/station_snapshot.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- visa-list
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-idn --resource ASRL8::INSTR --baud 921600
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 
-cargo run -p odmr-cli -- \
-  hardware smoke \
-  --station configs/stations/lab_a.json \
-  --out-dir out/hardware_smoke/manual
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json
 
-cargo run -p odmr-cli -- \
-  run execute \
-  --station configs/stations/lab_a.json \
-  --calibration configs/calibrations/main.json \
-  --plan configs/plans/x_axis_1d_bounce_15min.json \
-  --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json \
-  --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json \
-  --laser-profile configs/profiles/cni_laser_run_on_background.json \
-  --out-dir runs/x_axis_1d_bounce_15min
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json --out-dir runs/win_csharp_manual_minimal
 
-cargo run -p odmr-cli -- \
-  run execute \
-  --station configs/stations/lab_a.json \
-  --calibration configs/calibrations/main.json \
-  --plan configs/plans/minimal_3point_runtime.json \
-  --smb-profile configs/profiles/smb100a_run_pll_default.json \
-  --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json \
-  --laser-profile configs/profiles/cni_laser_run_on_background.json \
-  --out-dir runs/manual
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- artifact-check --run runs/win_csharp_manual_minimal
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run runs/win_csharp_manual_minimal --out runs/win_csharp_manual_minimal/continuity_audit.json
 ```
 
 输出行为：
 
-- 不带 `--out`：直接把 `station snapshot` 打到 stdout
-- 带 `--out`：把 `station snapshot` 写到文件
+- probes 直接输出设备身份、连接和最小状态
+- `run-execute` 写出 snapshots、manifest、events、raw、frames.idx、segments、points、quality、device_state、summary
+- `artifact-check` 和 `audit-continuity` 只读 artifact，不碰设备
 
 串口路径规则：
 
-- `station.json` 里的串口路径只当 hint，不当真值
-- `station verify` / `run execute` 每次都会先枚举当前串口池
-- hint 只用于候选排序，不再作为“先直连再回退”的真值
-- runtime 会按设备类型逐个发送 probe 指令完成 identity-first 认领
-- 命中后 snapshot 里会写出这次实际绑定到的端口
-- 真机 run 应优先复用这次实际绑定结果，而不是继续相信旧的静态 hint
+- 当前 Windows 实验机固定事实是：OE `ASRL8::INSTR`，SMB `169.254.2.20:5025`，M8812 `COM4/COM6/COM3`，Laser `COM9`
+- `station.json` 保存这些事实和 identity 条件
+- 真机 run 的 provenance 来自 snapshots、`device_state.jsonl`、segments/raw/frame index 和离线审查
+- 端口变化时先跑 C# probes，不回到旧 Rust `station verify`
 
-## station verify 当前做什么
+## C# probes 当前做什么
 
 ### SMB100A
 
-- 使用 `tcp_socket` hint
-- 建连到 `host:port`
+- 使用 Raw TCP 5025 建连到 `host:port`
 - 发送 `*IDN?`
-- 在 smoke 中继续发送：
-  - `SYST:ERR?`
-  - `OUTP?`
-  - `FREQ?`
-  - `POW?`
-  - `SWE:FREQ:STEP?`
-  - `SWE:FREQ:DWEL?`
-- 用 `identity.contains_all` 或 `identity.exact` 校验身份
+- 发送 `SYST:ERR?`
+- 发送 `OUTP?`
 
 ### OE1022D
 
-- 扫描当前串口候选，hint 只用于排序
-- 发送 `*IDN?`
-- 在 smoke 中执行：
-  - `port.clear(Input)`
-  - `RALL?`
-- 校验身份
+- 通过 NI-VISA 打开 `ASRL8::INSTR`
+- `oe-idn` 发送 `*IDN?` 并校验身份
+- `oe-rall` 用冻结热路径做定长稳定性采集
 
 ### M8812
 
-- 扫描当前串口候选，hint 只用于排序
-- 发送 `*IDN?`
-- 在 smoke 中逐轴执行：
+- 使用 `COM4/COM6/COM3`
+- 每轴执行：
+  - `*IDN?`
   - `SYST:REM`
   - `CURR 0.00000`
   - `OUTP 0`
   - `MEAS:CURR?`
-  - `CURR 0.01000`
-  - `OUTP 1`
-  - `MEAS:CURR?`
-  - `OUTP 0`
-  - `CURR 0.00000`
   - `SYST:LOC`
 - 严格校验 SN
+- probe 不设置非零电流，不开启输出
 
 ### CNI Laser
 
-- 扫描当前串口候选，hint 只用于排序
-- 发送 `Laser Off` 帧
+- 使用 `COM9`
+- `laser-probe --off-only` 只发送 `Laser Off` 帧
 - 读取固定长度 echo
 - 用 echo 作为第一版最小验证
 
-## station verify 当前不做什么
+## C# probes 当前不做什么
 
 - 不做网络扫描
 - 不做 preflight
 - 不做 error queue drain
-- 不做 output 状态校验
-- 不做 cleanup 编排
+- 不做推断式端口发现
+- 不开启 laser
+- 不启动 OE 常驻 RALL
 
 注意：
 
-- station verify 现在已经做“当前串口池内的自动认领”
-- 它仍然不做的是更大范围的推断式 discover、网络侧自动摸索和运行期 cleanup
+- probes 是连接事实验证，不是完整实验。
+- 完整实验链路由 `run-execute` 验证。
 
-这些是下一阶段工作，不属于当前最小设备连接链。
+## C# runtime 当前做什么
 
-## hardware smoke 当前做什么
-
-- 先执行一次 `station verify`
-- `SMB100A` 只做身份、错误队列、输出关闭态和关键 readback
-- `mag_x / mag_y / mag_z` 逐轴执行 `10mA` 微测并强制 cleanup
-- `OE1022D` 只做单次 `RALL?`
-- `CNI Laser` 只做 `off` 帧和 echo 验证
-- point / step 不参与采集线程生命周期
-
-固定目标不是“开始实验”，而是把连接参数、终止符、超时、回读和 cleanup 路径全部打实。
-
-## 最小 runtime 当前做什么
-
-- 先执行 `station verify`
 - 加载 `calibration`
 - 做一次 `Maynuo baseline lock`
 - 启动 run 级单 reader `RALL?` collector
 - 逐 point 执行：
   - `target_b_nt -> calibration -> target_current_a`
-  - `SMB100A` sweep 配置
+  - `SMB100A` 在 CW 状态下配置 sweep
+  - `segment_start` 后才切 `FREQ:MODE SWE` 并执行 `SWE:FREQ:EXEC`
   - `SWE:FREQ:EXEC + *OPC?`
-  - 基于 `sweep_started/sweep_completed` 的 segment 边界记录
+  - sweep 完成后回到 `FREQ:MODE CW + FREQ start_hz`
+  - segment 覆盖真实 RF exposure window
   - 再按 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切 point 窗口
-  - 最小 `RALL` 字段解析
+  - 写 `device_state.jsonl` 绑定 intended/measured/current/sweep/RF exposure/segment
 - cleanup 后确认：
   - `OUTP? -> 0`
   - `FREQ:MODE? -> CW`
@@ -157,21 +117,18 @@ cargo run -p odmr-cli -- \
 
 当前代码已经切到的新基线：
 
-- collector 不是“设备一连上就启动”，而是 `run execute` 启动后才创建
+- collector 不是“设备一连上就启动”，而是 C# `run-execute` 启动后才创建
 - point 语义已经改成 `1 point = 1 sweep`
 - `*OPC?` 已在 rebuild 真机短 run 中被证伪：它会过早返回，不能单独当 point 结束信号
 - runtime 现已改成 `*OPC?` + sweep duration fallback
-- 程序结束时 RF output 与 RF frequency sweep state 会一起退出
-
-还未在本轮 rebuild 真机重验的部分：
-
-- `cartesian_grid` 1D X 轴往返长跑的 15 分钟 acceptance
+- 程序结束时 RF output 与 RF frequency sweep state 会退出
+- 15 分钟 C# laser background run 已通过：`21/21 points`，`timeouts=0`，`raw_len_bad=0`，`delta_gt1=0`，C# audit `continuous`
 
 ## 实验室前准备
 
 在去实验室前，先完成这些本地动作：
 
-1. `cargo test --workspace`
+1. `dotnet build tools/win-csharp/Odmr.Win.sln`
 2. 优先使用 `configs/stations/lab_a.json`
 3. 确认其中的 `host / port_path / SN` 仍然匹配你当前实验室真实值
 4. 明确哪些设备这次是 required，哪些是 optional
@@ -259,18 +216,23 @@ cargo run -p odmr-cli -- \
 至少要留下：
 
 - 你实际使用的 `station.json`
-- `station_snapshot.json`
-- `hardware_smoke_events.jsonl`
-- `hardware_smoke_command_audit.jsonl`
+- C# probe stdout 或保存的日志
+- `run-execute` 输出目录
+- snapshots
+- `device_state.jsonl`
+- `artifact-check` 输出
+- `continuity_audit.json`
 - 每台设备的观察到的身份字符串或 echo
-- 如果失败，记录失败设备、hint、错误信息
+- 如果失败，记录失败设备、连接事实、错误信息
 
-## 下一阶段入口
+## 进入实验采集的条件
 
 当以下条件都满足时，再进入 runtime：
 
 - 4 类设备的最小连接路径都被真机验证过
-- `station verify` 能稳定输出 snapshot
-- 站点配置里的 hint 和 identity 规则不再混乱
+- `run-resolve` 能解析目标 plan
+- `run-execute` minimal 3-point 通过
+- `artifact-check` 通过
+- `audit-continuity` 返回 `continuous`
 
-在这之前，不要急着写 point loop 或 collector runtime。
+在这之前，不要急着改 point loop 或 collector runtime。
