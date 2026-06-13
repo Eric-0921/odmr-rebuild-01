@@ -88,6 +88,25 @@ public sealed record SmbSweepSpec(
         3.0,
         true);
 
+    public SmbSweepSpec WithPowerDbm(double powerDbm) => this with { PowerDbm = powerDbm };
+
+    public string[] ToCommands() =>
+    [
+        Smb100aCommands.FrequencyModeSweep,
+        $"POW {PowerDbm}dBm",
+        $"FREQ:STAR {StartHz}Hz",
+        $"FREQ:STOP {StopHz}Hz",
+        $"SWE:FREQ:STEP {StepHz}Hz",
+        $"SWE:FREQ:DWEL {DwellMs}ms",
+        $"SWE:MODE {SweepMode}",
+        $"SWE:SPAC {Spacing}",
+        $"SWE:SHAP {Shape}",
+        $"TRIG:FSW:SOUR {TriggerSource}",
+        $"SWE:OVOL:STAR {OutputVoltageStartV}",
+        $"SWE:OVOL:STOP {OutputVoltageStopV}",
+        RfOutputEnabled ? Smb100aCommands.OutputOn : Smb100aCommands.OutputOff
+    ];
+
     [JsonPropertyName("sweep_points")]
     public long SweepPoints => Math.Abs(StopHz - StartHz) / StepHz + 1;
 
@@ -229,15 +248,21 @@ public sealed class Smb100aSession : IDisposable
 
     public void ConfigureDefaultSweep(int settleMs)
     {
-        foreach (var command in Smb100aCommands.DefaultSweepProfile)
+        ConfigureSweep(SmbSweepSpec.Default, settleMs);
+    }
+
+    public void ConfigureSweep(SmbSweepSpec spec, int settleMs)
+    {
+        foreach (var command in spec.ToCommands())
         {
             SendAndCheck(command, settleMs);
         }
 
         var output = Query(Smb100aCommands.QueryOutput);
-        if (output.Trim() != "1")
+        var expectedOutput = spec.RfOutputEnabled ? "1" : "0";
+        if (output.Trim() != expectedOutput)
         {
-            throw new IOException($"SMB100A output state mismatch: expected 1, observed {output}");
+            throw new IOException($"SMB100A output state mismatch: expected {expectedOutput}, observed {output}");
         }
 
         var frequencyMode = Query(Smb100aCommands.QueryFrequencyMode);
@@ -249,7 +274,11 @@ public sealed class Smb100aSession : IDisposable
 
     public SmbSweepObservation ExecuteDefaultSweep()
     {
-        var spec = SmbSweepSpec.Default;
+        return ExecuteSweep(SmbSweepSpec.Default);
+    }
+
+    public SmbSweepObservation ExecuteSweep(SmbSweepSpec spec)
+    {
         var started = Stopwatch.GetTimestamp();
         Send(Smb100aCommands.ExecuteFrequencySweep);
         var response = Query(Smb100aCommands.QueryOperationComplete);

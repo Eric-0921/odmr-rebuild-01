@@ -102,6 +102,72 @@ public sealed record SegmentRecord(
     [property: JsonPropertyName("frame_seq_start")] long? FrameSeqStart,
     [property: JsonPropertyName("frame_seq_end")] long? FrameSeqEnd);
 
+public sealed record BaselineAxisSnapshot(
+    [property: JsonPropertyName("axis")] string Axis,
+    [property: JsonPropertyName("zero_offset_setpoint_a")] double ZeroOffsetSetpointA,
+    [property: JsonPropertyName("zero_offset_measured_samples_a")] IReadOnlyList<double> ZeroOffsetMeasuredSamplesA,
+    [property: JsonPropertyName("locked_zero_offset_current_a")] double? LockedZeroOffsetCurrentA);
+
+public sealed record BaselineSnapshot(
+    [property: JsonPropertyName("schema_version")] int SchemaVersion,
+    [property: JsonPropertyName("mode")] string Mode,
+    [property: JsonPropertyName("baseline_locked_at")] string BaselineLockedAt,
+    [property: JsonPropertyName("settle_ms")] int SettleMs,
+    [property: JsonPropertyName("readback_samples")] int ReadbackSamples,
+    [property: JsonPropertyName("settle_tolerance_a")] double SettleToleranceA,
+    [property: JsonPropertyName("axes")] IReadOnlyList<BaselineAxisSnapshot> Axes);
+
+public sealed record SmbSweepRecord(
+    [property: JsonPropertyName("start_hz")] long StartHz,
+    [property: JsonPropertyName("stop_hz")] long StopHz,
+    [property: JsonPropertyName("step_hz")] long StepHz,
+    [property: JsonPropertyName("dwell_ms")] int DwellMs,
+    [property: JsonPropertyName("power_dbm")] double PowerDbm,
+    [property: JsonPropertyName("sweep_mode")] string SweepMode,
+    [property: JsonPropertyName("spacing")] string Spacing,
+    [property: JsonPropertyName("shape")] string Shape,
+    [property: JsonPropertyName("trigger_source")] string TriggerSource,
+    [property: JsonPropertyName("output_voltage_start_v")] double OutputVoltageStartV,
+    [property: JsonPropertyName("output_voltage_stop_v")] double OutputVoltageStopV,
+    [property: JsonPropertyName("rf_output_enabled")] bool RfOutputEnabled);
+
+public sealed record SettleRecord(
+    [property: JsonPropertyName("policy")] string Policy,
+    [property: JsonPropertyName("started_at")] string StartedAt,
+    [property: JsonPropertyName("settled_at")] string SettledAt,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("measured_current_a")] IReadOnlyList<double> MeasuredCurrentA);
+
+public sealed record PointRecord(
+    [property: JsonPropertyName("schema_version")] int SchemaVersion,
+    [property: JsonPropertyName("run_id")] string RunId,
+    [property: JsonPropertyName("point_id")] string PointId,
+    [property: JsonPropertyName("index")] int Index,
+    [property: JsonPropertyName("target_b_nt")] IReadOnlyList<double> TargetBNt,
+    [property: JsonPropertyName("baseline_current_a")] IReadOnlyList<double> BaselineCurrentA,
+    [property: JsonPropertyName("calibrated_delta_current_a")] IReadOnlyList<double> CalibratedDeltaCurrentA,
+    [property: JsonPropertyName("target_current_a")] IReadOnlyList<double> TargetCurrentA,
+    [property: JsonPropertyName("rf")] SmbSweepRecord Rf,
+    [property: JsonPropertyName("settle")] SettleRecord Settle);
+
+public sealed record QualityRecord(
+    [property: JsonPropertyName("schema_version")] int SchemaVersion,
+    [property: JsonPropertyName("run_id")] string RunId,
+    [property: JsonPropertyName("point_id")] string PointId,
+    [property: JsonPropertyName("segment_id")] string SegmentId,
+    [property: JsonPropertyName("frames_total")] long FramesTotal,
+    [property: JsonPropertyName("frames_unique")] long FramesUnique,
+    [property: JsonPropertyName("duplicate_count")] long DuplicateCount,
+    [property: JsonPropertyName("duplicate_ratio")] double DuplicateRatio,
+    [property: JsonPropertyName("timeout_count")] long TimeoutCount,
+    [property: JsonPropertyName("last_frame_age_ms")] long LastFrameAgeMs,
+    [property: JsonPropertyName("min_frames")] int MinFrames,
+    [property: JsonPropertyName("estimated_frames_expected")] long? EstimatedFramesExpected,
+    [property: JsonPropertyName("frame_coverage_ratio")] double? FrameCoverageRatio,
+    [property: JsonPropertyName("collector_health")] string CollectorHealth,
+    [property: JsonPropertyName("timeout_budget_remaining")] long TimeoutBudgetRemaining,
+    [property: JsonPropertyName("quality_status")] string QualityStatus);
+
 public static class RallArtifactWriter
 {
     public static void WriteFrameIndexRecord(
@@ -161,6 +227,11 @@ public static class RallArtifactWriter
     public static void AppendSegmentRecord(string segmentsPath, SegmentRecord segment)
     {
         File.AppendAllText(segmentsPath, JsonSerializer.Serialize(segment, JsonOptions.Default) + Environment.NewLine, new UTF8Encoding(false));
+    }
+
+    public static void AppendJsonl<T>(string path, T record)
+    {
+        File.AppendAllText(path, JsonSerializer.Serialize(record, JsonOptions.Default) + Environment.NewLine, new UTF8Encoding(false));
     }
 }
 

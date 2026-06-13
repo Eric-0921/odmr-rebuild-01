@@ -30,6 +30,7 @@ static int Run(string[] args)
             "oe-rall" => OeRall(options),
             "smb-probe" => SmbProbe(options),
             "sweep-only-run" => SweepOnlyRunCommand(options),
+            "minimal-3point-run" => Minimal3PointRunCommand(options),
             "m8812-probe" => M8812Probe(options),
             "laser-probe" => LaserProbe(options),
             _ => Fail($"unknown command: {command}")
@@ -144,6 +145,22 @@ static int SweepOnlyRunCommand(IReadOnlyDictionary<string, string> options)
 
     var summary = SweepOnlyRun.Execute(new SweepOnlyRunOptions(resourceName, baudRate, host, port, repeat, outDir));
     Console.WriteLine($"sweep-only-run done: repeat={summary.RepeatCount}, frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
+    return summary.TimeoutCount == 0 && summary.RawLenBadCount == 0 && summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
+}
+
+static int Minimal3PointRunCommand(IReadOnlyDictionary<string, string> options)
+{
+    var resourceName = GetOption(options, "resource", Oe1022dDefaults.Resource);
+    var baudRate = GetIntOption(options, "baud", Oe1022dDefaults.BaudRate);
+    var host = GetOption(options, "host", Smb100aDefaults.Host);
+    var port = GetIntOption(options, "port", Smb100aDefaults.Port);
+    var xPort = GetOption(options, "x", M8812Defaults.XPort);
+    var yPort = GetOption(options, "y", M8812Defaults.YPort);
+    var zPort = GetOption(options, "z", M8812Defaults.ZPort);
+    var outDir = GetRequiredOption(options, "out-dir");
+
+    var summary = Minimal3PointRun.Execute(new Minimal3PointRunOptions(resourceName, baudRate, host, port, xPort, yPort, zPort, outDir));
+    Console.WriteLine($"minimal-3point-run done: points={summary.PointCount}, frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
     return summary.TimeoutCount == 0 && summary.RawLenBadCount == 0 && summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
 }
 
@@ -372,6 +389,7 @@ static void PrintUsage()
       Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
+      Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] --out-dir <dir>
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);
