@@ -2,6 +2,27 @@
 
 这是一个从头开始的最小重建仓库，目标不是恢复旧 GUI，而是先做出一条可验证、可追溯、可长期运行的 CLI 实验主链。
 
+## 当前主栈状态
+
+`win-csharp-rebuild` 分支的主运行栈已经迁移到 Windows C#：
+
+- 主入口：`tools/win-csharp/Odmr.WinProbe`
+- 主命令：`run-execute`、`run-resolve`、`artifact-check`、`audit-continuity`、各设备 probe、`device-command-check`
+- 主设备链路：OE1022D 走 NI-VISA ASRL，SMB100A 走 Raw TCP 5025，M8812/CNI Laser 走 Windows Serial
+- Rust 代码保留为归档参考和历史真值，不再作为日常实验、审计或 GUI/live 的必要依赖
+
+OE1022D `RALL?` collector 热路径仍是项目内唯一冻结链路：
+
+```text
+write RALL?
+sleep 30ms
+blocking exact read 12288B
+append raw
+append frame index
+```
+
+artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 collector 外侧。
+
 当前仓库包含三类内容：
 
 - `docs/equipment_manual/`：设备手册真值文档、冻结参考资料、命令真值层
@@ -10,14 +31,14 @@
 
 当前阶段约束：
 
-- 已有最小 transport、station verify、hardware smoke 入口
-- 已有第一版 `run execute` 骨架：固定 profile、baseline lock、run 级 `RALL?` collector、3-point plan
+- 已有 C# 主栈 runtime：固定 profile、baseline lock、run 级 `RALL?` collector、JSON plan、artifact 审查和连续性 audit
 - helper 名称必须带设备型号前缀
 - 注释和文档统一使用中文
 
-语言边界已经固定：
+语言边界已经更新：
 
-- Rust 负责设备命令、transport、station verify、runtime、artifact
+- C# 负责设备命令、transport、runtime、artifact、离线审查和连续性 audit
+- Rust 保留为归档参考，不再作为日常运行依赖
 - Python 负责 plan 生成、calibration 拟合、replay 后分析
 - Python 不进入实时采集链路，不直接连接设备
 
@@ -44,12 +65,12 @@
 - hint 只用于候选排序，不再作为“先直连再回退”的真值
 - 真实绑定结果来自 probe / identity / echo，并会写入 `station_snapshot.json`
 
-当前已经打通的最小链路：
+当前已经打通的 C# 主链路：
 
-- `crates/*-commands`：设备命令 helper
-- `crates/*-transport`：最小连接层
-- `crates/station-resolver`：基于 identity-first 串口认领的 station verify 与 snapshot 生成
-- `apps/odmr-cli`：CLI 入口
+- `tools/win-csharp/Odmr.Devices`：设备命令与 transport
+- `tools/win-csharp/Odmr.Runtime`：配置驱动 runtime
+- `tools/win-csharp/Odmr.Artifacts`：artifact writer、contract check、continuity audit
+- `tools/win-csharp/Odmr.WinProbe`：CLI 入口
 
 当前已经真机验证过的命令和链路见：
 
@@ -80,67 +101,10 @@
   - `device_packet_counter delta_gt1_count = 0`
   - `run audit-continuity` verdict = `continuous`
 
-GUI 本地环境与启动约束：
+当前可执行主命令见：
 
-- GUI 首版依赖本机 Python 虚拟环境，不走系统 Python 直接运行
-- GUI 技术栈固定为 `PySide6 + pyqtgraph`
-- GUI 只连接本机 `odmr gui-bridge serve`，不直接碰硬件
-- 第一次启动前必须先建虚拟环境并安装 `python/` 包
-
-GUI 首次安装：
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -U pip
-python3 -m pip install -e ./python
-```
-
-GUI 启动方式：
-
-```bash
-cargo run -p odmr-cli -- gui-bridge serve
-```
-
-新开一个终端：
-
-```bash
-source .venv/bin/activate
-odmr-gui
-```
-
-当前可执行命令：
-
-```bash
-cargo run -p odmr-cli -- station verify --station configs/stations/lab_a.json
-cargo run -p odmr-cli -- station verify --station configs/stations/lab_a.json --out out/station_snapshot.json
-cargo run -p odmr-cli -- hardware smoke --station configs/stations/lab_a.json --out-dir out/hardware_smoke/manual
-cargo run -p odmr-cli -- hardware verify-mag-lock \
-  --station configs/stations/lab_a.json \
-  --calibration configs/calibrations/main.json \
-  --plan configs/plans/mag_zero_lock_verify.json \
-  --out-dir out/hardware_verify_mag_lock/manual
-
-cargo run -p odmr-cli -- run execute \
-  --station configs/stations/lab_a.json \
-  --calibration configs/calibrations/main.json \
-  --plan configs/plans/minimal_3point_runtime.json \
-  --smb-profile configs/profiles/smb100a_run_pll_default.json \
-  --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json \
-  --laser-profile configs/profiles/cni_laser_run_on_background.json \
-  --out-dir runs/manual
-
-cargo run -p odmr-cli -- run execute \
-  --station configs/stations/lab_a.json \
-  --calibration configs/calibrations/main.json \
-  --plan configs/plans/x_axis_1d_bounce_15min.json \
-  --smb-profile configs/profiles/smb100a_run_short_sweep_15min.json \
-  --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json \
-  --laser-profile configs/profiles/cni_laser_run_on_background.json \
-  --out-dir runs/x_axis_1d_bounce_15min
-
-cargo run -p odmr-cli -- gui-bridge serve
-```
+- `tools/win-csharp/Odmr.WinProbe/README.md`
+- `docs/rebuild/13_csharp_primary_stack.md`
 
 第一版 runtime 默认配置：
 
