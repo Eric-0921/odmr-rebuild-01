@@ -12,7 +12,9 @@ public sealed record ConfigDrivenRunOptions(
     string SmbProfilePath,
     string OeProfilePath,
     string LaserProfilePath,
-    string OutDir);
+    string OutDir,
+    IProgress<RunProgressEvent>? Progress = null,
+    CancellationToken CancellationToken = default);
 
 internal sealed record ConfigMagAxis(
     string AxisId,
@@ -72,6 +74,19 @@ public static class ConfigDrivenRun
             plan_source_kind = bundle.ResolvedPlan.SourceKind,
             resolved_point_count = bundle.ResolvedPlan.ResolvedPointCount
         });
+        ReportProgress(
+            options,
+            RuntimeState.RunOpened,
+            "run_opened",
+            $"Run opened: {bundle.Plan.RunId}",
+            null,
+            null,
+            bundle.ResolvedPlan.ResolvedPointCount,
+            null,
+            null,
+            null,
+            null,
+            null);
 
         ApplyOeFixedProfile(bundle, eventsPath, processStart);
 
@@ -98,6 +113,20 @@ public static class ConfigDrivenRun
                 rall_post_write_delay_ms = bundle.OeProfile.Collector.RallPostWriteDelayMs,
                 ring_capacity_frames = bundle.OeProfile.Collector.RingCapacityFrames
             });
+            var collectorSnapshot = collector.Snapshot();
+            ReportProgress(
+                options,
+                RuntimeState.CollectorRunning,
+                "collector_started",
+                "OE RALL collector started",
+                null,
+                null,
+                bundle.ResolvedPlan.ResolvedPointCount,
+                collectorSnapshot.Stats.FramesOk,
+                collectorSnapshot.Stats.TimeoutCount,
+                collectorSnapshot.Stats.RawLenBadCount,
+                collectorSnapshot.PacketCounter.DeltaGt1Count,
+                null);
 
             laser = ApplyLaserProfile(bundle, eventsPath, processStart);
             var baseline = LockBaseline(bundle, magAxes, baselinePath);
@@ -110,12 +139,49 @@ public static class ConfigDrivenRun
 
             for (var index = 0; index < bundle.ResolvedPlan.Points.Count; index++)
             {
+                if (options.CancellationToken.IsCancellationRequested)
+                {
+                    var stoppingSnapshot = collector.Snapshot();
+                    AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "stop_after_current_point_requested", "run", null, null, new
+                    {
+                        stopped_before_point_index = index
+                    });
+                    ReportProgress(
+                        options,
+                        RuntimeState.Stopping,
+                        "stop_after_current_point_requested",
+                        "Stop requested before next point",
+                        null,
+                        index,
+                        bundle.ResolvedPlan.ResolvedPointCount,
+                        stoppingSnapshot.Stats.FramesOk,
+                        stoppingSnapshot.Stats.TimeoutCount,
+                        stoppingSnapshot.Stats.RawLenBadCount,
+                        stoppingSnapshot.PacketCounter.DeltaGt1Count,
+                        null);
+                    break;
+                }
+
                 var point = bundle.ResolvedPlan.Points[index];
+                var beforePointSnapshot = collector.Snapshot();
                 AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "point_prepare_started", "point", point.PointId, null, new
                 {
                     index,
                     target_b_nt = point.TargetBNt
                 });
+                ReportProgress(
+                    options,
+                    RuntimeState.PointRunning,
+                    "point_prepare_started",
+                    $"Point {index + 1}/{bundle.ResolvedPlan.ResolvedPointCount}: {point.PointId}",
+                    point.PointId,
+                    index,
+                    bundle.ResolvedPlan.ResolvedPointCount,
+                    beforePointSnapshot.Stats.FramesOk,
+                    beforePointSnapshot.Stats.TimeoutCount,
+                    beforePointSnapshot.Stats.RawLenBadCount,
+                    beforePointSnapshot.PacketCounter.DeltaGt1Count,
+                    null);
 
                 var quality = RunPoint(
                     bundle,
@@ -143,12 +209,40 @@ public static class ConfigDrivenRun
                         break;
                     }
                 }
+
+                var afterPointSnapshot = collector.Snapshot();
+                ReportProgress(
+                    options,
+                    RuntimeState.PointRunning,
+                    "point_completed",
+                    $"Point completed: {point.PointId} ({quality.QualityStatus})",
+                    point.PointId,
+                    index,
+                    bundle.ResolvedPlan.ResolvedPointCount,
+                    afterPointSnapshot.Stats.FramesOk,
+                    afterPointSnapshot.Stats.TimeoutCount,
+                    afterPointSnapshot.Stats.RawLenBadCount,
+                    afterPointSnapshot.PacketCounter.DeltaGt1Count,
+                    quality.QualityStatus);
             }
         }
         catch (Exception ex)
         {
             failure = ex.Message;
             AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "run_failed", "run", null, null, new { error = ex.Message });
+            ReportProgress(
+                options,
+                RuntimeState.Failed,
+                "run_failed",
+                ex.Message,
+                null,
+                null,
+                bundle.ResolvedPlan.ResolvedPointCount,
+                null,
+                null,
+                null,
+                null,
+                null);
         }
         finally
         {
@@ -224,6 +318,19 @@ public static class ConfigDrivenRun
                 timeout_count = snapshot.Stats.TimeoutCount,
                 raw_len_bad_count = snapshot.Stats.RawLenBadCount
             });
+            ReportProgress(
+                options,
+                RuntimeState.Stopping,
+                "collector_stopped",
+                "OE RALL collector stopped",
+                null,
+                null,
+                bundle.ResolvedPlan.ResolvedPointCount,
+                snapshot.Stats.FramesOk,
+                snapshot.Stats.TimeoutCount,
+                snapshot.Stats.RawLenBadCount,
+                snapshot.PacketCounter.DeltaGt1Count,
+                null);
 
             if (cleanupFailure is null)
             {
@@ -249,6 +356,19 @@ public static class ConfigDrivenRun
             points_failed = pointsFailed,
             failure
         });
+        ReportProgress(
+            options,
+            status == "failed" ? RuntimeState.Failed : RuntimeState.Completed,
+            status == "failed" ? "run_failed" : "run_completed",
+            $"Run {status}: {bundle.Plan.RunId}",
+            null,
+            null,
+            bundle.ResolvedPlan.ResolvedPointCount,
+            finalSnapshot.Stats.FramesOk,
+            finalSnapshot.Stats.TimeoutCount,
+            finalSnapshot.Stats.RawLenBadCount,
+            finalSnapshot.PacketCounter.DeltaGt1Count,
+            null);
 
         RallArtifactWriter.WritePrettyJson(
             manifestPath,
@@ -883,6 +1003,34 @@ public static class ConfigDrivenRun
         RallArtifactWriter.AppendJsonl(
             eventsPath,
             new EventRecord(UtcNowString(), MonotonicNsSince(processStart), eventName, runId, pointId, device, phase, data));
+    }
+
+    private static void ReportProgress(
+        ConfigDrivenRunOptions options,
+        RuntimeState state,
+        string eventName,
+        string message,
+        string? pointId,
+        int? pointIndex,
+        int? pointsTotal,
+        long? framesTotal,
+        long? timeoutCount,
+        long? rawLenBadCount,
+        long? deltaGt1Count,
+        string? qualityStatus)
+    {
+        options.Progress?.Report(new RunProgressEvent(
+            state,
+            eventName,
+            message,
+            pointId,
+            pointIndex,
+            pointsTotal,
+            framesTotal,
+            timeoutCount,
+            rawLenBadCount,
+            deltaGt1Count,
+            qualityStatus));
     }
 
     private static string UtcNowString() =>
