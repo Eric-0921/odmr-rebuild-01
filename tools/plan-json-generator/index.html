@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ODMR Plan JSON Generator</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="toolbar" aria-label="Plan metadata">
+        <div class="field">
+          <label for="run-id">Run ID</label>
+          <input id="run-id" value="generated_plan" />
+        </div>
+        <div class="field">
+          <label for="operator">Operator</label>
+          <input id="operator" value="local" />
+        </div>
+        <div class="field number">
+          <label for="point-settle">Point settle ms</label>
+          <input id="point-settle" type="number" min="0" step="1" value="500" />
+        </div>
+        <div class="field number">
+          <label for="acquisition-window">Acq window ms</label>
+          <input id="acquisition-window" type="number" min="0" step="1" value="0" />
+        </div>
+        <label class="file-button">
+          Load template
+          <input id="template-file" type="file" accept="application/json,.json" />
+        </label>
+      </section>
+
+      <section class="workspace">
+        <div class="panel blocks-panel">
+          <div class="panel-header">
+            <h1>Magnetic Scan Blocks</h1>
+            <div class="button-row">
+              <button id="add-block" type="button">Add block</button>
+              <button id="add-xyz" type="button">Add X/Y/Z</button>
+              <button id="generate" class="primary" type="button">Generate</button>
+            </div>
+          </div>
+          <div id="blocks"></div>
+        </div>
+
+        <div class="panel output-panel">
+          <div class="panel-header">
+            <h2>Plan JSON</h2>
+            <div class="button-row">
+              <button id="copy-json" type="button">Copy</button>
+              <button id="download-json" type="button">Download</button>
+            </div>
+          </div>
+          <pre id="summary" class="summary">No plan generated.</pre>
+          <textarea id="json-output" spellcheck="false"></textarea>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Point</th>
+                  <th>X nT</th>
+                  <th>Y nT</th>
+                  <th>Z nT</th>
+                </tr>
+              </thead>
+              <tbody id="point-preview"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./src/app.mjs"></script>
+  </body>
+</html>

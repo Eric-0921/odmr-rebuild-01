@@ -74,6 +74,8 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 - `tools/win-csharp/Odmr.Runtime`：配置驱动 runtime
 - `tools/win-csharp/Odmr.Artifacts`：artifact writer、contract check、continuity audit
 - `tools/win-csharp/Odmr.WinProbe`：CLI 入口
+- `tools/win-csharp/Odmr.ControlPanel.WinForms`：Windows Run Bundle 控制面板
+- `tools/plan-json-generator`：独立浏览器版磁场扫描 `plan.json` 生成器
 
 当前已经真机验证过的命令和链路见：
 
@@ -108,6 +110,12 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 
 - `tools/win-csharp/Odmr.WinProbe/README.md`
 - `docs/rebuild/13_csharp_primary_stack.md`
+
+当前 UI 边界：
+
+- Windows 控制面板只负责组合一次 run 所需的六个 JSON：`station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`，并显示解析摘要。
+- 磁场扫描计划由 `tools/plan-json-generator/index.html` 独立生成；生成器只输出 C# runtime 已支持的 `points[]` plan，不引入 `field_space/groups` 或新的 run bundle schema。
+- SMB/OE/Laser 参数继续通过 profile JSON 选择，不在 plan generator 内编辑。
 
 第一版 runtime 默认配置：
 
