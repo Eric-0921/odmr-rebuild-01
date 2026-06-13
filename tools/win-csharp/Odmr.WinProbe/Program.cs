@@ -34,6 +34,7 @@ static int Run(string[] args)
             "run-resolve" => RunResolveCommand(options),
             "run-execute" => RunExecuteCommand(options),
             "artifact-check" => ArtifactCheckCommand(options),
+            "audit-continuity" => AuditContinuityCommand(options),
             "m8812-probe" => M8812Probe(options),
             "laser-probe" => LaserProbe(options),
             _ => Fail($"unknown command: {command}")
@@ -208,6 +209,16 @@ static int ArtifactCheckCommand(IReadOnlyDictionary<string, string> options)
     var report = ArtifactCheck.Check(GetRequiredOption(options, "run"));
     Console.WriteLine(JsonSerializer.Serialize(report, JsonOptions.Pretty));
     return report.Passed ? 0 : 2;
+}
+
+static int AuditContinuityCommand(IReadOnlyDictionary<string, string> options)
+{
+    var runDir = GetRequiredOption(options, "run");
+    var outPath = GetRequiredOption(options, "out");
+    var report = ContinuityAudit.Audit(runDir);
+    ContinuityAudit.WriteReport(outPath, report);
+    Console.WriteLine($"continuity audit done: verdict={report.Verdict}, frames={report.FramesTotal}, delta_gt1={report.DevicePacketCounter.DeltaGt1Count}, out={outPath}");
+    return report.Verdict == "continuous" ? 0 : 2;
 }
 
 static int OeRall(IReadOnlyDictionary<string, string> options)
@@ -439,6 +450,7 @@ static void PrintUsage()
       Odmr.WinProbe run-resolve --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json>
       Odmr.WinProbe run-execute --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json> --out-dir <dir>
       Odmr.WinProbe artifact-check --run <run-dir>
+      Odmr.WinProbe audit-continuity --run <run-dir> --out <json>
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);
