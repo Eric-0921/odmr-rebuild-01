@@ -157,6 +157,11 @@ public static class RallArtifactWriter
 
         File.WriteAllText(segmentsPath, JsonSerializer.Serialize(segment, JsonOptions.Default) + Environment.NewLine, new UTF8Encoding(false));
     }
+
+    public static void AppendSegmentRecord(string segmentsPath, SegmentRecord segment)
+    {
+        File.AppendAllText(segmentsPath, JsonSerializer.Serialize(segment, JsonOptions.Default) + Environment.NewLine, new UTF8Encoding(false));
+    }
 }
 
 public static class JsonOptions

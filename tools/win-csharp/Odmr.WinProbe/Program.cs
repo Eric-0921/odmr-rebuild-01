@@ -5,6 +5,7 @@ using System.Text.Json;
 using Ivi.Visa;
 using Odmr.Artifacts;
 using Odmr.Devices;
+using Odmr.Runtime;
 
 var exitCode = Run(args);
 Environment.Exit(exitCode);
@@ -28,6 +29,7 @@ static int Run(string[] args)
             "oe-idn" => OeIdn(options),
             "oe-rall" => OeRall(options),
             "smb-probe" => SmbProbe(options),
+            "sweep-only-run" => SweepOnlyRunCommand(options),
             "m8812-probe" => M8812Probe(options),
             "laser-probe" => LaserProbe(options),
             _ => Fail($"unknown command: {command}")
@@ -129,6 +131,19 @@ static int SmbProbe(IReadOnlyDictionary<string, string> options)
     }
 
     return 0;
+}
+
+static int SweepOnlyRunCommand(IReadOnlyDictionary<string, string> options)
+{
+    var resourceName = GetOption(options, "resource", Oe1022dDefaults.Resource);
+    var baudRate = GetIntOption(options, "baud", Oe1022dDefaults.BaudRate);
+    var host = GetOption(options, "host", Smb100aDefaults.Host);
+    var port = GetIntOption(options, "port", Smb100aDefaults.Port);
+    var outDir = GetRequiredOption(options, "out-dir");
+
+    var summary = SweepOnlyRun.Execute(new SweepOnlyRunOptions(resourceName, baudRate, host, port, outDir));
+    Console.WriteLine($"sweep-only-run done: frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
+    return summary.TimeoutCount == 0 && summary.RawLenBadCount == 0 && summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
 }
 
 static int OeRall(IReadOnlyDictionary<string, string> options)
@@ -355,6 +370,7 @@ static void PrintUsage()
       Odmr.WinProbe oe-idn [--resource ASRL8::INSTR] [--baud 921600]
       Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
+      Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] --out-dir <dir>
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);
