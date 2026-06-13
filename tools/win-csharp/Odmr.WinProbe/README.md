@@ -43,8 +43,10 @@ Forbidden inside the loop:
 - GUI publish
 - async or multi-reader behavior
 
-It does not implement station resolving, GUI bridging, RALL parsing, retries,
-frame deadlines, or SMB100A control beyond the read-only TCP probe.
+It does not implement GUI bridging, live bridging, RALL parsing, retries, or
+frame deadlines. `run-execute` restores the JSON-driven station/profile/plan
+runtime path; OE fixed profile commands are snapshot-only in this gate and are
+not sent to the instrument yet.
 
 ## Commands
 
@@ -55,6 +57,8 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-rall --resource ASRL8:
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json --out-dir runs/win_csharp_run_execute_minimal
 ```
 
 `oe-rall` writes:
@@ -80,3 +84,15 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 -
 `laser-probe --off-only` only sends the output-off frame and verifies echo:
 
 - `55 AA 03 00 03`
+
+`run-execute` writes the config-driven runtime artifact set:
+
+- snapshots: station, plan, calibration, SMB, OE, laser
+- `run_manifest.json`
+- `events.jsonl`
+- `raw/oe1022d.rall`
+- `raw/oe1022d.frames.idx.jsonl`
+- `segments.jsonl`
+- `points.jsonl`
+- `quality.jsonl`
+- `summary.json`
