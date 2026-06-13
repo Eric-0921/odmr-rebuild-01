@@ -2,6 +2,9 @@
 
 本文定义 `win-csharp-rebuild` 分支当前的运行入口和归档边界。
 
+当前实验主链路的 RF sweep window、point device context 和暂缓 live frontend 边界见
+[`14_experiment_reliability_without_live_frontend.md`](14_experiment_reliability_without_live_frontend.md)。
+
 ## 主栈
 
 日常实验、审查和设备验证以 Windows C# 为主栈：
@@ -66,3 +69,4 @@ append frame index
 - C# `audit-continuity` 已在关键字段上对齐 Rust 归档 audit。
 - C# `device-command-check` 已覆盖 OE1022D、SMB100A、M8812、CNI Laser 当前 Rust command crates 的命令面。
 - C# `live-replay` 已提供 artifact/events 驱动的 live reducer 基础层，不连接设备，不订阅 collector。
+- 当前阶段暂缓 OE 常驻 `RALL?` reader 和前端 live monitor，优先保证实验采集链路可信。
