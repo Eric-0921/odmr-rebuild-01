@@ -396,7 +396,7 @@ public static class RunConfigLoader
                 points);
         }
 
-        var explicitPoints = plan.Points ?? [];
+        var explicitPoints = plan.Points ?? Array.Empty<RunPointPlan>();
         if (explicitPoints.Count == 0)
         {
             throw new InvalidOperationException("plan has no executable points");

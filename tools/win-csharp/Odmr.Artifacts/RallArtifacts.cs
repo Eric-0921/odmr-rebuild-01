@@ -168,6 +168,49 @@ public sealed record QualityRecord(
     [property: JsonPropertyName("timeout_budget_remaining")] long TimeoutBudgetRemaining,
     [property: JsonPropertyName("quality_status")] string QualityStatus);
 
+public sealed record RunManifestRecord(
+    [property: JsonPropertyName("schema_version")] int SchemaVersion,
+    [property: JsonPropertyName("run_id")] string RunId,
+    [property: JsonPropertyName("created_at")] string CreatedAt,
+    [property: JsonPropertyName("operator")] string Operator,
+    [property: JsonPropertyName("station_id")] string StationId,
+    [property: JsonPropertyName("runtime_version")] string RuntimeVersion,
+    [property: JsonPropertyName("calibration_id")] string CalibrationId,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("smb_profile_id")] string SmbProfileId,
+    [property: JsonPropertyName("oe_profile_id")] string OeProfileId,
+    [property: JsonPropertyName("laser_profile_id")] string LaserProfileId,
+    [property: JsonPropertyName("plan_source_kind")] string PlanSourceKind,
+    [property: JsonPropertyName("resolved_point_count")] int ResolvedPointCount,
+    [property: JsonPropertyName("estimated_run_duration_ms")] long? EstimatedRunDurationMs);
+
+public sealed record RunSummaryRecord(
+    [property: JsonPropertyName("run_id")] string RunId,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("points_total")] int PointsTotal,
+    [property: JsonPropertyName("points_passed")] int PointsPassed,
+    [property: JsonPropertyName("points_failed")] int PointsFailed,
+    [property: JsonPropertyName("frames_total")] long FramesTotal,
+    [property: JsonPropertyName("started_at")] string StartedAt,
+    [property: JsonPropertyName("ended_at")] string EndedAt,
+    [property: JsonPropertyName("failure")] string? Failure,
+    [property: JsonPropertyName("read_attempts")] long ReadAttempts,
+    [property: JsonPropertyName("timeout_count")] long TimeoutCount,
+    [property: JsonPropertyName("raw_len_bad_count")] long RawLenBadCount,
+    [property: JsonPropertyName("raw_bytes_written")] long RawBytesWritten,
+    [property: JsonPropertyName("raw_size_matches_frames_ok")] bool RawSizeMatchesFramesOk,
+    [property: JsonPropertyName("packet_counter")] PacketCounterSummary PacketCounter);
+
+public sealed record EventRecord(
+    [property: JsonPropertyName("ts")] string Ts,
+    [property: JsonPropertyName("monotonic_ns")] ulong MonotonicNs,
+    [property: JsonPropertyName("event")] string Event,
+    [property: JsonPropertyName("run_id")] string RunId,
+    [property: JsonPropertyName("point_id")] string? PointId,
+    [property: JsonPropertyName("device")] string? Device,
+    [property: JsonPropertyName("phase")] string Phase,
+    [property: JsonPropertyName("data")] object Data);
+
 public static class RallArtifactWriter
 {
     public static void WriteFrameIndexRecord(
@@ -232,6 +275,11 @@ public static class RallArtifactWriter
     public static void AppendJsonl<T>(string path, T record)
     {
         File.AppendAllText(path, JsonSerializer.Serialize(record, JsonOptions.Default) + Environment.NewLine, new UTF8Encoding(false));
+    }
+
+    public static void WritePrettyJson<T>(string path, T record)
+    {
+        File.WriteAllText(path, JsonSerializer.Serialize(record, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
     }
 }
 
