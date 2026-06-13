@@ -5,11 +5,43 @@ Minimal Windows C# probe for the first VISA rebuild gate.
 This tool intentionally keeps the OE1022D `RALL?` hot path small:
 
 ```text
+open VISA ASRL
+clear input once
+loop:
 write RALL?
 sleep 30ms
 blocking read 12288 bytes
 append raw frame and frame index
 ```
+
+## Frozen RALL Hot Path
+
+The `oe-rall` loop is a frozen LabVIEW-like contract. Do not change its order
+or add work inside the loop unless the change is followed by a new 15-minute
+continuity run with `delta_gt1_count = 0` and `run audit-continuity` returning
+`verdict = continuous`.
+
+Allowed inside the loop:
+
+- write `RALL?\r`
+- sleep `30ms`
+- blocking exact read `12288` bytes
+- append raw frame
+- append frame index
+- update minimal counters from `payload[12287]`
+
+Forbidden inside the loop:
+
+- extra poll sleep
+- first-byte deadline
+- frame deadline
+- zero-byte retry
+- timeout clear/retry
+- per-frame console output
+- per-frame object serialization
+- RALL parsing
+- GUI publish
+- async or multi-reader behavior
 
 It does not implement station resolving, GUI bridging, RALL parsing, retries,
 frame deadlines, or SMB100A control beyond the read-only TCP probe.

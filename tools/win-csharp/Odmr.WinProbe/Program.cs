@@ -165,6 +165,8 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     var rallCommand = Encoding.ASCII.GetBytes("RALL?\r");
     var payload = new byte[RallFrameBytes];
 
+    // Frozen LabVIEW-like RALL hot path: do not add parser, retry, poll sleep,
+    // per-frame console output, GUI publish, or async/multi-reader behavior here.
     while (Stopwatch.GetTimestamp() < deadline)
     {
         stats.ReadAttempts++;
