@@ -93,6 +93,7 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
 
     var rawPath = Path.Combine(rawDir, "oe1022d.rall");
     var indexPath = Path.Combine(rawDir, "oe1022d.frames.idx.jsonl");
+    var segmentsPath = Path.Combine(outDir, "segments.jsonl");
     var summaryPath = Path.Combine(outDir, "summary.json");
 
     var startedAt = UtcNowString();
@@ -102,6 +103,10 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     var frameSeq = 0L;
     var stats = new ProbeStats();
     var packetAudit = new PacketCounterAudit();
+    string? firstFrameTs = null;
+    string? lastFrameTs = null;
+    ulong? firstFrameMonotonicNs = null;
+    ulong? lastFrameMonotonicNs = null;
 
     using var resource = OpenOeSession(resourceName, baudRate);
     var session = (IMessageBasedSession)resource;
@@ -111,6 +116,7 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
         new FileStream(indexPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
         new UTF8Encoding(false));
     var rallCommand = Encoding.ASCII.GetBytes("RALL?\r");
+    var payload = new byte[RallFrameBytes];
 
     while (Stopwatch.GetTimestamp() < deadline)
     {
@@ -121,8 +127,8 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
             session.RawIO.Write(rallCommand);
             Thread.Sleep(RallPostWriteDelayMs);
 
-            var payload = session.RawIO.Read(RallFrameBytes);
-            if (payload.Length != RallFrameBytes)
+            session.RawIO.Read(payload, 0, RallFrameBytes, out var bytesRead, out _);
+            if (bytesRead != RallFrameBytes)
             {
                 stats.RawLenBadCount++;
                 stats.ReadErrors++;
@@ -132,20 +138,14 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
             var monotonicNs = MonotonicNsSince(processStart);
             var ts = UtcNowString();
             raw.Write(payload, 0, payload.Length);
+            firstFrameTs ??= ts;
+            firstFrameMonotonicNs ??= monotonicNs;
+            lastFrameTs = ts;
+            lastFrameMonotonicNs = monotonicNs;
 
             var counter = payload[DevicePacketCounterOffset];
             packetAudit.Record(counter);
-
-            var record = new FrameIndexRecord(
-                frameSeq,
-                ts,
-                monotonicNs,
-                nextRawOffset,
-                payload.Length,
-                counter,
-                "not_parsed",
-                null);
-            index.WriteLine(JsonSerializer.Serialize(record, JsonOptions.Default));
+            WriteFrameIndexRecord(index, frameSeq, ts, monotonicNs, nextRawOffset, payload.Length, counter);
 
             nextRawOffset += payload.Length;
             frameSeq++;
@@ -167,6 +167,16 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     index.Flush();
 
     var finishedAt = UtcNowString();
+    WriteWholeProbeSegment(
+        segmentsPath,
+        outDir,
+        firstFrameTs ?? startedAt,
+        lastFrameTs ?? finishedAt,
+        firstFrameMonotonicNs ?? 0,
+        lastFrameMonotonicNs ?? MonotonicNsSince(processStart),
+        nextRawOffset,
+        stats.FramesOk);
+
     var elapsedMs = (long)(Stopwatch.GetElapsedTime(processStart).TotalMilliseconds);
     var rawBytesWritten = new FileInfo(rawPath).Length;
     var summary = new ProbeSummary(
@@ -189,6 +199,7 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
         rawBytesWritten == stats.FramesOk * RallFrameBytes,
         PathRelative(outDir, rawPath),
         PathRelative(outDir, indexPath),
+        PathRelative(outDir, segmentsPath),
         packetAudit.ToSummary());
 
     File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
@@ -257,6 +268,60 @@ static string ReadAsciiLine(IMessageBasedSession session, int maxBytes)
     }
 
     return Encoding.ASCII.GetString(buffer.ToArray()).Trim();
+}
+
+static void WriteFrameIndexRecord(
+    StreamWriter writer,
+    long frameSeq,
+    string ts,
+    ulong monotonicNs,
+    long rawOffset,
+    int rawLen,
+    byte devicePacketCounter)
+{
+    writer.Write("{\"frame_seq\":");
+    writer.Write(frameSeq.ToString(CultureInfo.InvariantCulture));
+    writer.Write(",\"ts\":\"");
+    writer.Write(ts);
+    writer.Write("\",\"monotonic_ns\":");
+    writer.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+    writer.Write(",\"raw_offset\":");
+    writer.Write(rawOffset.ToString(CultureInfo.InvariantCulture));
+    writer.Write(",\"raw_len\":");
+    writer.Write(rawLen.ToString(CultureInfo.InvariantCulture));
+    writer.Write(",\"device_packet_counter\":");
+    writer.Write(devicePacketCounter.ToString(CultureInfo.InvariantCulture));
+    writer.Write(",\"parse_status\":\"not_parsed\",\"duplicate_of\":null}");
+    writer.WriteLine();
+}
+
+static void WriteWholeProbeSegment(
+    string segmentsPath,
+    string outDir,
+    string startTs,
+    string endTs,
+    ulong startMonotonicNs,
+    ulong endMonotonicNs,
+    long rawOffsetEnd,
+    long framesOk)
+{
+    var segment = new SegmentRecord(
+        1,
+        Path.GetFileName(Path.GetFullPath(outDir)),
+        "seg_oe_rall_probe_0000",
+        "oe_rall_probe",
+        "oe1022d_main",
+        startTs,
+        endTs,
+        startMonotonicNs,
+        endMonotonicNs,
+        "raw/oe1022d.rall",
+        0,
+        rawOffsetEnd,
+        framesOk > 0 ? (long?)0 : null,
+        framesOk > 0 ? framesOk - 1 : null);
+
+    File.WriteAllText(segmentsPath, JsonSerializer.Serialize(segment, JsonOptions.Default) + Environment.NewLine, new UTF8Encoding(false));
 }
 
 static Dictionary<string, string> ParseOptions(string[] args)
@@ -388,16 +453,6 @@ sealed class PacketCounterAudit
         new(FirstCounter, LastCounter, Delta0Count, Delta1Count, DeltaGt1Count, EstimatedMissingWindows);
 }
 
-sealed record FrameIndexRecord(
-    [property: JsonPropertyName("frame_seq")] long FrameSeq,
-    [property: JsonPropertyName("ts")] string Ts,
-    [property: JsonPropertyName("monotonic_ns")] ulong MonotonicNs,
-    [property: JsonPropertyName("raw_offset")] long RawOffset,
-    [property: JsonPropertyName("raw_len")] int RawLen,
-    [property: JsonPropertyName("device_packet_counter")] byte? DevicePacketCounter,
-    [property: JsonPropertyName("parse_status")] string ParseStatus,
-    [property: JsonPropertyName("duplicate_of")] long? DuplicateOf);
-
 sealed record PacketCounterSummary(
     [property: JsonPropertyName("first_counter")] byte? FirstCounter,
     [property: JsonPropertyName("last_counter")] byte? LastCounter,
@@ -426,7 +481,24 @@ sealed record ProbeSummary(
     [property: JsonPropertyName("raw_size_matches_frames_ok")] bool RawSizeMatchesFramesOk,
     [property: JsonPropertyName("raw_path")] string RawPath,
     [property: JsonPropertyName("index_path")] string IndexPath,
+    [property: JsonPropertyName("segments_path")] string SegmentsPath,
     [property: JsonPropertyName("packet_counter")] PacketCounterSummary PacketCounter);
+
+sealed record SegmentRecord(
+    [property: JsonPropertyName("schema_version")] int SchemaVersion,
+    [property: JsonPropertyName("run_id")] string RunId,
+    [property: JsonPropertyName("segment_id")] string SegmentId,
+    [property: JsonPropertyName("point_id")] string PointId,
+    [property: JsonPropertyName("source")] string Source,
+    [property: JsonPropertyName("start_ts")] string StartTs,
+    [property: JsonPropertyName("end_ts")] string EndTs,
+    [property: JsonPropertyName("start_monotonic_ns")] ulong StartMonotonicNs,
+    [property: JsonPropertyName("end_monotonic_ns")] ulong EndMonotonicNs,
+    [property: JsonPropertyName("raw_file")] string RawFile,
+    [property: JsonPropertyName("raw_offset_start")] long RawOffsetStart,
+    [property: JsonPropertyName("raw_offset_end")] long RawOffsetEnd,
+    [property: JsonPropertyName("frame_seq_start")] long? FrameSeqStart,
+    [property: JsonPropertyName("frame_seq_end")] long? FrameSeqEnd);
 
 static class JsonOptions
 {
