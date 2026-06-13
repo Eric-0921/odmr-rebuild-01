@@ -139,10 +139,11 @@ static int SweepOnlyRunCommand(IReadOnlyDictionary<string, string> options)
     var baudRate = GetIntOption(options, "baud", Oe1022dDefaults.BaudRate);
     var host = GetOption(options, "host", Smb100aDefaults.Host);
     var port = GetIntOption(options, "port", Smb100aDefaults.Port);
+    var repeat = GetIntOption(options, "repeat", 1);
     var outDir = GetRequiredOption(options, "out-dir");
 
-    var summary = SweepOnlyRun.Execute(new SweepOnlyRunOptions(resourceName, baudRate, host, port, outDir));
-    Console.WriteLine($"sweep-only-run done: frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
+    var summary = SweepOnlyRun.Execute(new SweepOnlyRunOptions(resourceName, baudRate, host, port, repeat, outDir));
+    Console.WriteLine($"sweep-only-run done: repeat={summary.RepeatCount}, frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
     return summary.TimeoutCount == 0 && summary.RawLenBadCount == 0 && summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
 }
 
@@ -370,7 +371,7 @@ static void PrintUsage()
       Odmr.WinProbe oe-idn [--resource ASRL8::INSTR] [--baud 921600]
       Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
-      Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] --out-dir <dir>
+      Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);

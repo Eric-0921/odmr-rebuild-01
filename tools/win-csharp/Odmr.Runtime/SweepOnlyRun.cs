@@ -13,6 +13,7 @@ public sealed record SweepOnlyRunOptions(
     int OeBaudRate,
     string SmbHost,
     int SmbPort,
+    int RepeatCount,
     string OutDir);
 
 public sealed record CollectorCursor(
@@ -44,7 +45,8 @@ public sealed record SweepOnlyRunSummary(
     [property: JsonPropertyName("index_path")] string IndexPath,
     [property: JsonPropertyName("segments_path")] string SegmentsPath,
     [property: JsonPropertyName("sweep")] SmbSweepSpec Sweep,
-    [property: JsonPropertyName("sweep_observation")] SmbSweepObservation SweepObservation,
+    [property: JsonPropertyName("repeat_count")] int RepeatCount,
+    [property: JsonPropertyName("sweep_observations")] IReadOnlyList<SmbSweepObservation> SweepObservations,
     [property: JsonPropertyName("packet_counter")] PacketCounterSummary PacketCounter);
 
 public static class SweepOnlyRun
@@ -76,29 +78,58 @@ public static class SweepOnlyRun
         collector.Start();
         collector.WaitForFirstFrame(TimeSpan.FromSeconds(5));
 
-        SmbSweepObservation? sweepObservation = null;
-        CollectorCursor? segmentStart = null;
-        CollectorCursor? segmentEnd = null;
-        var segmentStartTs = startedAt;
-        var segmentEndTs = startedAt;
-        ulong segmentStartMonotonicNs = 0;
-        ulong segmentEndMonotonicNs = 0;
+        if (options.RepeatCount <= 0)
+        {
+            throw new ArgumentException("--repeat must be positive");
+        }
+
+        var sweepObservations = new List<SmbSweepObservation>(options.RepeatCount);
 
         using (var smb = Smb100aTcp.Open(options.SmbHost, options.SmbPort))
         {
-            smb.ApplyDefaultFixedProfile(SmbCommandSettleMs);
-            smb.ConfigureDefaultSweep(SmbCommandSettleMs);
+            try
+            {
+                smb.ApplyDefaultFixedProfile(SmbCommandSettleMs);
+                smb.ConfigureDefaultSweep(SmbCommandSettleMs);
 
-            segmentStartTs = UtcNowString();
-            segmentStartMonotonicNs = MonotonicNsSince(processStart);
-            segmentStart = collector.Cursor();
+                for (var sweepIndex = 0; sweepIndex < options.RepeatCount; sweepIndex++)
+                {
+                    var segmentStartTs = UtcNowString();
+                    var segmentStartMonotonicNs = MonotonicNsSince(processStart);
+                    var segmentStart = collector.Cursor();
 
-            sweepObservation = smb.ExecuteDefaultSweep();
+                    var sweepObservation = smb.ExecuteDefaultSweep();
 
-            segmentEndTs = UtcNowString();
-            segmentEndMonotonicNs = MonotonicNsSince(processStart);
-            segmentEnd = collector.Cursor();
-            smb.Cleanup();
+                    var segmentEndTs = UtcNowString();
+                    var segmentEndMonotonicNs = MonotonicNsSince(processStart);
+                    var segmentEnd = collector.Cursor();
+                    sweepObservations.Add(sweepObservation);
+
+                    var runId = Path.GetFileName(Path.GetFullPath(options.OutDir));
+                    var framesInSegment = segmentEnd.NextFrameSeq - segmentStart.NextFrameSeq;
+                    RallArtifactWriter.AppendSegmentRecord(
+                        segmentsPath,
+                        new SegmentRecord(
+                            1,
+                            runId,
+                            $"seg_smb_sweep_only_{sweepIndex:0000}",
+                            "smb_sweep_only",
+                            "oe1022d_main",
+                            segmentStartTs,
+                            segmentEndTs,
+                            segmentStartMonotonicNs,
+                            segmentEndMonotonicNs,
+                            "raw/oe1022d.rall",
+                            segmentStart.NextRawOffset,
+                            segmentEnd.NextRawOffset,
+                            framesInSegment > 0 ? segmentStart.NextFrameSeq : null,
+                            framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null));
+                }
+            }
+            finally
+            {
+                smb.Cleanup();
+            }
         }
 
         collector.Stop();
@@ -106,26 +137,6 @@ public static class SweepOnlyRun
         var finishedAt = UtcNowString();
         var elapsedMs = (long)Stopwatch.GetElapsedTime(processStart).TotalMilliseconds;
         var rawBytesWritten = new FileInfo(rawPath).Length;
-
-        var runId = Path.GetFileName(Path.GetFullPath(options.OutDir));
-        var framesInSegment = segmentEnd.NextFrameSeq - segmentStart.NextFrameSeq;
-        RallArtifactWriter.AppendSegmentRecord(
-            segmentsPath,
-            new SegmentRecord(
-                1,
-                runId,
-                "seg_smb_sweep_only_0000",
-                "smb_sweep_only",
-                "oe1022d_main",
-                segmentStartTs,
-                segmentEndTs,
-                segmentStartMonotonicNs,
-                segmentEndMonotonicNs,
-                "raw/oe1022d.rall",
-                segmentStart.NextRawOffset,
-                segmentEnd.NextRawOffset,
-                framesInSegment > 0 ? segmentStart.NextFrameSeq : null,
-                framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null));
 
         var summary = new SweepOnlyRunSummary(
             "sweep-only-run",
@@ -150,7 +161,8 @@ public static class SweepOnlyRun
             PathRelative(options.OutDir, indexPath),
             PathRelative(options.OutDir, segmentsPath),
             SmbSweepSpec.Default,
-            sweepObservation!,
+            options.RepeatCount,
+            sweepObservations,
             snapshot.PacketCounter.ToSummary());
 
         File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));

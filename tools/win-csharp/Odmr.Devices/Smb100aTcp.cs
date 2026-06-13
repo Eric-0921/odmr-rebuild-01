@@ -88,7 +88,10 @@ public sealed record SmbSweepSpec(
         3.0,
         true);
 
+    [JsonPropertyName("sweep_points")]
     public long SweepPoints => Math.Abs(StopHz - StartHz) / StepHz + 1;
+
+    [JsonPropertyName("estimated_sweep_duration_ms")]
     public long EstimatedSweepDurationMs => SweepPoints * DwellMs;
 }
 
