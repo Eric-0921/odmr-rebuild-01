@@ -19,7 +19,7 @@ from odmr_config_core import (
 
 STEP_TITLES = [
     "1 Templates / Output",
-    "2 Magnetic Plan",
+    "2 磁场扫描计划",
     "3 Plan Policy",
     "4 SMB100A",
     "5 OE1022D",
@@ -50,6 +50,27 @@ def choice_code(value: object) -> int:
     return int(text.split("-", 1)[0].strip())
 
 
+def token_choice(token: str, label: str) -> str:
+    return f"{token} - {label}"
+
+
+def choice_token(value: object) -> str:
+    return str(value).split(" - ", 1)[0].strip()
+
+
+def token_choice_for(token: str, choices: list[str]) -> str:
+    for choice in choices:
+        if choice_token(choice) == token:
+            return choice
+    return token
+
+
+def token_label_for(token: str, choices: list[str]) -> str:
+    choice = token_choice_for(token, choices)
+    parts = choice.split(" - ", 1)
+    return parts[1] if len(parts) == 2 else choice
+
+
 SMB_FM_SOURCE_CHOICES = ["INT", "EXT", "INT,EXT"]
 SMB_FM_MODE_CHOICES = ["NORM", "LNO", "HDEV"]
 SMB_LF_SHAPE_CHOICES = ["SINE", "SQU", "TRI", "SAWT", "ISAW"]
@@ -66,6 +87,14 @@ FREQUENCY_UNIT_CHOICES = ["Hz", "kHz", "MHz", "GHz"]
 LOW_FREQUENCY_UNIT_CHOICES = ["Hz", "kHz", "MHz"]
 LF_VOLTAGE_UNIT_CHOICES = ["mV", "V"]
 LASER_POWER_UNIT_CHOICES = ["mW", "W"]
+MAG_AXIS_MODE_CHOICES = [
+    token_choice("range", "起点/终点/步进"),
+    token_choice("list", "显式列表"),
+]
+MAG_TRAVERSAL_CHOICES = [
+    token_choice("raster", "光栅顺序展开"),
+    token_choice("bounce_1d_x", "X 轴往返扫描"),
+]
 
 OE_CHOICES = {
     "channel": [code_choice(1, "通道 A"), code_choice(2, "通道 B")],
@@ -294,19 +323,31 @@ class ConfigGeneratorApp(tk.Tk):
         ).grid(row=8, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
     def _build_magnetic_page(self, parent: ttk.Frame) -> None:
-        self._section_title(parent, "Run identity", 0)
+        self._section_title(parent, "运行标识", 0)
         self.run_vars = {
             "run_id": tk.StringVar(value="generated_plan"),
             "operator": tk.StringVar(value="local"),
             "acquisition_window_ms": tk.DoubleVar(value=0),
             "point_settle_ms": tk.DoubleVar(value=500),
         }
-        self._form_field(parent, "Run ID", self.run_vars["run_id"], 1, 0)
-        self._form_field(parent, "Operator", self.run_vars["operator"], 2, 0)
-        self._form_field(parent, "Acquisition window", self.run_vars["acquisition_window_ms"], 1, 2, unit=(self.unit_vars["time"], TIME_UNIT_CHOICES))
-        self._form_field(parent, "Point settle", self.run_vars["point_settle_ms"], 2, 2, unit=(self.unit_vars["time"], TIME_UNIT_CHOICES))
+        self._form_field(parent, "运行 ID", self.run_vars["run_id"], 1, 0)
+        self._form_field(parent, "操作人", self.run_vars["operator"], 2, 0)
+        self._form_field(parent, "采集窗口", self.run_vars["acquisition_window_ms"], 1, 2, unit=(self.unit_vars["time"], TIME_UNIT_CHOICES))
+        self._form_field(parent, "点位稳定时间", self.run_vars["point_settle_ms"], 2, 2, unit=(self.unit_vars["time"], TIME_UNIT_CHOICES))
 
-        self._section_title(parent, "Scan blocks", 4)
+        ttk.Label(
+            parent,
+            text=(
+                "本页只定义目标磁场扫描点，生成 plan.points[].target_b_nt。"
+                "原厂反编译得到的线圈/电流语义不在这里手填，而由 calibration JSON 与 Plan Policy 共同决定："
+                "target_b_nt -> current_per_nt/current_offset_a -> target_current_a -> M8812 MEAS:CURR? 回读。"
+                "这仍是零偏电流锁定链路，不是物理磁场闭环。"
+            ),
+            wraplength=980,
+            foreground="#555555",
+        ).grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 12))
+
+        self._section_title(parent, "磁场扫描块", 4)
         block_frame = ttk.Frame(parent)
         block_frame.grid(row=5, column=0, columnspan=4, sticky="nsew")
         block_frame.columnconfigure(1, weight=1)
@@ -315,11 +356,11 @@ class ConfigGeneratorApp(tk.Tk):
         self.block_list.bind("<<ListboxSelect>>", self._on_block_select)
 
         self.block_prefix = tk.StringVar()
-        self.block_traversal = tk.StringVar(value="raster")
+        self.block_traversal = tk.StringVar(value=token_choice_for("raster", MAG_TRAVERSAL_CHOICES))
         self.block_total_points = tk.IntVar(value=0)
-        self._form_field(block_frame, "Block prefix", self.block_prefix, 0, 1)
-        self._form_field(block_frame, "Traversal", self.block_traversal, 1, 1, choices=["raster", "bounce_1d_x"])
-        self._form_field(block_frame, "Total points (0 = once)", self.block_total_points, 2, 1)
+        self._form_field(block_frame, "扫描块前缀", self.block_prefix, 0, 1)
+        self._form_field(block_frame, "展开顺序", self.block_traversal, 1, 1, choices=MAG_TRAVERSAL_CHOICES)
+        self._form_field(block_frame, "总点数（0=按网格一次展开）", self.block_total_points, 2, 1)
 
         axis_area = ttk.Frame(parent)
         axis_area.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(12, 0))
@@ -331,9 +372,9 @@ class ConfigGeneratorApp(tk.Tk):
 
         actions = ttk.Frame(parent)
         actions.grid(row=7, column=0, columnspan=4, sticky="w", pady=14)
-        ttk.Button(actions, text="Add / Update selected block", command=self._add_or_update_block).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(actions, text="Remove selected block", command=self._remove_block).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(actions, text="Add X/Y/Z single-axis blocks", command=self._add_xyz_blocks).pack(side=tk.LEFT)
+        ttk.Button(actions, text="添加 / 更新选中扫描块", command=self._add_or_update_block).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(actions, text="删除选中扫描块", command=self._remove_block).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(actions, text="添加 X/Y/Z 三个单轴扫描块", command=self._add_xyz_blocks).pack(side=tk.LEFT)
 
     def _build_policy_page(self, parent: ttk.Frame) -> None:
         self._section_title(parent, "Maynuo baseline / output policy", 0)
@@ -595,12 +636,12 @@ class ConfigGeneratorApp(tk.Tk):
         parent.columnconfigure(column + 1, weight=1)
 
     def _axis_panel(self, parent: ttk.Frame, axis: str, column: int) -> None:
-        group = ttk.LabelFrame(parent, text=f"{axis.upper()} axis")
+        group = ttk.LabelFrame(parent, text=f"{axis.upper()} 轴")
         group.grid(row=0, column=column, sticky="new", padx=4)
         group.columnconfigure(1, weight=1)
         vars_for_axis: dict[str, tk.Variable] = {
             "enabled": tk.BooleanVar(),
-            "mode": tk.StringVar(value="range"),
+            "mode": tk.StringVar(value=token_choice_for("range", MAG_AXIS_MODE_CHOICES)),
             "fixed": tk.DoubleVar(value=0.0),
             "start": tk.DoubleVar(value=0.0),
             "stop": tk.DoubleVar(value=0.0),
@@ -608,14 +649,14 @@ class ConfigGeneratorApp(tk.Tk):
             "values_text": tk.StringVar(value="0"),
         }
         self.axis_vars[axis] = vars_for_axis
-        self._form_field(group, "Active", vars_for_axis["enabled"], 0, 0)
-        self._form_field(group, "Mode", vars_for_axis["mode"], 1, 0, choices=["range", "list"])
+        self._form_field(group, "启用扫描", vars_for_axis["enabled"], 0, 0)
+        self._form_field(group, "输入方式", vars_for_axis["mode"], 1, 0, choices=MAG_AXIS_MODE_CHOICES)
         field_unit = (self.unit_vars["field"], FIELD_UNIT_CHOICES)
-        self._form_field(group, "Fixed", vars_for_axis["fixed"], 2, 0, unit=field_unit)
-        self._form_field(group, "Start", vars_for_axis["start"], 3, 0, unit=field_unit)
-        self._form_field(group, "Stop", vars_for_axis["stop"], 4, 0, unit=field_unit)
-        self._form_field(group, "Step", vars_for_axis["step"], 5, 0, unit=field_unit)
-        self._form_field(group, "Explicit list", vars_for_axis["values_text"], 6, 0, unit=field_unit)
+        self._form_field(group, "固定磁场", vars_for_axis["fixed"], 2, 0, unit=field_unit)
+        self._form_field(group, "起始磁场", vars_for_axis["start"], 3, 0, unit=field_unit)
+        self._form_field(group, "结束磁场", vars_for_axis["stop"], 4, 0, unit=field_unit)
+        self._form_field(group, "步进磁场", vars_for_axis["step"], 5, 0, unit=field_unit)
+        self._form_field(group, "显式点列表", vars_for_axis["values_text"], 6, 0, unit=field_unit)
 
     def _load_default_paths(self) -> None:
         self.template_vars["plan"].set(str(self.repo_root / "configs" / "plans" / "x_axis_1d_bounce_15min.json"))
@@ -808,8 +849,9 @@ class ConfigGeneratorApp(tk.Tk):
     def _refresh_block_list(self) -> None:
         self.block_list.delete(0, tk.END)
         for block in self.blocks:
-            active = "".join(axis.upper() for axis, spec in block.axes.items() if spec.enabled) or "fixed"
-            self.block_list.insert(tk.END, f"{block.prefix} [{active}] {block.traversal}")
+            active = "".join(axis.upper() for axis, spec in block.axes.items() if spec.enabled) or "固定点"
+            traversal = token_label_for(block.traversal, MAG_TRAVERSAL_CHOICES)
+            self.block_list.insert(tk.END, f"{block.prefix} [{active}] {traversal}")
         if self.blocks:
             self.block_list.selection_set(0)
 
@@ -821,12 +863,12 @@ class ConfigGeneratorApp(tk.Tk):
     def _load_block(self, index: int) -> None:
         block = self.blocks[index]
         self.block_prefix.set(block.prefix)
-        self.block_traversal.set(block.traversal)
+        self.block_traversal.set(token_choice_for(block.traversal, MAG_TRAVERSAL_CHOICES))
         self.block_total_points.set(block.total_points)
         for axis, spec in block.axes.items():
             values = self.axis_vars[axis]
             values["enabled"].set(spec.enabled)
-            values["mode"].set(spec.mode)
+            values["mode"].set(token_choice_for(spec.mode, MAG_AXIS_MODE_CHOICES))
             values["fixed"].set(spec.fixed)
             values["start"].set(spec.start)
             values["stop"].set(spec.stop)
@@ -836,7 +878,7 @@ class ConfigGeneratorApp(tk.Tk):
     def _read_block(self) -> ScanBlock:
         return ScanBlock(
             prefix=self.block_prefix.get(),
-            traversal=self.block_traversal.get(),
+            traversal=choice_token(self.block_traversal.get()),
             total_points=int(self.block_total_points.get()),
             axes={axis: self._read_axis(axis) for axis in ("x", "y", "z")},
         )
@@ -845,7 +887,7 @@ class ConfigGeneratorApp(tk.Tk):
         values = self.axis_vars[axis]
         return AxisSpec(
             enabled=bool(values["enabled"].get()),
-            mode=str(values["mode"].get()),
+            mode=choice_token(values["mode"].get()),
             fixed=float(values["fixed"].get()),
             start=float(values["start"].get()),
             stop=float(values["stop"].get()),

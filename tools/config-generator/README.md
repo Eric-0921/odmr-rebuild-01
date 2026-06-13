@@ -42,7 +42,7 @@ python3 tools/config-generator/tests/test_config_core.py
 配置器按实验配置顺序分页：
 
 1. Templates / Output：选择源 JSON 模板和生成目录。
-2. Magnetic Plan：定义磁场扫描 block。
+2. 磁场扫描计划（Magnetic Plan）：定义磁场扫描 block。
 3. Plan Policy：定义 Maynuo baseline/output 和 point quality 阈值。
 4. SMB100A：定义固定调制 profile 和默认 RF sweep。
 5. OE1022D：定义 fixed profile；collector `12288B / 30ms` 只校验不编辑。
@@ -50,6 +50,46 @@ python3 tools/config-generator/tests/test_config_core.py
 7. Generate：生成 JSON，交给 C# Run Bundle 控制面板选择运行。
 
 界面使用分页和滚动表单，避免把不同设备的大量字段挤在同一页。
+
+## Magnetic Field Flow
+
+磁场页只负责生成目标磁场点，不直接写 M8812 电流，也不直接复刻原厂 exe 的控件状态。
+
+原厂反编译资料位置：
+
+- `reverse_application/reverse_output/逆向分析报告-协议与算法还原.md`
+- `reverse_application/reverse_output/decompiled/SimplePowerController/SimplePowerController/FormMain.cs`
+- `docs/rebuild/12_原厂锁零事实与边界.md`
+
+从这些资料能确认的事实是：
+
+- 原厂 `LockZero` 不是物理磁场闭环，而是零偏电流锁定。
+- 原厂输出模型是 `zeroSetCurr + recurSetCurr`。
+- 原厂磁场显示来自线圈常数换算：`Mag(nT)=Curr(mA)*CoilConstant(nT/mA)`，`Curr(mA)=Mag(nT)/CoilConstant(nT/mA)`。
+- 原厂验证手段是 M8812 `MEAS:CURR?` 电流回读，不是外部磁场传感器回读。
+
+这些值在 rebuild 里的对应位置：
+
+- 目标磁场点：生成到 plan JSON 的 `points[].target_b_nt`，单位固定为 `nT`。
+- 磁场到电流的换算：`configs/calibrations/main.json` 的 `current_offset_a` 和 `current_per_nt`。
+- 零偏电流策略：plan JSON 的 `mag_baseline_policy.baseline_current_a`、`settle_ms`、`readback_samples`、`settle_tolerance_a`。
+- 运行时换算代码：`tools/win-csharp/Odmr.Runtime/RunConfig.cs` 的 `CalibrationProfile.TargetCurrentA(...)`。
+- 运行时执行链：`tools/win-csharp/Odmr.Runtime/ConfigDrivenRun.cs` 中 point loop 的 `target_b_nt -> target_current_a -> M8812 SetCurrent -> MEAS:CURR?`。
+- 运行产物审查：`baseline_snapshot.json` 记录锁定后的 `locked_zero_offset_current_a`，`device_state.jsonl` 记录每个 point 的 intended target/current、measured current、segment 和 RF exposure。
+
+因此磁场页的流程是：
+
+```text
+UI 扫描块
+  -> 展开为 plan.points[].target_b_nt
+  -> C# run-execute 读取 station + calibration + plan + profiles
+  -> LockBaseline 读取/锁定零偏电流
+  -> target_b_nt 通过 calibration 计算 delta/target current
+  -> M8812 下发目标电流并用 MEAS:CURR? 回读
+  -> device_state.jsonl / baseline_snapshot.json / points.jsonl 落盘审查
+```
+
+这条链路表达的是“目标磁场设定通过校准换算成电流并被设备回读确认”，不是“物理零磁场已经闭环证明”。
 
 ## Device Options
 
