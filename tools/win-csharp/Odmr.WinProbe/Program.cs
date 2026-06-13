@@ -157,10 +157,14 @@ static int Minimal3PointRunCommand(IReadOnlyDictionary<string, string> options)
     var xPort = GetOption(options, "x", M8812Defaults.XPort);
     var yPort = GetOption(options, "y", M8812Defaults.YPort);
     var zPort = GetOption(options, "z", M8812Defaults.ZPort);
+    var cycles = GetIntOption(options, "cycles", 1);
+    var enableLaser = GetBoolOption(options, "laser-background", false);
+    var laserPort = GetOption(options, "laser-port", CniLaserDefaults.Port);
+    var laserPowerMw = GetIntOption(options, "laser-power-mw", 50);
     var outDir = GetRequiredOption(options, "out-dir");
 
-    var summary = Minimal3PointRun.Execute(new Minimal3PointRunOptions(resourceName, baudRate, host, port, xPort, yPort, zPort, outDir));
-    Console.WriteLine($"minimal-3point-run done: points={summary.PointCount}, frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
+    var summary = Minimal3PointRun.Execute(new Minimal3PointRunOptions(resourceName, baudRate, host, port, xPort, yPort, zPort, cycles, enableLaser, laserPort, laserPowerMw, outDir));
+    Console.WriteLine($"minimal-3point-run done: points={summary.PointCount}, cycles={summary.Cycles}, laser={summary.LaserEnabled}, frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
     return summary.TimeoutCount == 0 && summary.RawLenBadCount == 0 && summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
 }
 
@@ -389,7 +393,7 @@ static void PrintUsage()
       Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
-      Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] --out-dir <dir>
+      Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);

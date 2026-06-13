@@ -15,6 +15,10 @@ public sealed record Minimal3PointRunOptions(
     string XPort,
     string YPort,
     string ZPort,
+    int Cycles,
+    bool EnableLaser,
+    string LaserPort,
+    int LaserPowerMw,
     string OutDir);
 
 public sealed record Minimal3PointRunSummary(
@@ -26,6 +30,10 @@ public sealed record Minimal3PointRunSummary(
     [property: JsonPropertyName("smb_port")] int SmbPort,
     [property: JsonPropertyName("m8812_ports")] IReadOnlyList<string> M8812Ports,
     [property: JsonPropertyName("point_count")] int PointCount,
+    [property: JsonPropertyName("cycles")] int Cycles,
+    [property: JsonPropertyName("laser_enabled")] bool LaserEnabled,
+    [property: JsonPropertyName("laser_port")] string? LaserPort,
+    [property: JsonPropertyName("laser_power_mw")] int? LaserPowerMw,
     [property: JsonPropertyName("started_at")] string StartedAt,
     [property: JsonPropertyName("finished_at")] string FinishedAt,
     [property: JsonPropertyName("elapsed_ms")] long ElapsedMs,
@@ -95,17 +103,32 @@ public static class Minimal3PointRun
             }
         }
 
+        if (options.Cycles <= 0)
+        {
+            throw new ArgumentException("--cycles must be positive");
+        }
+
         var startedAt = UtcNowString();
         var processStart = Stopwatch.GetTimestamp();
         var runId = Path.GetFileName(Path.GetFullPath(options.OutDir));
         using var collector = new OeRallCollector(options.OeResource, options.OeBaudRate, rawPath, indexPath, processStart);
         using var smb = Smb100aTcp.Open(options.SmbHost, options.SmbPort);
         var magAxes = OpenMagAxes(options);
+        CniLaserSession? laser = null;
 
         try
         {
             collector.Start();
             collector.WaitForFirstFrame(TimeSpan.FromSeconds(5));
+
+            if (options.EnableLaser)
+            {
+                laser = CniLaserSerial.Open(options.LaserPort);
+                laser.SetPowerMw(options.LaserPowerMw);
+                Thread.Sleep(1000);
+                laser.OutputOn();
+                Thread.Sleep(1000);
+            }
 
             var baseline = LockBaseline(magAxes, baselinePath);
             var baselineCurrentA = baseline.Axes
@@ -114,25 +137,52 @@ public static class Minimal3PointRun
 
             smb.ApplyDefaultFixedProfile(SmbCommandSettleMs);
 
-            for (var index = 0; index < Points.Length; index++)
+            for (var cycle = 0; cycle < options.Cycles; cycle++)
             {
-                RunPoint(
-                    runId,
-                    index,
-                    Points[index],
-                    baselineCurrentA,
-                    magAxes,
-                    smb,
-                    collector,
-                    segmentsPath,
-                    pointsPath,
-                    qualityPath,
-                    processStart);
+                for (var index = 0; index < Points.Length; index++)
+                {
+                    RunPoint(
+                        runId,
+                        cycle,
+                        index,
+                        Points[index],
+                        baselineCurrentA,
+                        magAxes,
+                        smb,
+                        collector,
+                        segmentsPath,
+                        pointsPath,
+                        qualityPath,
+                        processStart);
+                }
             }
         }
         finally
         {
             Exception? cleanupFailure = null;
+            if (laser is not null)
+            {
+                try
+                {
+                    laser.OutputOff();
+                }
+                catch (Exception ex)
+                {
+                    cleanupFailure ??= ex;
+                }
+                finally
+                {
+                    try
+                    {
+                        laser.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        cleanupFailure ??= ex;
+                    }
+                }
+            }
+
             try
             {
                 CleanupMagAxes(magAxes);
@@ -191,7 +241,11 @@ public static class Minimal3PointRun
             options.SmbHost,
             options.SmbPort,
             [options.XPort, options.YPort, options.ZPort],
-            Points.Length,
+            Points.Length * options.Cycles,
+            options.Cycles,
+            options.EnableLaser,
+            options.EnableLaser ? options.LaserPort : null,
+            options.EnableLaser ? options.LaserPowerMw : null,
             startedAt,
             finishedAt,
             (long)Stopwatch.GetElapsedTime(processStart).TotalMilliseconds,
@@ -279,6 +333,7 @@ public static class Minimal3PointRun
 
     private static void RunPoint(
         string runId,
+        int cycle,
         int index,
         MinimalPointPlan point,
         IReadOnlyList<double> baselineCurrentA,
@@ -325,7 +380,8 @@ public static class Minimal3PointRun
         var timeoutsAfter = collector.Snapshot().Stats.TimeoutCount;
         var pointTimeouts = timeoutsAfter - timeoutsBefore;
         var framesInSegment = segmentEnd.NextFrameSeq - segmentStart.NextFrameSeq;
-        var segmentId = $"seg_{point.PointId}_0000";
+        var globalIndex = cycle * Points.Length + index;
+        var segmentId = $"seg_{point.PointId}_{globalIndex:0000}";
 
         RallArtifactWriter.AppendSegmentRecord(
             segmentsPath,
@@ -351,7 +407,7 @@ public static class Minimal3PointRun
                 1,
                 runId,
                 point.PointId,
-                index,
+                globalIndex,
                 point.TargetBNt,
                 baselineCurrentA.ToArray(),
                 deltaCurrentA,
