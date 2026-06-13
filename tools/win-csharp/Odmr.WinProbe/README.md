@@ -59,6 +59,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y 
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json --out-dir runs/win_csharp_run_execute_minimal
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- artifact-check --run runs/win_csharp_run_execute_minimal
 ```
 
 `oe-rall` writes:
@@ -96,3 +97,6 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station con
 - `points.jsonl`
 - `quality.jsonl`
 - `summary.json`
+
+`artifact-check` is an offline run directory contract check. It reads existing
+artifacts only and does not open instruments or touch the collector.

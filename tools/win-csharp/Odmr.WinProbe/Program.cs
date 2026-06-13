@@ -33,6 +33,7 @@ static int Run(string[] args)
             "minimal-3point-run" => Minimal3PointRunCommand(options),
             "run-resolve" => RunResolveCommand(options),
             "run-execute" => RunExecuteCommand(options),
+            "artifact-check" => ArtifactCheckCommand(options),
             "m8812-probe" => M8812Probe(options),
             "laser-probe" => LaserProbe(options),
             _ => Fail($"unknown command: {command}")
@@ -200,6 +201,13 @@ static int RunExecuteCommand(IReadOnlyDictionary<string, string> options)
         summary.TimeoutCount == 0 &&
         summary.RawLenBadCount == 0 &&
         summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
+}
+
+static int ArtifactCheckCommand(IReadOnlyDictionary<string, string> options)
+{
+    var report = ArtifactCheck.Check(GetRequiredOption(options, "run"));
+    Console.WriteLine(JsonSerializer.Serialize(report, JsonOptions.Pretty));
+    return report.Passed ? 0 : 2;
 }
 
 static int OeRall(IReadOnlyDictionary<string, string> options)
@@ -430,6 +438,7 @@ static void PrintUsage()
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
       Odmr.WinProbe run-resolve --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json>
       Odmr.WinProbe run-execute --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json> --out-dir <dir>
+      Odmr.WinProbe artifact-check --run <run-dir>
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);
