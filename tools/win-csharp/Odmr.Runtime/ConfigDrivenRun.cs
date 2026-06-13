@@ -41,6 +41,7 @@ public static class ConfigDrivenRun
         var segmentsPath = Path.Combine(options.OutDir, "segments.jsonl");
         var pointsPath = Path.Combine(options.OutDir, "points.jsonl");
         var qualityPath = Path.Combine(options.OutDir, "quality.jsonl");
+        var deviceStatePath = Path.Combine(options.OutDir, "device_state.jsonl");
         var eventsPath = Path.Combine(options.OutDir, "events.jsonl");
         var baselinePath = Path.Combine(options.OutDir, "baseline_snapshot.json");
         var manifestPath = Path.Combine(options.OutDir, "run_manifest.json");
@@ -127,6 +128,7 @@ public static class ConfigDrivenRun
                     segmentsPath,
                     pointsPath,
                     qualityPath,
+                    deviceStatePath,
                     eventsPath,
                     processStart);
                 if (quality.QualityStatus == "passed")
@@ -286,6 +288,7 @@ public static class ConfigDrivenRun
             "segments.jsonl",
             "points.jsonl",
             "quality.jsonl",
+            "device_state.jsonl",
             "events.jsonl",
             "point_fields.jsonl"
         })
@@ -474,6 +477,7 @@ public static class ConfigDrivenRun
         string segmentsPath,
         string pointsPath,
         string qualityPath,
+        string deviceStatePath,
         string eventsPath,
         long processStart)
     {
@@ -588,6 +592,7 @@ public static class ConfigDrivenRun
             raw_offset_end = segment.RawOffsetEnd
         });
 
+        var sweepRecord = ToSweepRecord(sweep);
         RallArtifactWriter.AppendJsonl(
             pointsPath,
             new PointRecord(
@@ -599,8 +604,41 @@ public static class ConfigDrivenRun
                 baselineCurrentA.ToArray(),
                 deltaCurrentA,
                 targetCurrentA,
-                ToSweepRecord(sweep),
+                sweepRecord,
                 new SettleRecord("fixed_delay_with_readback", settleStarted, settleEnded, "passed", measuredCurrentA)));
+
+        RallArtifactWriter.AppendJsonl(
+            deviceStatePath,
+            new DeviceStateRecord(
+                1,
+                bundle.Plan.RunId,
+                point.PointId,
+                index,
+                point.TargetBNt,
+                targetCurrentA,
+                measuredCurrentA,
+                bundle.SmbProfile.ProfileId,
+                sweepRecord,
+                smbConfigureError,
+                new SmbSweepExecutionRecord(sweepObservation.EstimatedSweepDurationMs, sweepObservation.OpcWaitMs, sweepObservation.FallbackUsed),
+                new RfExposureWindowRecord(
+                    "run_level_output_on_segment_scoped_sweep",
+                    rfExposureStartedTs,
+                    rfExposureEndedTs,
+                    rfExposureStartedMonotonicNs,
+                    rfExposureEndedMonotonicNs,
+                    segmentStartMonotonicNs,
+                    segmentEndMonotonicNs),
+                new SegmentBindingRecord(
+                    segmentId,
+                    segment.FrameSeqStart,
+                    segment.FrameSeqEnd,
+                    segment.RawOffsetStart,
+                    segment.RawOffsetEnd),
+                bundle.LaserProfile.ProfileId,
+                bundle.LaserProfile.Mode,
+                bundle.LaserProfile.PowerMw,
+                bundle.OeProfile.ProfileId));
 
         var quality = ComputeQuality(bundle, point, segmentId, framesInSegment, pointTimeouts, segmentEndMonotonicNs, segmentEnd.MonotonicNs, sweep);
         RallArtifactWriter.AppendJsonl(qualityPath, quality);

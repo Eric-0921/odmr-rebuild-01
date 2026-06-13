@@ -150,6 +150,46 @@ public sealed record PointRecord(
     [property: JsonPropertyName("rf")] SmbSweepRecord Rf,
     [property: JsonPropertyName("settle")] SettleRecord Settle);
 
+public sealed record SmbSweepExecutionRecord(
+    [property: JsonPropertyName("estimated_sweep_duration_ms")] long EstimatedSweepDurationMs,
+    [property: JsonPropertyName("opc_wait_ms")] long OpcWaitMs,
+    [property: JsonPropertyName("fallback_used")] bool FallbackUsed);
+
+public sealed record RfExposureWindowRecord(
+    [property: JsonPropertyName("policy")] string Policy,
+    [property: JsonPropertyName("started_ts")] string StartedTs,
+    [property: JsonPropertyName("ended_ts")] string EndedTs,
+    [property: JsonPropertyName("started_monotonic_ns")] ulong StartedMonotonicNs,
+    [property: JsonPropertyName("ended_monotonic_ns")] ulong EndedMonotonicNs,
+    [property: JsonPropertyName("segment_start_monotonic_ns")] ulong SegmentStartMonotonicNs,
+    [property: JsonPropertyName("segment_end_monotonic_ns")] ulong SegmentEndMonotonicNs);
+
+public sealed record SegmentBindingRecord(
+    [property: JsonPropertyName("segment_id")] string SegmentId,
+    [property: JsonPropertyName("frame_seq_start")] long? FrameSeqStart,
+    [property: JsonPropertyName("frame_seq_end")] long? FrameSeqEnd,
+    [property: JsonPropertyName("raw_offset_start")] long RawOffsetStart,
+    [property: JsonPropertyName("raw_offset_end")] long RawOffsetEnd);
+
+public sealed record DeviceStateRecord(
+    [property: JsonPropertyName("schema_version")] int SchemaVersion,
+    [property: JsonPropertyName("run_id")] string RunId,
+    [property: JsonPropertyName("point_id")] string PointId,
+    [property: JsonPropertyName("point_index")] int PointIndex,
+    [property: JsonPropertyName("target_b_nt")] IReadOnlyList<double> TargetBNt,
+    [property: JsonPropertyName("target_current_a")] IReadOnlyList<double> TargetCurrentA,
+    [property: JsonPropertyName("measured_current_a")] IReadOnlyList<double> MeasuredCurrentA,
+    [property: JsonPropertyName("smb_profile_id")] string SmbProfileId,
+    [property: JsonPropertyName("smb_sweep")] SmbSweepRecord SmbSweep,
+    [property: JsonPropertyName("smb_configure_error")] string SmbConfigureError,
+    [property: JsonPropertyName("smb_sweep_execution")] SmbSweepExecutionRecord SmbSweepExecution,
+    [property: JsonPropertyName("rf_exposure")] RfExposureWindowRecord RfExposure,
+    [property: JsonPropertyName("segment")] SegmentBindingRecord Segment,
+    [property: JsonPropertyName("laser_profile_id")] string LaserProfileId,
+    [property: JsonPropertyName("laser_mode")] string LaserMode,
+    [property: JsonPropertyName("laser_power_mw")] int LaserPowerMw,
+    [property: JsonPropertyName("oe_profile_id")] string OeProfileId);
+
 public sealed record QualityRecord(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
     [property: JsonPropertyName("run_id")] string RunId,
