@@ -54,6 +54,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-idn --resource ASRL8::
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-rall --resource ASRL8::INSTR --baud 921600 --duration-sec 300 --out-dir runs/win_csharp_oe_rall_5min
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 ```
 
 `oe-rall` writes:
@@ -75,3 +76,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y 
 - `SYST:REM`
 - `MEAS:CURR?`
 - cleanup: `CURR 0.00000`, `OUTP 0`, `SYST:LOC`
+
+`laser-probe --off-only` only sends the output-off frame and verifies echo:
+
+- `55 AA 03 00 03`

@@ -29,6 +29,7 @@ static int Run(string[] args)
             "oe-rall" => OeRall(options),
             "smb-probe" => SmbProbe(options),
             "m8812-probe" => M8812Probe(options),
+            "laser-probe" => LaserProbe(options),
             _ => Fail($"unknown command: {command}")
         };
     }
@@ -37,6 +38,25 @@ static int Run(string[] args)
         Console.Error.WriteLine(ex.Message);
         return 1;
     }
+}
+
+static int LaserProbe(IReadOnlyDictionary<string, string> options)
+{
+    var port = GetOption(options, "port", CniLaserDefaults.Port);
+    if (!GetBoolOption(options, "off-only", defaultValue: false))
+    {
+        return Fail("laser-probe requires --off-only");
+    }
+
+    var result = CniLaserSerial.ProbeOffOnly(port);
+    Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Pretty));
+
+    if (!result.EchoMatched)
+    {
+        return Fail("CNI laser output_off echo mismatch");
+    }
+
+    return 0;
 }
 
 static int M8812Probe(IReadOnlyDictionary<string, string> options)
@@ -254,9 +274,10 @@ static Dictionary<string, string> ParseOptions(string[] args)
             throw new ArgumentException($"unexpected argument: {key}");
         }
 
-        if (i + 1 >= args.Length)
+        if (i + 1 >= args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal))
         {
-            throw new ArgumentException($"missing value for {key}");
+            options[key[2..]] = "true";
+            continue;
         }
 
         options[key[2..]] = args[++i];
@@ -293,6 +314,21 @@ static int GetIntOption(IReadOnlyDictionary<string, string> options, string key,
     return parsed;
 }
 
+static bool GetBoolOption(IReadOnlyDictionary<string, string> options, string key, bool defaultValue)
+{
+    if (!options.TryGetValue(key, out var value))
+    {
+        return defaultValue;
+    }
+
+    if (!bool.TryParse(value, out var parsed))
+    {
+        throw new ArgumentException($"--{key} must be true or false");
+    }
+
+    return parsed;
+}
+
 static int Fail(string message)
 {
     Console.Error.WriteLine(message);
@@ -320,5 +356,6 @@ static void PrintUsage()
       Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
+      Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);
 }
