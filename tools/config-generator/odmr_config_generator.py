@@ -41,8 +41,132 @@ def format_number(value: float) -> str:
     return "0" if text == "-0" else text
 
 
+def code_choice(code: int, label: str) -> str:
+    return f"{code} - {label}"
+
+
+def choice_code(value: object) -> int:
+    text = str(value).strip()
+    return int(text.split("-", 1)[0].strip())
+
+
+SMB_FM_SOURCE_CHOICES = ["INT", "EXT", "INT,EXT"]
+SMB_FM_MODE_CHOICES = ["NORM", "LNO", "HDEV"]
+SMB_LF_SHAPE_CHOICES = ["SINE", "SQU", "TRI", "SAWT", "ISAW"]
+SMB_LF_IMPEDANCE_CHOICES = ["LOW", "G600"]
+SMB_SWEEP_MODE_CHOICES = ["AUTO", "MAN", "STEP"]
+SMB_SWEEP_SPACING_CHOICES = ["LIN", "LOG"]
+SMB_SWEEP_SHAPE_CHOICES = ["SAWT", "TRI"]
+SMB_TRIGGER_SOURCE_CHOICES = ["AUTO", "SING", "EXT"]
+
+OE_CHOICES = {
+    "channel": [code_choice(1, "Ch-A"), code_choice(2, "Ch-B")],
+    "input_source": [
+        code_choice(0, "single-ended voltage A"),
+        code_choice(1, "differential voltage A-B"),
+        code_choice(2, "1 MOhm current gain"),
+        code_choice(3, "100 MOhm current gain"),
+    ],
+    "input_grounding": [code_choice(0, "float"), code_choice(1, "ground")],
+    "input_coupling": [code_choice(0, "AC"), code_choice(1, "DC")],
+    "line_notch_filter": [
+        code_choice(0, "off"),
+        code_choice(1, "50 Hz"),
+        code_choice(2, "50 Hz + 100 Hz"),
+        code_choice(3, "100 Hz"),
+    ],
+    "reference_source": [
+        code_choice(0, "external"),
+        code_choice(1, "internal"),
+        code_choice(2, "internal sweep"),
+    ],
+    "reference_slope": [
+        code_choice(0, "TTL rising edge"),
+        code_choice(1, "sine zero crossing"),
+        code_choice(2, "observed LabVIEW locked readback"),
+    ],
+    "dynamic_reserve": [
+        code_choice(0, "low noise"),
+        code_choice(1, "normal"),
+        code_choice(2, "high reserve"),
+    ],
+    "sensitivity_index": [
+        code_choice(0, "1 nV/fA"),
+        code_choice(1, "2 nV/fA"),
+        code_choice(2, "5 nV/fA"),
+        code_choice(3, "10 nV/fA"),
+        code_choice(4, "20 nV/fA"),
+        code_choice(5, "50 nV/fA"),
+        code_choice(6, "100 nV/fA"),
+        code_choice(7, "200 nV/fA"),
+        code_choice(8, "500 nV/fA"),
+        code_choice(9, "1 uV/pA"),
+        code_choice(10, "2 uV/pA"),
+        code_choice(11, "5 uV/pA"),
+        code_choice(12, "10 uV/pA"),
+        code_choice(13, "20 uV/pA"),
+        code_choice(14, "50 uV/pA"),
+        code_choice(15, "100 uV/pA"),
+        code_choice(16, "200 uV/pA"),
+        code_choice(17, "500 uV/pA"),
+        code_choice(18, "1 mV/nA"),
+        code_choice(19, "2 mV/nA"),
+        code_choice(20, "5 mV/nA"),
+        code_choice(21, "10 mV/nA"),
+        code_choice(22, "20 mV/nA"),
+        code_choice(23, "50 mV/nA"),
+        code_choice(24, "100 mV/nA"),
+        code_choice(25, "200 mV/nA"),
+        code_choice(26, "500 mV/nA"),
+        code_choice(27, "1 V/uA"),
+    ],
+    "time_constant_index": [
+        code_choice(0, "10 us"),
+        code_choice(1, "30 us"),
+        code_choice(2, "100 us"),
+        code_choice(3, "300 us"),
+        code_choice(4, "1 ms"),
+        code_choice(5, "3 ms"),
+        code_choice(6, "10 ms"),
+        code_choice(7, "30 ms"),
+        code_choice(8, "100 ms"),
+        code_choice(9, "300 ms"),
+        code_choice(10, "1 s"),
+        code_choice(11, "3 s"),
+        code_choice(12, "10 s"),
+        code_choice(13, "30 s"),
+        code_choice(14, "100 s"),
+        code_choice(15, "300 s"),
+        code_choice(16, "1000 s"),
+        code_choice(17, "3000 s"),
+    ],
+    "filter_slope": [
+        code_choice(0, "6 dB/oct"),
+        code_choice(1, "12 dB/oct"),
+        code_choice(2, "18 dB/oct"),
+        code_choice(3, "24 dB/oct"),
+    ],
+    "sync_filter": [code_choice(0, "off"), code_choice(1, "on")],
+    "sine_output_mode": [
+        code_choice(0, "fixed amplitude"),
+        code_choice(1, "linear sweep amplitude"),
+        code_choice(2, "log sweep amplitude"),
+        code_choice(3, "DC output"),
+    ],
+}
+OE_CHOICE_KEYS = set(OE_CHOICES)
+
+
+def oe_choice_for_code(key: str, value: object) -> str:
+    code = choice_code(value)
+    for choice in OE_CHOICES[key]:
+        if choice_code(choice) == code:
+            return choice
+    return str(code)
+
+
 class ScrollPage(ttk.Frame):
-    def __init__(self, parent: ttk.Notebook) -> None:
+    def __init__(self, parent: tk.Widget) -> None:
         super().__init__(parent)
         self.canvas = tk.Canvas(self, highlightthickness=0)
         self.scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.canvas.yview)
@@ -90,6 +214,7 @@ class ConfigGeneratorApp(tk.Tk):
         }
         self.axis_vars: dict[str, dict[str, tk.Variable]] = {}
         self.blocks: list[ScanBlock] = [self.default_block("x_line", "x")]
+        self.current_step = 0
 
         self._build_ui()
         self._load_default_paths()
@@ -122,12 +247,13 @@ class ConfigGeneratorApp(tk.Tk):
         ttk.Button(side, text="Previous", command=lambda: self._move_step(-1)).pack(fill=tk.X, pady=(16, 4))
         ttk.Button(side, text="Next", command=lambda: self._move_step(1)).pack(fill=tk.X)
 
-        self.notebook = ttk.Notebook(root)
-        self.notebook.grid(row=0, column=1, sticky="nsew")
-        self.pages = [ScrollPage(self.notebook) for _ in STEP_TITLES]
-        for title, page in zip(STEP_TITLES, self.pages):
-            self.notebook.add(page, text=title)
-        self.notebook.bind("<<NotebookTabChanged>>", self._sync_step_list)
+        self.content = ttk.Frame(root)
+        self.content.grid(row=0, column=1, sticky="nsew")
+        self.content.rowconfigure(0, weight=1)
+        self.content.columnconfigure(0, weight=1)
+        self.pages = [ScrollPage(self.content) for _ in STEP_TITLES]
+        for page in self.pages:
+            page.grid(row=0, column=0, sticky="nsew")
 
         self._build_templates_page(self.pages[0].body)
         self._build_magnetic_page(self.pages[1].body)
@@ -136,6 +262,7 @@ class ConfigGeneratorApp(tk.Tk):
         self._build_oe_page(self.pages[4].body)
         self._build_laser_page(self.pages[5].body)
         self._build_generate_page(self.pages[6].body)
+        self._show_step(0)
 
     def _build_templates_page(self, parent: ttk.Frame) -> None:
         self._section_title(parent, "Templates and output paths", 0)
@@ -285,14 +412,14 @@ class ConfigGeneratorApp(tk.Tk):
         self._form_grid(parent, self.smb_vars, [
             ("modulation_enabled", "Modulation enabled"),
             ("fm_enabled", "FM enabled"),
-            ("fm_source", "FM source"),
-            ("fm_mode", "FM mode"),
+            ("fm_source", "FM source", SMB_FM_SOURCE_CHOICES),
+            ("fm_mode", "FM mode", SMB_FM_MODE_CHOICES),
             ("fm_deviation_hz", "FM deviation"),
             ("lf_output_enabled", "LF output enabled"),
             ("lf_voltage_mv", "LF voltage"),
             ("lf_frequency_hz", "LF frequency"),
-            ("lf_shape", "LF shape"),
-            ("lf_source_impedance", "LF source impedance"),
+            ("lf_shape", "LF shape", SMB_LF_SHAPE_CHOICES),
+            ("lf_source_impedance", "LF source impedance", SMB_LF_IMPEDANCE_CHOICES),
         ], start_row=10)
         self._section_title(parent, "SMB default RF sweep", 16)
         self._form_grid(parent, self.smb_vars, [
@@ -301,10 +428,10 @@ class ConfigGeneratorApp(tk.Tk):
             ("step_hz", "Step"),
             ("dwell_ms", "Dwell"),
             ("power_dbm", "Power dBm"),
-            ("sweep_mode", "Sweep mode"),
-            ("spacing", "Spacing"),
-            ("shape", "Shape"),
-            ("trigger_source", "Trigger source"),
+            ("sweep_mode", "Sweep mode", SMB_SWEEP_MODE_CHOICES),
+            ("spacing", "Spacing", SMB_SWEEP_SPACING_CHOICES),
+            ("shape", "Shape", SMB_SWEEP_SHAPE_CHOICES),
+            ("trigger_source", "Trigger source", SMB_TRIGGER_SOURCE_CHOICES),
             ("output_voltage_start_v", "Output voltage start V"),
             ("output_voltage_stop_v", "Output voltage stop V"),
             ("rf_output_enabled", "RF output enabled"),
@@ -314,52 +441,53 @@ class ConfigGeneratorApp(tk.Tk):
         self.oe_vars = {
             "profile_id": tk.StringVar(),
             "command_settle_ms": tk.DoubleVar(value=500),
-            "channel": tk.IntVar(value=2),
-            "input_source": tk.IntVar(value=0),
-            "input_grounding": tk.IntVar(value=0),
-            "input_coupling": tk.IntVar(value=1),
-            "line_notch_filter": tk.IntVar(value=0),
-            "reference_source": tk.IntVar(value=0),
-            "reference_slope": tk.IntVar(value=2),
+            "channel": tk.StringVar(value=oe_choice_for_code("channel", 2)),
+            "input_source": tk.StringVar(value=oe_choice_for_code("input_source", 0)),
+            "input_grounding": tk.StringVar(value=oe_choice_for_code("input_grounding", 0)),
+            "input_coupling": tk.StringVar(value=oe_choice_for_code("input_coupling", 1)),
+            "line_notch_filter": tk.StringVar(value=oe_choice_for_code("line_notch_filter", 0)),
+            "reference_source": tk.StringVar(value=oe_choice_for_code("reference_source", 0)),
+            "reference_slope": tk.StringVar(value=oe_choice_for_code("reference_slope", 2)),
             "phase_deg": tk.DoubleVar(value=0.0),
             "harmonic_1": tk.IntVar(value=1),
             "harmonic_2": tk.IntVar(value=1),
-            "dynamic_reserve": tk.IntVar(value=1),
-            "sensitivity_index": tk.IntVar(value=24),
-            "time_constant_index": tk.IntVar(value=9),
-            "filter_slope": tk.IntVar(value=1),
-            "sync_filter": tk.IntVar(value=0),
-            "sine_output_mode": tk.IntVar(value=0),
+            "dynamic_reserve": tk.StringVar(value=oe_choice_for_code("dynamic_reserve", 1)),
+            "sensitivity_index": tk.StringVar(value=oe_choice_for_code("sensitivity_index", 24)),
+            "time_constant_index": tk.StringVar(value=oe_choice_for_code("time_constant_index", 9)),
+            "filter_slope": tk.StringVar(value=oe_choice_for_code("filter_slope", 1)),
+            "sync_filter": tk.StringVar(value=oe_choice_for_code("sync_filter", 0)),
+            "sine_output_mode": tk.StringVar(value=oe_choice_for_code("sine_output_mode", 0)),
             "sine_output_voltage_vrms": tk.DoubleVar(value=1.0),
         }
         self._section_title(parent, "OE1022D fixed profile", 0)
-        self._form_grid(parent, self.oe_vars, [
+        oe_fields: list[tuple[str, str] | tuple[str, str, list[str]]] = [
             ("profile_id", "Profile ID"),
             ("command_settle_ms", "Command settle"),
-            ("channel", "Channel"),
-            ("input_source", "Input source"),
-            ("input_grounding", "Input grounding"),
-            ("input_coupling", "Input coupling"),
-            ("line_notch_filter", "Line notch filter"),
-            ("reference_source", "Reference source"),
-            ("reference_slope", "Reference slope"),
+            ("channel", "Channel", OE_CHOICES["channel"]),
+            ("input_source", "Input source", OE_CHOICES["input_source"]),
+            ("input_grounding", "Input grounding", OE_CHOICES["input_grounding"]),
+            ("input_coupling", "Input coupling", OE_CHOICES["input_coupling"]),
+            ("line_notch_filter", "Line notch filter", OE_CHOICES["line_notch_filter"]),
+            ("reference_source", "Reference source", OE_CHOICES["reference_source"]),
+            ("reference_slope", "Reference slope", OE_CHOICES["reference_slope"]),
             ("phase_deg", "Phase deg"),
             ("harmonic_1", "Harmonic 1"),
             ("harmonic_2", "Harmonic 2"),
-            ("dynamic_reserve", "Dynamic reserve"),
-            ("sensitivity_index", "Sensitivity index"),
-            ("time_constant_index", "Time constant index"),
-            ("filter_slope", "Filter slope"),
-            ("sync_filter", "Sync filter"),
-            ("sine_output_mode", "Sine output mode"),
+            ("dynamic_reserve", "Dynamic reserve", OE_CHOICES["dynamic_reserve"]),
+            ("sensitivity_index", "Sensitivity index", OE_CHOICES["sensitivity_index"]),
+            ("time_constant_index", "Time constant index", OE_CHOICES["time_constant_index"]),
+            ("filter_slope", "Filter slope", OE_CHOICES["filter_slope"]),
+            ("sync_filter", "Sync filter", OE_CHOICES["sync_filter"]),
+            ("sine_output_mode", "Sine output mode", OE_CHOICES["sine_output_mode"]),
             ("sine_output_voltage_vrms", "Sine output voltage Vrms"),
-        ], start_row=1)
+        ]
+        self._form_grid(parent, self.oe_vars, oe_fields, start_row=1, columns=1)
         ttk.Label(
             parent,
             text="Collector is locked: frame_exact_bytes=12288 and rall_post_write_delay_ms=30. This GUI does not edit the RALL hot path.",
             wraplength=840,
             foreground="#555555",
-        ).grid(row=12, column=0, columnspan=4, sticky="w", pady=14)
+        ).grid(row=len(oe_fields) + 2, column=0, columnspan=2, sticky="w", pady=14)
 
     def _build_laser_page(self, parent: ttk.Frame) -> None:
         self.laser_vars = {
@@ -397,11 +525,21 @@ class ConfigGeneratorApp(tk.Tk):
         ttk.Button(parent, text="Browse", command=lambda: self._browse_path(variable, is_directory)).grid(row=row, column=2, padx=(8, 0), pady=5)
         parent.columnconfigure(1, weight=1)
 
-    def _form_grid(self, parent: ttk.Frame, values: dict[str, tk.Variable], fields: list[tuple[str, str]], start_row: int) -> None:
-        for index, (key, label) in enumerate(fields):
-            row = start_row + index // 2
-            col = 0 if index % 2 == 0 else 2
-            self._form_field(parent, label, values[key], row, col)
+    def _form_grid(
+        self,
+        parent: ttk.Frame,
+        values: dict[str, tk.Variable],
+        fields: list[tuple[str, str] | tuple[str, str, list[str]]],
+        start_row: int,
+        columns: int = 2,
+    ) -> None:
+        for index, field in enumerate(fields):
+            key = field[0]
+            label = field[1]
+            choices = field[2] if len(field) > 2 else None
+            row = start_row + index // columns
+            col = (index % columns) * 2
+            self._form_field(parent, label, values[key], row, col, choices=choices)
 
     def _form_field(
         self,
@@ -539,7 +677,8 @@ class ConfigGeneratorApp(tk.Tk):
         self.oe_vars["profile_id"].set(f"{oe.get('profile_id', 'oe1022d')}_generated")
         self.oe_vars["command_settle_ms"].set(from_canonical_unit(oe.get("command_settle_ms", 500), "time_ms", self.unit_vars["time"].get()))
         for key in [key for key in self.oe_vars if key not in {"profile_id", "command_settle_ms"}]:
-            self.oe_vars[key].set(fixed.get(key, self.oe_vars[key].get()))
+            value = fixed.get(key, self.oe_vars[key].get())
+            self.oe_vars[key].set(oe_choice_for_code(key, value) if key in OE_CHOICE_KEYS else value)
 
     def _set_laser_values(self, laser: dict) -> None:
         self.laser_vars["profile_id"].set(f"{laser.get('profile_id', 'cni_laser')}_generated")
@@ -733,7 +872,11 @@ class ConfigGeneratorApp(tk.Tk):
             smb_sweep=self._canonical_smb_sweep(),
             oe_profile_id=str(self.oe_vars["profile_id"].get()),
             oe_command_settle_ms=self._time_ms(self.oe_vars["command_settle_ms"].get()),
-            oe_fixed={key: self.oe_vars[key].get() for key in self.oe_vars if key not in {"profile_id", "command_settle_ms"}},
+            oe_fixed={
+                key: choice_code(self.oe_vars[key].get()) if key in OE_CHOICE_KEYS else self.oe_vars[key].get()
+                for key in self.oe_vars
+                if key not in {"profile_id", "command_settle_ms"}
+            },
             laser_profile_id=str(self.laser_vars["profile_id"].get()),
             laser_mode=str(self.laser_vars["mode"].get()),
             laser_power_mw=int(round(to_canonical_unit(self.laser_vars["power_mw"].get(), "power_mw", self.unit_vars["laser_power"].get()))),
@@ -758,24 +901,34 @@ class ConfigGeneratorApp(tk.Tk):
             for key, path in paths.items():
                 self.summary.insert(tk.END, f"{key}: {path}\n")
             self.summary.insert(tk.END, "\nNext step:\nOpen the Windows C# Control Panel, select these generated JSON files in Run Bundle, validate, then run.\n")
-            self.notebook.select(6)
+            self._show_step(6)
         except Exception as exc:
             messagebox.showerror("Generate failed", str(exc), parent=self)
 
     def _select_step_from_list(self, _event: tk.Event) -> None:
         selection = self.step_list.curselection()
         if selection:
-            self.notebook.select(int(selection[0]))
-
-    def _sync_step_list(self, _event: tk.Event) -> None:
-        index = self.notebook.index(self.notebook.select())
-        self.step_list.selection_clear(0, tk.END)
-        self.step_list.selection_set(index)
+            self._show_step(int(selection[0]))
 
     def _move_step(self, delta: int) -> None:
-        index = self.notebook.index(self.notebook.select())
-        next_index = max(0, min(len(STEP_TITLES) - 1, index + delta))
-        self.notebook.select(next_index)
+        next_index = max(0, min(len(STEP_TITLES) - 1, self.current_step + delta))
+        self._show_step(next_index)
+
+    def _show_step(self, index: int) -> None:
+        self.current_step = max(0, min(len(STEP_TITLES) - 1, index))
+        self.pages[self.current_step].tkraise()
+        self.step_list.selection_clear(0, tk.END)
+        self.step_list.selection_set(self.current_step)
+        self.step_list.see(self.current_step)
+        self.after_idle(self._refresh_selected_page)
+        self.after(30, self._refresh_selected_page)
+
+    def _refresh_selected_page(self) -> None:
+        page = self.pages[self.current_step]
+        page.update_idletasks()
+        page.canvas.itemconfigure(page.window_id, width=max(1, page.canvas.winfo_width()))
+        page.canvas.configure(scrollregion=page.canvas.bbox("all"))
+        page.canvas.yview_moveto(0)
 
     @staticmethod
     def default_block(prefix: str, active_axis: str) -> ScanBlock:

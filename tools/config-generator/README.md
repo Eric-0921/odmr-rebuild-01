@@ -35,6 +35,7 @@ python3 tools/config-generator/tests/test_config_core.py
 - SMB/OE/Laser 参数继续写在 profile JSON 中。
 - 磁场扫描点写在 C# runtime 已支持的 `points[]` plan 中。
 - Python GUI 是单线程 Tkinter 工具：只做离线表单编辑和本地 JSON 文件写入，不连接设备，不启动采集，不引入后台 worker。
+- 页面切换使用单内容区 frame stack，不使用隐藏 Notebook tab；快速切换只切换已构建页面，不重新加载配置文件。
 
 ## UI Order
 
@@ -49,6 +50,24 @@ python3 tools/config-generator/tests/test_config_core.py
 7. Generate：生成 JSON，交给 C# Run Bundle 控制面板选择运行。
 
 界面使用分页和滚动表单，避免把不同设备的大量字段挤在同一页。
+
+## Device Options
+
+设备命令枚举不允许随手输入字符串：
+
+- SMB100A 的 token 下拉来自仓库中的 R&S 命令真值和手册摘录：
+  - `FM:SOUR`: `INT` / `EXT` / `INT,EXT`
+  - `FM:MODE`: `NORM` / `LNO` / `HDEV`
+  - `LFO:SHAP`: `SINE` / `SQU` / `TRI` / `SAWT` / `ISAW`
+  - `SOUR:LFO:SIMP`: `LOW` / `G600`
+  - `SWE:MODE`: `AUTO` / `MAN` / `STEP`
+  - `SWE:SPAC`: `LIN` / `LOG`
+  - `SWE:SHAP`: `SAWT` / `TRI`
+  - `TRIG:FSW:SOUR`: `AUTO` / `SING` / `EXT`
+- OE1022D 的 `j` 编码下拉来自 `docs/equipment_manual/oe1022d/校对后的oe1022d面板基础设置/` 和当前已验证 profile。
+  UI 显示为 `code - meaning`，生成 JSON 时仍写回整数 code，例如 `24 - 100 mV/nA` 会写成 `"sensitivity_index": 24`。
+- OE `reference_slope=2` 是当前 LabVIEW 锁定态 profile 中的已观测读回值；手册 V1.5 只列出 `0/1`，所以 UI 明确标注为 observed LabVIEW locked readback。
+- 仍然保留自由输入的字段只限连续数值或实验身份字段，例如频率、功率、电流、settle 时间、run id、operator。
 
 ## Units
 
