@@ -9,9 +9,23 @@ from odmr_config_core import (
     AxisSpec,
     GeneratorRequest,
     ScanBlock,
+    from_canonical_unit,
     load_json,
+    parse_values,
+    to_canonical_unit,
     write_generated_bundle,
 )
+
+
+STEP_TITLES = [
+    "1 Templates / Output",
+    "2 Magnetic Plan",
+    "3 Plan Policy",
+    "4 SMB100A",
+    "5 OE1022D",
+    "6 CNI Laser",
+    "7 Generate",
+]
 
 
 def find_repo_root() -> Path:
@@ -22,159 +36,407 @@ def find_repo_root() -> Path:
     raise RuntimeError("could not find repository root")
 
 
+def format_number(value: float) -> str:
+    text = f"{float(value):.12g}"
+    return "0" if text == "-0" else text
+
+
+class ScrollPage(ttk.Frame):
+    def __init__(self, parent: ttk.Notebook) -> None:
+        super().__init__(parent)
+        self.canvas = tk.Canvas(self, highlightthickness=0)
+        self.scrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.body = ttk.Frame(self.canvas, padding=12)
+        self.window_id = self.canvas.create_window((0, 0), window=self.body, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.body.bind("<Configure>", self._update_scrollregion)
+        self.canvas.bind("<Configure>", self._resize_window)
+
+    def _update_scrollregion(self, _event: tk.Event) -> None:
+        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+    def _resize_window(self, event: tk.Event) -> None:
+        self.canvas.itemconfigure(self.window_id, width=event.width)
+
+
 class ConfigGeneratorApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.repo_root = find_repo_root()
         self.title("ODMR Config Generator")
-        self.geometry("1180x780")
-        self.minsize(980, 680)
-        self.blocks: list[ScanBlock] = [self.default_block("x_line", "x")]
+        self.geometry("1280x860")
+        self.minsize(1100, 760)
+
         self.template_vars: dict[str, tk.StringVar] = {}
+        self.run_vars: dict[str, tk.Variable] = {}
+        self.baseline_vars: dict[str, tk.Variable] = {}
+        self.quality_vars: dict[str, tk.Variable] = {}
+        self.smb_vars: dict[str, tk.Variable] = {}
+        self.oe_vars: dict[str, tk.Variable] = {}
+        self.laser_vars: dict[str, tk.Variable] = {}
+        self.unit_vars: dict[str, tk.StringVar] = {
+            "field": tk.StringVar(value="nT"),
+            "baseline_current": tk.StringVar(value="A"),
+            "voltage": tk.StringVar(value="V"),
+            "time": tk.StringVar(value="ms"),
+            "rf_frequency": tk.StringVar(value="GHz"),
+            "rf_step": tk.StringVar(value="MHz"),
+            "fm_deviation": tk.StringVar(value="MHz"),
+            "lf_frequency": tk.StringVar(value="Hz"),
+            "lf_voltage": tk.StringVar(value="mV"),
+            "laser_power": tk.StringVar(value="mW"),
+        }
         self.axis_vars: dict[str, dict[str, tk.Variable]] = {}
+        self.blocks: list[ScanBlock] = [self.default_block("x_line", "x")]
+
         self._build_ui()
-        self._load_defaults()
+        self._load_default_paths()
         self._refresh_block_list()
         self._load_block(0)
-        self._load_profile_defaults()
+        self._load_template_values()
 
     def _build_ui(self) -> None:
         root = ttk.Frame(self, padding=10)
         root.pack(fill=tk.BOTH, expand=True)
-        root.columnconfigure(0, weight=1)
         root.columnconfigure(1, weight=1)
-        root.rowconfigure(1, weight=1)
+        root.rowconfigure(0, weight=1)
 
-        self._build_template_frame(root)
-        self._build_run_frame(root)
-        self._build_scan_frame(root)
-        self._build_profile_frame(root)
-        self._build_output_frame(root)
+        side = ttk.Frame(root, width=230)
+        side.grid(row=0, column=0, sticky="ns", padx=(0, 10))
+        side.grid_propagate(False)
+        ttk.Label(side, text="Configuration Order", font=("", 11, "bold")).pack(anchor="w")
+        ttk.Label(
+            side,
+            text="先选模板和输出目录，再定义磁场扫描；随后确认 Plan policy、SMB、OE、Laser，最后生成 JSON 给 C# Run Bundle 使用。",
+            wraplength=205,
+            justify=tk.LEFT,
+        ).pack(anchor="w", pady=(6, 10))
+        self.step_list = tk.Listbox(side, height=len(STEP_TITLES), exportselection=False)
+        self.step_list.pack(fill=tk.X)
+        for title in STEP_TITLES:
+            self.step_list.insert(tk.END, title)
+        self.step_list.selection_set(0)
+        self.step_list.bind("<<ListboxSelect>>", self._select_step_from_list)
+        ttk.Button(side, text="Previous", command=lambda: self._move_step(-1)).pack(fill=tk.X, pady=(16, 4))
+        ttk.Button(side, text="Next", command=lambda: self._move_step(1)).pack(fill=tk.X)
 
-    def _build_template_frame(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Templates")
-        frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 8))
-        frame.columnconfigure(1, weight=1)
-        frame.columnconfigure(4, weight=1)
-        rows = [
-            ("plan", "Plan template", 0, 0),
-            ("smb", "SMB profile", 0, 3),
-            ("oe", "OE profile", 1, 0),
-            ("laser", "Laser profile", 1, 3),
-        ]
-        for key, label, row, col in rows:
+        self.notebook = ttk.Notebook(root)
+        self.notebook.grid(row=0, column=1, sticky="nsew")
+        self.pages = [ScrollPage(self.notebook) for _ in STEP_TITLES]
+        for title, page in zip(STEP_TITLES, self.pages):
+            self.notebook.add(page, text=title)
+        self.notebook.bind("<<NotebookTabChanged>>", self._sync_step_list)
+
+        self._build_templates_page(self.pages[0].body)
+        self._build_magnetic_page(self.pages[1].body)
+        self._build_policy_page(self.pages[2].body)
+        self._build_smb_page(self.pages[3].body)
+        self._build_oe_page(self.pages[4].body)
+        self._build_laser_page(self.pages[5].body)
+        self._build_generate_page(self.pages[6].body)
+
+    def _build_templates_page(self, parent: ttk.Frame) -> None:
+        self._section_title(parent, "Templates and output paths", 0)
+        for row, (key, label) in enumerate([
+            ("plan", "Plan template"),
+            ("smb", "SMB100A profile template"),
+            ("oe", "OE1022D profile template"),
+            ("laser", "CNI laser profile template"),
+            ("output", "Generated config directory"),
+        ], start=1):
             var = tk.StringVar()
             self.template_vars[key] = var
-            ttk.Label(frame, text=label).grid(row=row, column=col, sticky="w", padx=(6, 4), pady=4)
-            ttk.Entry(frame, textvariable=var).grid(row=row, column=col + 1, sticky="ew", pady=4)
-            ttk.Button(frame, text="Browse", command=lambda k=key: self._browse_template(k)).grid(row=row, column=col + 2, padx=4, pady=4)
-        ttk.Button(frame, text="Load template values", command=self._load_profile_defaults).grid(row=2, column=0, padx=6, pady=6, sticky="w")
+            self._path_row(parent, label, var, row, is_directory=key == "output")
+        ttk.Button(parent, text="Load template values into forms", command=self._load_template_values).grid(row=7, column=1, sticky="w", pady=14)
+        ttk.Label(
+            parent,
+            text="输出结果仍然是现有 C# runtime 的 plan/profile JSON。这里不创建新的 run bundle schema。",
+            wraplength=820,
+        ).grid(row=8, column=0, columnspan=3, sticky="w", pady=(10, 0))
 
-    def _build_run_frame(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Run / Plan")
-        frame.grid(row=1, column=0, sticky="nsew", padx=(0, 8), pady=(0, 8))
-        frame.columnconfigure(1, weight=1)
-        self.run_id = tk.StringVar(value="generated_plan")
-        self.operator = tk.StringVar(value="local")
-        self.point_settle = tk.IntVar(value=500)
-        self.acq_window = tk.IntVar(value=0)
-        self._entry(frame, "Run ID", self.run_id, 0)
-        self._entry(frame, "Operator", self.operator, 1)
-        self._entry(frame, "Point settle ms", self.point_settle, 2)
-        self._entry(frame, "Acq window ms", self.acq_window, 3)
+    def _build_magnetic_page(self, parent: ttk.Frame) -> None:
+        self._section_title(parent, "Run identity", 0)
+        self.run_vars = {
+            "run_id": tk.StringVar(value="generated_plan"),
+            "operator": tk.StringVar(value="local"),
+            "acquisition_window_ms": tk.DoubleVar(value=0),
+            "point_settle_ms": tk.DoubleVar(value=500),
+        }
+        self._form_field(parent, "Run ID", self.run_vars["run_id"], 1, 0)
+        self._form_field(parent, "Operator", self.run_vars["operator"], 2, 0)
+        self._form_field(parent, "Acquisition window", self.run_vars["acquisition_window_ms"], 1, 2)
+        self._form_field(parent, "Point settle", self.run_vars["point_settle_ms"], 2, 2)
+        self._unit_selector(parent, "Magnetic field input unit", self.unit_vars["field"], ["nT", "uT", "mT"], 3, 0)
+        self._unit_selector(parent, "Time input unit", self.unit_vars["time"], ["ms", "s"], 3, 2)
 
-    def _build_scan_frame(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Magnetic Scan Blocks")
-        frame.grid(row=2, column=0, sticky="nsew", padx=(0, 8))
-        frame.columnconfigure(1, weight=1)
-        parent.rowconfigure(2, weight=1)
-
-        self.block_list = tk.Listbox(frame, height=7, exportselection=False)
-        self.block_list.grid(row=0, column=0, rowspan=9, sticky="nsew", padx=6, pady=6)
+        self._section_title(parent, "Scan blocks", 4)
+        block_frame = ttk.Frame(parent)
+        block_frame.grid(row=5, column=0, columnspan=4, sticky="nsew")
+        block_frame.columnconfigure(1, weight=1)
+        self.block_list = tk.Listbox(block_frame, height=9, exportselection=False)
+        self.block_list.grid(row=0, column=0, rowspan=6, sticky="nsw", padx=(0, 12))
         self.block_list.bind("<<ListboxSelect>>", self._on_block_select)
 
         self.block_prefix = tk.StringVar()
         self.block_traversal = tk.StringVar(value="raster")
         self.block_total_points = tk.IntVar(value=0)
-        self._entry(frame, "Prefix", self.block_prefix, 0, column=1)
-        ttk.Label(frame, text="Traversal").grid(row=1, column=1, sticky="w", padx=6, pady=3)
-        ttk.Combobox(frame, textvariable=self.block_traversal, values=["raster", "bounce_1d_x"], state="readonly").grid(row=1, column=2, sticky="ew", padx=6, pady=3)
-        self._entry(frame, "Total points", self.block_total_points, 2, column=1)
+        self._form_field(block_frame, "Block prefix", self.block_prefix, 0, 1)
+        self._form_field(block_frame, "Traversal", self.block_traversal, 1, 1, choices=["raster", "bounce_1d_x"])
+        self._form_field(block_frame, "Total points (0 = once)", self.block_total_points, 2, 1)
 
-        axis_header = ttk.Frame(frame)
-        axis_header.grid(row=3, column=1, columnspan=2, sticky="ew", padx=6, pady=(8, 2))
-        for index, title in enumerate(["Axis", "Active", "Mode", "Fixed", "Start", "Stop", "Step", "List"]):
-            ttk.Label(axis_header, text=title).grid(row=0, column=index, sticky="w", padx=2)
+        axis_area = ttk.Frame(parent)
+        axis_area.grid(row=6, column=0, columnspan=4, sticky="ew", pady=(12, 0))
+        axis_area.columnconfigure(0, weight=1)
+        axis_area.columnconfigure(1, weight=1)
+        axis_area.columnconfigure(2, weight=1)
+        for index, axis in enumerate(["x", "y", "z"]):
+            self._axis_panel(axis_area, axis, index)
 
-        for row, axis in enumerate(["x", "y", "z"], start=4):
-            self._axis_row(frame, axis, row)
+        actions = ttk.Frame(parent)
+        actions.grid(row=7, column=0, columnspan=4, sticky="w", pady=14)
+        ttk.Button(actions, text="Add / Update selected block", command=self._add_or_update_block).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(actions, text="Remove selected block", command=self._remove_block).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(actions, text="Add X/Y/Z single-axis blocks", command=self._add_xyz_blocks).pack(side=tk.LEFT)
 
-        button_row = ttk.Frame(frame)
-        button_row.grid(row=8, column=1, columnspan=2, sticky="ew", padx=6, pady=6)
-        ttk.Button(button_row, text="Add / Update block", command=self._add_or_update_block).pack(side=tk.LEFT, padx=(0, 6))
-        ttk.Button(button_row, text="Remove", command=self._remove_block).pack(side=tk.LEFT, padx=(0, 6))
-        ttk.Button(button_row, text="Add X/Y/Z single-axis", command=self._add_xyz_blocks).pack(side=tk.LEFT)
+    def _build_policy_page(self, parent: ttk.Frame) -> None:
+        self._section_title(parent, "Maynuo baseline / output policy", 0)
+        self.baseline_vars = {
+            "baseline_x_a": tk.DoubleVar(value=0.0),
+            "baseline_y_a": tk.DoubleVar(value=0.0),
+            "baseline_z_a": tk.DoubleVar(value=0.0),
+            "settle_ms": tk.DoubleVar(value=1000),
+            "readback_samples": tk.IntVar(value=3),
+            "settle_tolerance_a": tk.DoubleVar(value=0.002),
+            "voltage_v": tk.DoubleVar(value=75.0),
+            "voltage_protection_v": tk.DoubleVar(value=75.0),
+            "output_enabled": tk.BooleanVar(value=True),
+        }
+        self._unit_selector(parent, "Current input unit", self.unit_vars["baseline_current"], ["A", "mA"], 1, 0)
+        self._unit_selector(parent, "Voltage input unit", self.unit_vars["voltage"], ["V", "mV"], 1, 2)
+        self._form_grid(parent, self.baseline_vars, [
+            ("baseline_x_a", "Baseline X current"),
+            ("baseline_y_a", "Baseline Y current"),
+            ("baseline_z_a", "Baseline Z current"),
+            ("settle_ms", "Settle"),
+            ("readback_samples", "Readback samples"),
+            ("settle_tolerance_a", "Settle tolerance A"),
+            ("voltage_v", "Voltage"),
+            ("voltage_protection_v", "Voltage protection"),
+            ("output_enabled", "Output enabled"),
+        ], start_row=2)
 
-    def _build_profile_frame(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Spectrum / Device Profiles")
-        frame.grid(row=1, column=1, rowspan=2, sticky="nsew", pady=(0, 8))
-        frame.columnconfigure(1, weight=1)
-        frame.columnconfigure(3, weight=1)
+        self._section_title(parent, "Point quality thresholds", 8)
+        self.quality_vars = {
+            "min_frames": tk.IntVar(value=20),
+            "max_timeout_count": tk.IntVar(value=2),
+            "max_duplicate_ratio": tk.DoubleVar(value=0.3),
+            "max_last_frame_age_ms": tk.DoubleVar(value=500),
+        }
+        self._form_grid(parent, self.quality_vars, [
+            ("min_frames", "Min frames"),
+            ("max_timeout_count", "Max timeout count"),
+            ("max_duplicate_ratio", "Max duplicate ratio"),
+            ("max_last_frame_age_ms", "Max last frame age"),
+        ], start_row=9)
 
-        self.smb_profile_id = tk.StringVar()
-        self.smb_start = tk.DoubleVar()
-        self.smb_stop = tk.DoubleVar()
-        self.smb_step = tk.DoubleVar()
-        self.smb_dwell = tk.IntVar()
-        self.smb_power = tk.DoubleVar()
-        self.smb_rf_output = tk.BooleanVar(value=True)
-        self.oe_profile_id = tk.StringVar()
-        self.oe_time_constant = tk.IntVar()
-        self.oe_filter_slope = tk.IntVar()
-        self.laser_profile_id = tk.StringVar()
-        self.laser_mode = tk.StringVar(value="off_background")
-        self.laser_power = tk.IntVar(value=0)
-        self.laser_settle = tk.IntVar(value=1000)
+    def _build_smb_page(self, parent: ttk.Frame) -> None:
+        self.smb_vars = {
+            "profile_id": tk.StringVar(),
+            "command_settle_ms": tk.DoubleVar(value=500),
+            "error_check_after_write": tk.BooleanVar(value=True),
+            "modulation_enabled": tk.BooleanVar(value=True),
+            "fm_enabled": tk.BooleanVar(value=True),
+            "fm_source": tk.StringVar(value="INT"),
+            "fm_mode": tk.StringVar(value="HDEV"),
+            "fm_deviation_hz": tk.DoubleVar(value=4000000.0),
+            "lf_output_enabled": tk.BooleanVar(value=True),
+            "lf_voltage_mv": tk.DoubleVar(value=137.0),
+            "lf_frequency_hz": tk.DoubleVar(value=500.0),
+            "lf_shape": tk.StringVar(value="SQU"),
+            "lf_source_impedance": tk.StringVar(value="LOW"),
+            "start_hz": tk.DoubleVar(value=2830000000.0),
+            "stop_hz": tk.DoubleVar(value=2890000000.0),
+            "step_hz": tk.DoubleVar(value=500000.0),
+            "dwell_ms": tk.DoubleVar(value=300),
+            "power_dbm": tk.DoubleVar(value=-10.0),
+            "sweep_mode": tk.StringVar(value="AUTO"),
+            "spacing": tk.StringVar(value="LIN"),
+            "shape": tk.StringVar(value="SAWT"),
+            "trigger_source": tk.StringVar(value="AUTO"),
+            "output_voltage_start_v": tk.DoubleVar(value=0.0),
+            "output_voltage_stop_v": tk.DoubleVar(value=3.0),
+            "rf_output_enabled": tk.BooleanVar(value=True),
+        }
+        self._section_title(parent, "SMB100A profile identity", 0)
+        self._form_grid(parent, self.smb_vars, [
+            ("profile_id", "Profile ID"),
+            ("command_settle_ms", "Command settle"),
+            ("error_check_after_write", "Check SYST:ERR? after batch"),
+        ], start_row=1)
+        self._section_title(parent, "SMB input units", 4)
+        self._unit_selector(parent, "RF start/stop unit", self.unit_vars["rf_frequency"], ["Hz", "kHz", "MHz", "GHz"], 5, 0)
+        self._unit_selector(parent, "RF step unit", self.unit_vars["rf_step"], ["Hz", "kHz", "MHz", "GHz"], 5, 2)
+        self._unit_selector(parent, "FM deviation unit", self.unit_vars["fm_deviation"], ["Hz", "kHz", "MHz", "GHz"], 6, 0)
+        self._unit_selector(parent, "LF frequency unit", self.unit_vars["lf_frequency"], ["Hz", "kHz", "MHz"], 6, 2)
+        self._unit_selector(parent, "LF voltage unit", self.unit_vars["lf_voltage"], ["mV", "V"], 7, 0)
+        self._section_title(parent, "SMB fixed modulation profile", 9)
+        self._form_grid(parent, self.smb_vars, [
+            ("modulation_enabled", "Modulation enabled"),
+            ("fm_enabled", "FM enabled"),
+            ("fm_source", "FM source"),
+            ("fm_mode", "FM mode"),
+            ("fm_deviation_hz", "FM deviation"),
+            ("lf_output_enabled", "LF output enabled"),
+            ("lf_voltage_mv", "LF voltage"),
+            ("lf_frequency_hz", "LF frequency"),
+            ("lf_shape", "LF shape"),
+            ("lf_source_impedance", "LF source impedance"),
+        ], start_row=10)
+        self._section_title(parent, "SMB default RF sweep", 16)
+        self._form_grid(parent, self.smb_vars, [
+            ("start_hz", "Start"),
+            ("stop_hz", "Stop"),
+            ("step_hz", "Step"),
+            ("dwell_ms", "Dwell"),
+            ("power_dbm", "Power dBm"),
+            ("sweep_mode", "Sweep mode"),
+            ("spacing", "Spacing"),
+            ("shape", "Shape"),
+            ("trigger_source", "Trigger source"),
+            ("output_voltage_start_v", "Output voltage start V"),
+            ("output_voltage_stop_v", "Output voltage stop V"),
+            ("rf_output_enabled", "RF output enabled"),
+        ], start_row=17)
 
-        ttk.Label(frame, text="SMB100A").grid(row=0, column=0, sticky="w", padx=6, pady=(6, 2))
-        self._entry(frame, "SMB profile id", self.smb_profile_id, 1)
-        self._entry(frame, "Start Hz", self.smb_start, 2)
-        self._entry(frame, "Stop Hz", self.smb_stop, 3)
-        self._entry(frame, "Step Hz", self.smb_step, 4)
-        self._entry(frame, "Dwell ms", self.smb_dwell, 5)
-        self._entry(frame, "Power dBm", self.smb_power, 6)
-        ttk.Checkbutton(frame, text="RF output enabled", variable=self.smb_rf_output).grid(row=7, column=1, sticky="w", padx=6, pady=3)
+    def _build_oe_page(self, parent: ttk.Frame) -> None:
+        self.oe_vars = {
+            "profile_id": tk.StringVar(),
+            "command_settle_ms": tk.DoubleVar(value=500),
+            "channel": tk.IntVar(value=2),
+            "input_source": tk.IntVar(value=0),
+            "input_grounding": tk.IntVar(value=0),
+            "input_coupling": tk.IntVar(value=1),
+            "line_notch_filter": tk.IntVar(value=0),
+            "reference_source": tk.IntVar(value=0),
+            "reference_slope": tk.IntVar(value=2),
+            "phase_deg": tk.DoubleVar(value=0.0),
+            "harmonic_1": tk.IntVar(value=1),
+            "harmonic_2": tk.IntVar(value=1),
+            "dynamic_reserve": tk.IntVar(value=1),
+            "sensitivity_index": tk.IntVar(value=24),
+            "time_constant_index": tk.IntVar(value=9),
+            "filter_slope": tk.IntVar(value=1),
+            "sync_filter": tk.IntVar(value=0),
+            "sine_output_mode": tk.IntVar(value=0),
+            "sine_output_voltage_vrms": tk.DoubleVar(value=1.0),
+        }
+        self._section_title(parent, "OE1022D fixed profile", 0)
+        self._form_grid(parent, self.oe_vars, [
+            ("profile_id", "Profile ID"),
+            ("command_settle_ms", "Command settle"),
+            ("channel", "Channel"),
+            ("input_source", "Input source"),
+            ("input_grounding", "Input grounding"),
+            ("input_coupling", "Input coupling"),
+            ("line_notch_filter", "Line notch filter"),
+            ("reference_source", "Reference source"),
+            ("reference_slope", "Reference slope"),
+            ("phase_deg", "Phase deg"),
+            ("harmonic_1", "Harmonic 1"),
+            ("harmonic_2", "Harmonic 2"),
+            ("dynamic_reserve", "Dynamic reserve"),
+            ("sensitivity_index", "Sensitivity index"),
+            ("time_constant_index", "Time constant index"),
+            ("filter_slope", "Filter slope"),
+            ("sync_filter", "Sync filter"),
+            ("sine_output_mode", "Sine output mode"),
+            ("sine_output_voltage_vrms", "Sine output voltage Vrms"),
+        ], start_row=1)
+        ttk.Label(
+            parent,
+            text="Collector is locked: frame_exact_bytes=12288 and rall_post_write_delay_ms=30. This GUI does not edit the RALL hot path.",
+            wraplength=840,
+            foreground="#555555",
+        ).grid(row=12, column=0, columnspan=4, sticky="w", pady=14)
 
-        ttk.Label(frame, text="OE1022D").grid(row=0, column=2, sticky="w", padx=6, pady=(6, 2))
-        self._entry(frame, "OE profile id", self.oe_profile_id, 1, column=2)
-        self._entry(frame, "Time constant index", self.oe_time_constant, 2, column=2)
-        self._entry(frame, "Filter slope", self.oe_filter_slope, 3, column=2)
-        ttk.Label(frame, text="RALL 12288B / 30ms locked").grid(row=4, column=3, sticky="w", padx=6, pady=3)
+    def _build_laser_page(self, parent: ttk.Frame) -> None:
+        self.laser_vars = {
+            "profile_id": tk.StringVar(),
+            "mode": tk.StringVar(value="off_background"),
+            "power_mw": tk.IntVar(value=0),
+            "settle_ms": tk.DoubleVar(value=1000),
+        }
+        self._section_title(parent, "CNI laser run background profile", 0)
+        self._form_field(parent, "Profile ID", self.laser_vars["profile_id"], 1, 0)
+        self._form_field(parent, "Mode", self.laser_vars["mode"], 2, 0, choices=["off_background", "on_background"])
+        self._unit_selector(parent, "Power input unit", self.unit_vars["laser_power"], ["mW", "W"], 3, 0)
+        self._form_field(parent, "Power", self.laser_vars["power_mw"], 4, 0)
+        self._form_field(parent, "Settle", self.laser_vars["settle_ms"], 5, 0)
+        ttk.Label(
+            parent,
+            text="Laser is generated as a run-level background profile. The C# runtime opens/closes it at run boundaries, not per point.",
+            wraplength=840,
+        ).grid(row=6, column=0, columnspan=4, sticky="w", pady=14)
 
-        ttk.Label(frame, text="CNI Laser").grid(row=8, column=0, sticky="w", padx=6, pady=(14, 2))
-        self._entry(frame, "Laser profile id", self.laser_profile_id, 9)
-        ttk.Label(frame, text="Laser mode").grid(row=10, column=0, sticky="w", padx=6, pady=3)
-        ttk.Combobox(frame, textvariable=self.laser_mode, values=["off_background", "on_background"], state="readonly").grid(row=10, column=1, sticky="ew", padx=6, pady=3)
-        self._entry(frame, "Power mW", self.laser_power, 11)
-        self._entry(frame, "Settle ms", self.laser_settle, 12)
+    def _build_generate_page(self, parent: ttk.Frame) -> None:
+        self._section_title(parent, "Generate JSON files", 0)
+        ttk.Button(parent, text="Generate plan + profiles", command=self._generate).grid(row=1, column=0, sticky="w", pady=(0, 12))
+        self.summary = tk.Text(parent, height=22, wrap="word", font=("Menlo", 11))
+        self.summary.grid(row=2, column=0, columnspan=4, sticky="nsew")
+        parent.rowconfigure(2, weight=1)
+        parent.columnconfigure(0, weight=1)
 
-    def _build_output_frame(self, parent: ttk.Frame) -> None:
-        frame = ttk.LabelFrame(parent, text="Output")
-        frame.grid(row=3, column=0, columnspan=2, sticky="nsew")
-        frame.columnconfigure(1, weight=1)
-        self.output_dir = tk.StringVar()
-        ttk.Label(frame, text="Generated config dir").grid(row=0, column=0, sticky="w", padx=6, pady=6)
-        ttk.Entry(frame, textvariable=self.output_dir).grid(row=0, column=1, sticky="ew", padx=6, pady=6)
-        ttk.Button(frame, text="Browse", command=self._browse_output_dir).grid(row=0, column=2, padx=6, pady=6)
-        ttk.Button(frame, text="Generate JSON", command=self._generate).grid(row=0, column=3, padx=6, pady=6)
-        self.summary = tk.Text(frame, height=8, wrap="word")
-        self.summary.grid(row=1, column=0, columnspan=4, sticky="nsew", padx=6, pady=(0, 6))
+    def _section_title(self, parent: ttk.Frame, text: str, row: int) -> None:
+        ttk.Label(parent, text=text, font=("", 12, "bold")).grid(row=row, column=0, columnspan=4, sticky="w", pady=(0, 10))
 
-    def _entry(self, parent: ttk.Frame, label: str, variable: tk.Variable, row: int, column: int = 0) -> None:
-        ttk.Label(parent, text=label).grid(row=row, column=column, sticky="w", padx=6, pady=3)
-        ttk.Entry(parent, textvariable=variable).grid(row=row, column=column + 1, sticky="ew", padx=6, pady=3)
+    def _path_row(self, parent: ttk.Frame, label: str, variable: tk.StringVar, row: int, is_directory: bool) -> None:
+        ttk.Label(parent, text=label, width=28).grid(row=row, column=0, sticky="w", pady=5)
+        ttk.Entry(parent, textvariable=variable).grid(row=row, column=1, sticky="ew", pady=5)
+        ttk.Button(parent, text="Browse", command=lambda: self._browse_path(variable, is_directory)).grid(row=row, column=2, padx=(8, 0), pady=5)
+        parent.columnconfigure(1, weight=1)
 
-    def _axis_row(self, parent: ttk.Frame, axis: str, row: int) -> None:
+    def _form_grid(self, parent: ttk.Frame, values: dict[str, tk.Variable], fields: list[tuple[str, str]], start_row: int) -> None:
+        for index, (key, label) in enumerate(fields):
+            row = start_row + index // 2
+            col = 0 if index % 2 == 0 else 2
+            self._form_field(parent, label, values[key], row, col)
+
+    def _form_field(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        variable: tk.Variable,
+        row: int,
+        column: int,
+        choices: list[str] | None = None,
+    ) -> None:
+        ttk.Label(parent, text=label, wraplength=180).grid(row=row, column=column, sticky="w", padx=(0, 8), pady=4)
+        if isinstance(variable, tk.BooleanVar):
+            ttk.Checkbutton(parent, variable=variable).grid(row=row, column=column + 1, sticky="w", pady=4)
+        elif choices:
+            ttk.Combobox(parent, textvariable=variable, values=choices, state="readonly").grid(row=row, column=column + 1, sticky="ew", pady=4)
+        else:
+            ttk.Entry(parent, textvariable=variable).grid(row=row, column=column + 1, sticky="ew", pady=4)
+        parent.columnconfigure(column + 1, weight=1)
+
+    def _unit_selector(
+        self,
+        parent: ttk.Frame,
+        label: str,
+        variable: tk.StringVar,
+        choices: list[str],
+        row: int,
+        column: int,
+    ) -> None:
+        ttk.Label(parent, text=label, wraplength=180).grid(row=row, column=column, sticky="w", padx=(0, 8), pady=4)
+        ttk.Combobox(parent, textvariable=variable, values=choices, state="readonly", width=10).grid(row=row, column=column + 1, sticky="w", pady=4)
+
+    def _axis_panel(self, parent: ttk.Frame, axis: str, column: int) -> None:
+        group = ttk.LabelFrame(parent, text=f"{axis.upper()} axis")
+        group.grid(row=0, column=column, sticky="new", padx=4)
+        group.columnconfigure(1, weight=1)
         vars_for_axis: dict[str, tk.Variable] = {
             "enabled": tk.BooleanVar(),
             "mode": tk.StringVar(value="range"),
@@ -185,63 +447,117 @@ class ConfigGeneratorApp(tk.Tk):
             "values_text": tk.StringVar(value="0"),
         }
         self.axis_vars[axis] = vars_for_axis
-        row_frame = ttk.Frame(parent)
-        row_frame.grid(row=row, column=1, columnspan=2, sticky="ew", padx=6, pady=2)
-        ttk.Label(row_frame, text=axis.upper(), width=4).grid(row=0, column=0, sticky="w")
-        ttk.Checkbutton(row_frame, variable=vars_for_axis["enabled"]).grid(row=0, column=1, sticky="w")
-        ttk.Combobox(row_frame, textvariable=vars_for_axis["mode"], values=["range", "list"], state="readonly", width=8).grid(row=0, column=2, padx=2)
-        for col, key in enumerate(["fixed", "start", "stop", "step", "values_text"], start=3):
-            ttk.Entry(row_frame, textvariable=vars_for_axis[key], width=12 if key != "values_text" else 22).grid(row=0, column=col, padx=2)
+        self._form_field(group, "Active", vars_for_axis["enabled"], 0, 0)
+        self._form_field(group, "Mode", vars_for_axis["mode"], 1, 0, choices=["range", "list"])
+        self._form_field(group, "Fixed", vars_for_axis["fixed"], 2, 0)
+        self._form_field(group, "Start", vars_for_axis["start"], 3, 0)
+        self._form_field(group, "Stop", vars_for_axis["stop"], 4, 0)
+        self._form_field(group, "Step", vars_for_axis["step"], 5, 0)
+        self._form_field(group, "Explicit list", vars_for_axis["values_text"], 6, 0)
 
-    def _load_defaults(self) -> None:
+    def _load_default_paths(self) -> None:
         self.template_vars["plan"].set(str(self.repo_root / "configs" / "plans" / "x_axis_1d_bounce_15min.json"))
         self.template_vars["smb"].set(str(self.repo_root / "configs" / "profiles" / "smb100a_run_monitor_2830_2890_-10dbm.json"))
         self.template_vars["oe"].set(str(self.repo_root / "configs" / "profiles" / "oe1022d_run_ch_b_observed.json"))
         self.template_vars["laser"].set(str(self.repo_root / "configs" / "profiles" / "cni_laser_run_off_background.json"))
-        self.output_dir.set(str(self.repo_root / "configs" / "generated"))
+        self.template_vars["output"].set(str(self.repo_root / "configs" / "generated"))
 
-    def _load_profile_defaults(self) -> None:
+    def _load_template_values(self) -> None:
         try:
             plan = load_json(self.template_vars["plan"].get())
             smb = load_json(self.template_vars["smb"].get())
             oe = load_json(self.template_vars["oe"].get())
             laser = load_json(self.template_vars["laser"].get())
-            self.run_id.set(f"{plan.get('run_id', 'generated_plan')}_generated")
-            self.operator.set(plan.get("operator", "local"))
-            self.point_settle.set(plan.get("point_settle_ms", 500))
-            self.acq_window.set(plan.get("acquisition_window_ms", 0))
-            sweep = smb["default_sweep"]
-            self.smb_profile_id.set(f"{smb.get('profile_id', 'smb100a')}_generated")
-            self.smb_start.set(sweep.get("start_hz", 2830000000.0))
-            self.smb_stop.set(sweep.get("stop_hz", 2890000000.0))
-            self.smb_step.set(sweep.get("step_hz", 500000.0))
-            self.smb_dwell.set(sweep.get("dwell_ms", 300))
-            self.smb_power.set(sweep.get("power_dbm", -10.0))
-            self.smb_rf_output.set(bool(sweep.get("rf_output_enabled", True)))
-            self.oe_profile_id.set(f"{oe.get('profile_id', 'oe1022d')}_generated")
-            self.oe_time_constant.set(oe["fixed"].get("time_constant_index", 9))
-            self.oe_filter_slope.set(oe["fixed"].get("filter_slope", 1))
-            self.laser_profile_id.set(f"{laser.get('profile_id', 'cni_laser')}_generated")
-            self.laser_mode.set(laser.get("mode", "off_background"))
-            self.laser_power.set(laser.get("power_mw", 0))
-            self.laser_settle.set(laser.get("settle_ms", 1000))
+            self._set_run_values(plan)
+            self._set_plan_policy_values(plan)
+            self._set_smb_values(smb)
+            self._set_oe_values(oe)
+            self._set_laser_values(laser)
         except Exception as exc:
             messagebox.showerror("Load templates failed", str(exc), parent=self)
 
-    def _browse_template(self, key: str) -> None:
-        path = filedialog.askopenfilename(
-            parent=self,
-            title=f"Select {key} template",
-            initialdir=str(self.repo_root / "configs"),
-            filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
-        )
-        if path:
-            self.template_vars[key].set(path)
+    def _set_run_values(self, plan: dict) -> None:
+        time_unit = self.unit_vars["time"].get()
+        self.run_vars["run_id"].set(f"{plan.get('run_id', 'generated_plan')}_generated")
+        self.run_vars["operator"].set(plan.get("operator", "local"))
+        self.run_vars["acquisition_window_ms"].set(from_canonical_unit(plan.get("acquisition_window_ms", 0), "time_ms", time_unit))
+        self.run_vars["point_settle_ms"].set(from_canonical_unit(plan.get("point_settle_ms", 500), "time_ms", time_unit))
 
-    def _browse_output_dir(self) -> None:
-        path = filedialog.askdirectory(parent=self, title="Select generated config directory", initialdir=self.output_dir.get())
+    def _set_plan_policy_values(self, plan: dict) -> None:
+        baseline = plan.get("mag_baseline_policy", {})
+        currents = baseline.get("baseline_current_a", [0.0, 0.0, 0.0])
+        current_unit = self.unit_vars["baseline_current"].get()
+        voltage_unit = self.unit_vars["voltage"].get()
+        time_unit = self.unit_vars["time"].get()
+        for key, value in {
+            "baseline_x_a": from_canonical_unit(currents[0] if len(currents) > 0 else 0.0, "current_a", current_unit),
+            "baseline_y_a": from_canonical_unit(currents[1] if len(currents) > 1 else 0.0, "current_a", current_unit),
+            "baseline_z_a": from_canonical_unit(currents[2] if len(currents) > 2 else 0.0, "current_a", current_unit),
+            "settle_ms": from_canonical_unit(baseline.get("settle_ms", 1000), "time_ms", time_unit),
+            "readback_samples": baseline.get("readback_samples", 3),
+            "settle_tolerance_a": from_canonical_unit(baseline.get("settle_tolerance_a", 0.002), "current_a", current_unit),
+            "voltage_v": from_canonical_unit(baseline.get("voltage_v", 75.0), "voltage_v", voltage_unit),
+            "voltage_protection_v": from_canonical_unit(baseline.get("voltage_protection_v", 75.0), "voltage_v", voltage_unit),
+            "output_enabled": baseline.get("output_enabled", True),
+        }.items():
+            self.baseline_vars[key].set(value)
+        quality = plan.get("quality_thresholds", {})
+        for key, value in {
+            "min_frames": quality.get("min_frames", 20),
+            "max_timeout_count": quality.get("max_timeout_count", 2),
+            "max_duplicate_ratio": quality.get("max_duplicate_ratio", 0.3),
+            "max_last_frame_age_ms": from_canonical_unit(quality.get("max_last_frame_age_ms", 500), "time_ms", time_unit),
+        }.items():
+            self.quality_vars[key].set(value)
+
+    def _set_smb_values(self, smb: dict) -> None:
+        fixed = smb.get("fixed", {})
+        sweep = smb.get("default_sweep", {})
+        rf_unit = self.unit_vars["rf_frequency"].get()
+        rf_step_unit = self.unit_vars["rf_step"].get()
+        fm_unit = self.unit_vars["fm_deviation"].get()
+        lf_frequency_unit = self.unit_vars["lf_frequency"].get()
+        lf_voltage_unit = self.unit_vars["lf_voltage"].get()
+        time_unit = self.unit_vars["time"].get()
+        self.smb_vars["profile_id"].set(f"{smb.get('profile_id', 'smb100a')}_generated")
+        self.smb_vars["command_settle_ms"].set(from_canonical_unit(smb.get("command_settle_ms", 500), "time_ms", time_unit))
+        self.smb_vars["error_check_after_write"].set(smb.get("error_check_after_write", True))
+        for key in ["modulation_enabled", "fm_enabled", "fm_source", "fm_mode", "lf_output_enabled", "lf_shape", "lf_source_impedance"]:
+            self.smb_vars[key].set(fixed.get(key, self.smb_vars[key].get()))
+        self.smb_vars["fm_deviation_hz"].set(from_canonical_unit(fixed.get("fm_deviation_hz", 4000000.0), "frequency_hz", fm_unit))
+        self.smb_vars["lf_voltage_mv"].set(from_canonical_unit(fixed.get("lf_voltage_mv", 137.0), "voltage_mv", lf_voltage_unit))
+        self.smb_vars["lf_frequency_hz"].set(from_canonical_unit(fixed.get("lf_frequency_hz", 500.0), "frequency_hz", lf_frequency_unit))
+        for key in ["power_dbm", "sweep_mode", "spacing", "shape", "trigger_source", "output_voltage_start_v", "output_voltage_stop_v", "rf_output_enabled"]:
+            self.smb_vars[key].set(sweep.get(key, self.smb_vars[key].get()))
+        self.smb_vars["dwell_ms"].set(from_canonical_unit(sweep.get("dwell_ms", 300), "time_ms", time_unit))
+        self.smb_vars["start_hz"].set(from_canonical_unit(sweep.get("start_hz", 2830000000.0), "frequency_hz", rf_unit))
+        self.smb_vars["stop_hz"].set(from_canonical_unit(sweep.get("stop_hz", 2890000000.0), "frequency_hz", rf_unit))
+        self.smb_vars["step_hz"].set(from_canonical_unit(sweep.get("step_hz", 500000.0), "frequency_hz", rf_step_unit))
+
+    def _set_oe_values(self, oe: dict) -> None:
+        fixed = oe.get("fixed", {})
+        self.oe_vars["profile_id"].set(f"{oe.get('profile_id', 'oe1022d')}_generated")
+        self.oe_vars["command_settle_ms"].set(from_canonical_unit(oe.get("command_settle_ms", 500), "time_ms", self.unit_vars["time"].get()))
+        for key in [key for key in self.oe_vars if key not in {"profile_id", "command_settle_ms"}]:
+            self.oe_vars[key].set(fixed.get(key, self.oe_vars[key].get()))
+
+    def _set_laser_values(self, laser: dict) -> None:
+        self.laser_vars["profile_id"].set(f"{laser.get('profile_id', 'cni_laser')}_generated")
+        self.laser_vars["mode"].set(laser.get("mode", "off_background"))
+        self.laser_vars["power_mw"].set(from_canonical_unit(laser.get("power_mw", 0), "power_mw", self.unit_vars["laser_power"].get()))
+        self.laser_vars["settle_ms"].set(from_canonical_unit(laser.get("settle_ms", 1000), "time_ms", self.unit_vars["time"].get()))
+
+    def _browse_path(self, variable: tk.StringVar, is_directory: bool) -> None:
+        if is_directory:
+            path = filedialog.askdirectory(parent=self, initialdir=variable.get() or str(self.repo_root))
+        else:
+            path = filedialog.askopenfilename(
+                parent=self,
+                initialdir=str(self.repo_root / "configs"),
+                filetypes=[("JSON files", "*.json"), ("All files", "*.*")],
+            )
         if path:
-            self.output_dir.set(path)
+            variable.set(path)
 
     def _refresh_block_list(self) -> None:
         self.block_list.delete(0, tk.END)
@@ -262,14 +578,14 @@ class ConfigGeneratorApp(tk.Tk):
         self.block_traversal.set(block.traversal)
         self.block_total_points.set(block.total_points)
         for axis, spec in block.axes.items():
-            vars_for_axis = self.axis_vars[axis]
-            vars_for_axis["enabled"].set(spec.enabled)
-            vars_for_axis["mode"].set(spec.mode)
-            vars_for_axis["fixed"].set(spec.fixed)
-            vars_for_axis["start"].set(spec.start)
-            vars_for_axis["stop"].set(spec.stop)
-            vars_for_axis["step"].set(spec.step)
-            vars_for_axis["values_text"].set(spec.values_text)
+            values = self.axis_vars[axis]
+            values["enabled"].set(spec.enabled)
+            values["mode"].set(spec.mode)
+            values["fixed"].set(spec.fixed)
+            values["start"].set(spec.start)
+            values["stop"].set(spec.stop)
+            values["step"].set(spec.step)
+            values["values_text"].set(spec.values_text)
 
     def _read_block(self) -> ScanBlock:
         return ScanBlock(
@@ -280,16 +596,90 @@ class ConfigGeneratorApp(tk.Tk):
         )
 
     def _read_axis(self, axis: str) -> AxisSpec:
-        vars_for_axis = self.axis_vars[axis]
+        values = self.axis_vars[axis]
         return AxisSpec(
-            enabled=bool(vars_for_axis["enabled"].get()),
-            mode=str(vars_for_axis["mode"].get()),
-            fixed=float(vars_for_axis["fixed"].get()),
-            start=float(vars_for_axis["start"].get()),
-            stop=float(vars_for_axis["stop"].get()),
-            step=float(vars_for_axis["step"].get()),
-            values_text=str(vars_for_axis["values_text"].get()),
+            enabled=bool(values["enabled"].get()),
+            mode=str(values["mode"].get()),
+            fixed=float(values["fixed"].get()),
+            start=float(values["start"].get()),
+            stop=float(values["stop"].get()),
+            step=float(values["step"].get()),
+            values_text=str(values["values_text"].get()),
         )
+
+    def _canonical_blocks(self) -> list[ScanBlock]:
+        field_unit = self.unit_vars["field"].get()
+        blocks: list[ScanBlock] = []
+        for block in self.blocks:
+            blocks.append(ScanBlock(
+                prefix=block.prefix,
+                traversal=block.traversal,
+                total_points=block.total_points,
+                axes={axis: self._canonical_axis(spec, field_unit) for axis, spec in block.axes.items()},
+            ))
+        return blocks
+
+    def _canonical_axis(self, spec: AxisSpec, field_unit: str) -> AxisSpec:
+        values_text = spec.values_text
+        if spec.mode == "list":
+            values_text = ", ".join(format_number(to_canonical_unit(value, "field", field_unit)) for value in parse_values(spec.values_text))
+        return AxisSpec(
+            enabled=spec.enabled,
+            mode=spec.mode,
+            fixed=to_canonical_unit(spec.fixed, "field", field_unit),
+            start=to_canonical_unit(spec.start, "field", field_unit),
+            stop=to_canonical_unit(spec.stop, "field", field_unit),
+            step=to_canonical_unit(spec.step, "field", field_unit),
+            values_text=values_text,
+        )
+
+    def _canonical_baseline_policy(self) -> dict[str, object]:
+        current_unit = self.unit_vars["baseline_current"].get()
+        voltage_unit = self.unit_vars["voltage"].get()
+        return {
+            "baseline_x_a": to_canonical_unit(self.baseline_vars["baseline_x_a"].get(), "current_a", current_unit),
+            "baseline_y_a": to_canonical_unit(self.baseline_vars["baseline_y_a"].get(), "current_a", current_unit),
+            "baseline_z_a": to_canonical_unit(self.baseline_vars["baseline_z_a"].get(), "current_a", current_unit),
+            "settle_ms": self._time_ms(self.baseline_vars["settle_ms"].get()),
+            "readback_samples": self.baseline_vars["readback_samples"].get(),
+            "settle_tolerance_a": to_canonical_unit(self.baseline_vars["settle_tolerance_a"].get(), "current_a", current_unit),
+            "voltage_v": to_canonical_unit(self.baseline_vars["voltage_v"].get(), "voltage_v", voltage_unit),
+            "voltage_protection_v": to_canonical_unit(self.baseline_vars["voltage_protection_v"].get(), "voltage_v", voltage_unit),
+            "output_enabled": self.baseline_vars["output_enabled"].get(),
+        }
+
+    def _canonical_smb_fixed(self) -> dict[str, object]:
+        return {
+            "modulation_enabled": self.smb_vars["modulation_enabled"].get(),
+            "fm_enabled": self.smb_vars["fm_enabled"].get(),
+            "fm_source": self.smb_vars["fm_source"].get(),
+            "fm_mode": self.smb_vars["fm_mode"].get(),
+            "fm_deviation_hz": to_canonical_unit(self.smb_vars["fm_deviation_hz"].get(), "frequency_hz", self.unit_vars["fm_deviation"].get()),
+            "lf_output_enabled": self.smb_vars["lf_output_enabled"].get(),
+            "lf_voltage_mv": to_canonical_unit(self.smb_vars["lf_voltage_mv"].get(), "voltage_mv", self.unit_vars["lf_voltage"].get()),
+            "lf_frequency_hz": to_canonical_unit(self.smb_vars["lf_frequency_hz"].get(), "frequency_hz", self.unit_vars["lf_frequency"].get()),
+            "lf_shape": self.smb_vars["lf_shape"].get(),
+            "lf_source_impedance": self.smb_vars["lf_source_impedance"].get(),
+        }
+
+    def _canonical_smb_sweep(self) -> dict[str, object]:
+        return {
+            "start_hz": to_canonical_unit(self.smb_vars["start_hz"].get(), "frequency_hz", self.unit_vars["rf_frequency"].get()),
+            "stop_hz": to_canonical_unit(self.smb_vars["stop_hz"].get(), "frequency_hz", self.unit_vars["rf_frequency"].get()),
+            "step_hz": to_canonical_unit(self.smb_vars["step_hz"].get(), "frequency_hz", self.unit_vars["rf_step"].get()),
+            "dwell_ms": self._time_ms(self.smb_vars["dwell_ms"].get()),
+            "power_dbm": self.smb_vars["power_dbm"].get(),
+            "sweep_mode": self.smb_vars["sweep_mode"].get(),
+            "spacing": self.smb_vars["spacing"].get(),
+            "shape": self.smb_vars["shape"].get(),
+            "trigger_source": self.smb_vars["trigger_source"].get(),
+            "output_voltage_start_v": self.smb_vars["output_voltage_start_v"].get(),
+            "output_voltage_stop_v": self.smb_vars["output_voltage_stop_v"].get(),
+            "rf_output_enabled": self.smb_vars["rf_output_enabled"].get(),
+        }
+
+    def _time_ms(self, value: object) -> int:
+        return int(round(to_canonical_unit(value, "time_ms", self.unit_vars["time"].get())))
 
     def _add_or_update_block(self) -> None:
         block = self._read_block()
@@ -324,45 +714,68 @@ class ConfigGeneratorApp(tk.Tk):
 
     def _request(self) -> GeneratorRequest:
         return GeneratorRequest(
-            run_id=self.run_id.get(),
-            operator=self.operator.get(),
-            acquisition_window_ms=int(self.acq_window.get()),
-            point_settle_ms=int(self.point_settle.get()),
-            blocks=list(self.blocks),
-            smb_profile_id=self.smb_profile_id.get(),
-            smb_start_hz=float(self.smb_start.get()),
-            smb_stop_hz=float(self.smb_stop.get()),
-            smb_step_hz=float(self.smb_step.get()),
-            smb_dwell_ms=int(self.smb_dwell.get()),
-            smb_power_dbm=float(self.smb_power.get()),
-            smb_rf_output_enabled=bool(self.smb_rf_output.get()),
-            oe_profile_id=self.oe_profile_id.get(),
-            oe_time_constant_index=int(self.oe_time_constant.get()),
-            oe_filter_slope=int(self.oe_filter_slope.get()),
-            laser_profile_id=self.laser_profile_id.get(),
-            laser_mode=self.laser_mode.get(),
-            laser_power_mw=int(self.laser_power.get()),
-            laser_settle_ms=int(self.laser_settle.get()),
+            run_id=str(self.run_vars["run_id"].get()),
+            operator=str(self.run_vars["operator"].get()),
+            acquisition_window_ms=self._time_ms(self.run_vars["acquisition_window_ms"].get()),
+            point_settle_ms=self._time_ms(self.run_vars["point_settle_ms"].get()),
+            blocks=self._canonical_blocks(),
+            mag_baseline_policy=self._canonical_baseline_policy(),
+            quality_thresholds={
+                "min_frames": self.quality_vars["min_frames"].get(),
+                "max_timeout_count": self.quality_vars["max_timeout_count"].get(),
+                "max_duplicate_ratio": self.quality_vars["max_duplicate_ratio"].get(),
+                "max_last_frame_age_ms": self._time_ms(self.quality_vars["max_last_frame_age_ms"].get()),
+            },
+            smb_profile_id=str(self.smb_vars["profile_id"].get()),
+            smb_command_settle_ms=self._time_ms(self.smb_vars["command_settle_ms"].get()),
+            smb_error_check_after_write=bool(self.smb_vars["error_check_after_write"].get()),
+            smb_fixed=self._canonical_smb_fixed(),
+            smb_sweep=self._canonical_smb_sweep(),
+            oe_profile_id=str(self.oe_vars["profile_id"].get()),
+            oe_command_settle_ms=self._time_ms(self.oe_vars["command_settle_ms"].get()),
+            oe_fixed={key: self.oe_vars[key].get() for key in self.oe_vars if key not in {"profile_id", "command_settle_ms"}},
+            laser_profile_id=str(self.laser_vars["profile_id"].get()),
+            laser_mode=str(self.laser_vars["mode"].get()),
+            laser_power_mw=int(round(to_canonical_unit(self.laser_vars["power_mw"].get(), "power_mw", self.unit_vars["laser_power"].get()))),
+            laser_settle_ms=self._time_ms(self.laser_vars["settle_ms"].get()),
         )
 
     def _generate(self) -> None:
         try:
             self._add_or_update_block()
+            request = self._request()
             paths = write_generated_bundle(
                 self.repo_root,
-                self._request(),
+                request,
                 self.template_vars["plan"].get(),
                 self.template_vars["smb"].get(),
                 self.template_vars["oe"].get(),
                 self.template_vars["laser"].get(),
-                self.output_dir.get(),
+                self.template_vars["output"].get(),
             )
             self.summary.delete("1.0", tk.END)
-            self.summary.insert(tk.END, "Generated JSON files:\n")
+            self.summary.insert(tk.END, "Generated JSON files for C# Run Bundle:\n\n")
             for key, path in paths.items():
                 self.summary.insert(tk.END, f"{key}: {path}\n")
+            self.summary.insert(tk.END, "\nNext step:\nOpen the Windows C# Control Panel, select these generated JSON files in Run Bundle, validate, then run.\n")
+            self.notebook.select(6)
         except Exception as exc:
             messagebox.showerror("Generate failed", str(exc), parent=self)
+
+    def _select_step_from_list(self, _event: tk.Event) -> None:
+        selection = self.step_list.curselection()
+        if selection:
+            self.notebook.select(int(selection[0]))
+
+    def _sync_step_list(self, _event: tk.Event) -> None:
+        index = self.notebook.index(self.notebook.select())
+        self.step_list.selection_clear(0, tk.END)
+        self.step_list.selection_set(index)
+
+    def _move_step(self, delta: int) -> None:
+        index = self.notebook.index(self.notebook.select())
+        next_index = max(0, min(len(STEP_TITLES) - 1, index + delta))
+        self.notebook.select(next_index)
 
     @staticmethod
     def default_block(prefix: str, active_axis: str) -> ScanBlock:

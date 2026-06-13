@@ -9,6 +9,17 @@ import re
 from typing import Any
 
 
+UNIT_FACTORS_TO_CANONICAL: dict[str, dict[str, float]] = {
+    "field": {"nT": 1.0, "uT": 1000.0, "mT": 1000000.0},
+    "frequency_hz": {"Hz": 1.0, "kHz": 1000.0, "MHz": 1000000.0, "GHz": 1000000000.0},
+    "time_ms": {"ms": 1.0, "s": 1000.0},
+    "current_a": {"A": 1.0, "mA": 0.001},
+    "voltage_v": {"V": 1.0, "mV": 0.001},
+    "voltage_mv": {"mV": 1.0, "V": 1000.0},
+    "power_mw": {"mW": 1.0, "W": 1000.0},
+}
+
+
 @dataclass
 class AxisSpec:
     enabled: bool
@@ -35,20 +46,20 @@ class GeneratorRequest:
     acquisition_window_ms: int
     point_settle_ms: int
     blocks: list[ScanBlock]
-    smb_profile_id: str
-    smb_start_hz: float
-    smb_stop_hz: float
-    smb_step_hz: float
-    smb_dwell_ms: int
-    smb_power_dbm: float
-    smb_rf_output_enabled: bool
-    oe_profile_id: str
-    oe_time_constant_index: int
-    oe_filter_slope: int
-    laser_profile_id: str
-    laser_mode: str
-    laser_power_mw: int
-    laser_settle_ms: int
+    mag_baseline_policy: dict[str, Any] = field(default_factory=dict)
+    quality_thresholds: dict[str, Any] = field(default_factory=dict)
+    smb_profile_id: str = "smb100a_generated"
+    smb_command_settle_ms: int = 500
+    smb_error_check_after_write: bool = True
+    smb_fixed: dict[str, Any] = field(default_factory=dict)
+    smb_sweep: dict[str, Any] = field(default_factory=dict)
+    oe_profile_id: str = "oe1022d_generated"
+    oe_command_settle_ms: int = 500
+    oe_fixed: dict[str, Any] = field(default_factory=dict)
+    laser_profile_id: str = "cni_laser_generated"
+    laser_mode: str = "off_background"
+    laser_power_mw: int = 0
+    laser_settle_ms: int = 1000
 
 
 def load_json(path: str | Path) -> dict[str, Any]:
@@ -70,6 +81,10 @@ def build_plan(template: dict[str, Any], request: GeneratorRequest) -> dict[str,
     plan["operator"] = request.operator.strip() or plan.get("operator", "local")
     plan["acquisition_window_ms"] = non_negative_int(request.acquisition_window_ms, "acquisition_window_ms")
     plan["point_settle_ms"] = non_negative_int(request.point_settle_ms, "point_settle_ms")
+    if request.mag_baseline_policy:
+        plan["mag_baseline_policy"] = normalize_mag_baseline(request.mag_baseline_policy)
+    if request.quality_thresholds:
+        plan["quality_thresholds"] = normalize_quality_thresholds(request.quality_thresholds)
     plan.pop("point_source", None)
     points: list[dict[str, Any]] = []
     for block in request.blocks:
@@ -83,22 +98,21 @@ def build_plan(template: dict[str, Any], request: GeneratorRequest) -> dict[str,
 def build_smb_profile(template: dict[str, Any], request: GeneratorRequest) -> dict[str, Any]:
     profile = copy.deepcopy(template)
     profile["profile_id"] = sanitize_id(request.smb_profile_id)
+    profile["command_settle_ms"] = non_negative_int(request.smb_command_settle_ms, "smb_command_settle_ms")
+    profile["error_check_after_write"] = bool(request.smb_error_check_after_write)
+    fixed = profile.setdefault("fixed", {})
+    fixed.update(normalize_smb_fixed(request.smb_fixed))
     sweep = profile.setdefault("default_sweep", {})
-    sweep["start_hz"] = float(request.smb_start_hz)
-    sweep["stop_hz"] = float(request.smb_stop_hz)
-    sweep["step_hz"] = float(request.smb_step_hz)
-    sweep["dwell_ms"] = non_negative_int(request.smb_dwell_ms, "smb_dwell_ms")
-    sweep["power_dbm"] = float(request.smb_power_dbm)
-    sweep["rf_output_enabled"] = bool(request.smb_rf_output_enabled)
+    sweep.update(normalize_smb_sweep(request.smb_sweep))
     return profile
 
 
 def build_oe_profile(template: dict[str, Any], request: GeneratorRequest) -> dict[str, Any]:
     profile = copy.deepcopy(template)
     profile["profile_id"] = sanitize_id(request.oe_profile_id)
+    profile["command_settle_ms"] = non_negative_int(request.oe_command_settle_ms, "oe_command_settle_ms")
     fixed = profile.setdefault("fixed", {})
-    fixed["time_constant_index"] = non_negative_int(request.oe_time_constant_index, "oe_time_constant_index")
-    fixed["filter_slope"] = non_negative_int(request.oe_filter_slope, "oe_filter_slope")
+    fixed.update(normalize_oe_fixed(request.oe_fixed))
     collector = profile.get("collector", {})
     if collector.get("frame_exact_bytes") != 12288:
         raise ValueError("oe collector frame_exact_bytes must remain 12288")
@@ -233,6 +247,108 @@ def bounce_1d_x_targets(
 def parse_values(text: str) -> list[float]:
     parts = [part for part in re.split(r"[,\s;]+", text.strip()) if part]
     return [round9(float(part)) for part in parts]
+
+
+def to_canonical_unit(value: Any, unit_kind: str, unit: str) -> float:
+    return float(value) * unit_factor(unit_kind, unit)
+
+
+def from_canonical_unit(value: Any, unit_kind: str, unit: str) -> float:
+    return float(value) / unit_factor(unit_kind, unit)
+
+
+def unit_factor(unit_kind: str, unit: str) -> float:
+    try:
+        return UNIT_FACTORS_TO_CANONICAL[unit_kind][unit]
+    except KeyError as exc:
+        raise ValueError(f"unsupported unit {unit!r} for {unit_kind}") from exc
+
+
+def normalize_mag_baseline(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "baseline_current_a": [
+            float(values.get("baseline_x_a", 0.0)),
+            float(values.get("baseline_y_a", 0.0)),
+            float(values.get("baseline_z_a", 0.0)),
+        ],
+        "settle_ms": non_negative_int(values.get("settle_ms", 1000), "baseline.settle_ms"),
+        "readback_samples": non_negative_int(values.get("readback_samples", 3), "baseline.readback_samples"),
+        "settle_tolerance_a": float(values.get("settle_tolerance_a", 0.002)),
+        "voltage_v": nullable_float(values.get("voltage_v", 75.0)),
+        "voltage_protection_v": nullable_float(values.get("voltage_protection_v", 75.0)),
+        "output_enabled": bool(values.get("output_enabled", True)),
+    }
+
+
+def normalize_quality_thresholds(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "min_frames": non_negative_int(values.get("min_frames", 20), "quality.min_frames"),
+        "max_timeout_count": non_negative_int(values.get("max_timeout_count", 2), "quality.max_timeout_count"),
+        "max_duplicate_ratio": float(values.get("max_duplicate_ratio", 0.3)),
+        "max_last_frame_age_ms": non_negative_int(values.get("max_last_frame_age_ms", 500), "quality.max_last_frame_age_ms"),
+    }
+
+
+def normalize_smb_fixed(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "modulation_enabled": bool(values.get("modulation_enabled", True)),
+        "fm_enabled": bool(values.get("fm_enabled", True)),
+        "fm_source": str(values.get("fm_source", "INT")),
+        "fm_mode": str(values.get("fm_mode", "HDEV")),
+        "fm_deviation_hz": float(values.get("fm_deviation_hz", 4000000.0)),
+        "lf_output_enabled": bool(values.get("lf_output_enabled", True)),
+        "lf_voltage_mv": float(values.get("lf_voltage_mv", 137.0)),
+        "lf_frequency_hz": float(values.get("lf_frequency_hz", 500.0)),
+        "lf_shape": str(values.get("lf_shape", "SQU")),
+        "lf_source_impedance": str(values.get("lf_source_impedance", "LOW")),
+    }
+
+
+def normalize_smb_sweep(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "start_hz": float(values.get("start_hz", 2830000000.0)),
+        "stop_hz": float(values.get("stop_hz", 2890000000.0)),
+        "step_hz": float(values.get("step_hz", 500000.0)),
+        "dwell_ms": non_negative_int(values.get("dwell_ms", 300), "smb.dwell_ms"),
+        "power_dbm": float(values.get("power_dbm", -10.0)),
+        "sweep_mode": str(values.get("sweep_mode", "AUTO")),
+        "spacing": str(values.get("spacing", "LIN")),
+        "shape": str(values.get("shape", "SAWT")),
+        "trigger_source": str(values.get("trigger_source", "AUTO")),
+        "output_voltage_start_v": float(values.get("output_voltage_start_v", 0.0)),
+        "output_voltage_stop_v": float(values.get("output_voltage_stop_v", 3.0)),
+        "rf_output_enabled": bool(values.get("rf_output_enabled", True)),
+    }
+
+
+def normalize_oe_fixed(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "channel": non_negative_int(values.get("channel", 2), "oe.channel"),
+        "input_source": non_negative_int(values.get("input_source", 0), "oe.input_source"),
+        "input_grounding": non_negative_int(values.get("input_grounding", 0), "oe.input_grounding"),
+        "input_coupling": non_negative_int(values.get("input_coupling", 1), "oe.input_coupling"),
+        "line_notch_filter": non_negative_int(values.get("line_notch_filter", 0), "oe.line_notch_filter"),
+        "reference_source": non_negative_int(values.get("reference_source", 0), "oe.reference_source"),
+        "reference_slope": non_negative_int(values.get("reference_slope", 2), "oe.reference_slope"),
+        "phase_deg": float(values.get("phase_deg", 0.0)),
+        "harmonic_1": non_negative_int(values.get("harmonic_1", 1), "oe.harmonic_1"),
+        "harmonic_2": non_negative_int(values.get("harmonic_2", 1), "oe.harmonic_2"),
+        "dynamic_reserve": non_negative_int(values.get("dynamic_reserve", 1), "oe.dynamic_reserve"),
+        "sensitivity_index": non_negative_int(values.get("sensitivity_index", 24), "oe.sensitivity_index"),
+        "time_constant_index": non_negative_int(values.get("time_constant_index", 9), "oe.time_constant_index"),
+        "filter_slope": non_negative_int(values.get("filter_slope", 1), "oe.filter_slope"),
+        "sync_filter": non_negative_int(values.get("sync_filter", 0), "oe.sync_filter"),
+        "sine_output_mode": non_negative_int(values.get("sine_output_mode", 0), "oe.sine_output_mode"),
+        "sine_output_voltage_vrms": float(values.get("sine_output_voltage_vrms", 1.0)),
+    }
+
+
+def nullable_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return float(value)
 
 
 def sanitize_id(value: str) -> str:

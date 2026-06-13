@@ -116,6 +116,7 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 
 - Windows 控制面板只负责组合一次 run 所需的六个 JSON：`station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`，并显示解析摘要。
 - 日常配置编辑优先使用 `tools/config-generator/odmr_config_generator.py`：它同时生成磁场 `plan.json`、SMB sweep profile、OE fixed profile 和 Laser profile。
+- Python 配置生成器是单线程离线 GUI；UI 可选择输入单位，但写入 JSON 时统一回到现有 C# runtime units：磁场 `nT`、频率 `Hz`、时间 `ms`、电流 `A`、laser `mW`。
 - `tools/plan-json-generator/index.html` 只保留为 plan-only 的浏览器辅助工具；它不编辑 SMB/OE/Laser。
 - 配置生成器输出的 JSON 仍然是现有 C# runtime schema，不引入 `field_space/groups` 或新的 run bundle schema。
 
