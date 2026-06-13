@@ -1,0 +1,6 @@
+{
+  "profile_id": "cni_laser_run_off_background",
+  "mode": "off_background",
+  "power_mw": 0,
+  "settle_ms": 1000
+}
