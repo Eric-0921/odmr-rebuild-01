@@ -163,8 +163,27 @@ public sealed record SmbSweepOverride(
 public sealed record Oe1022dRunProfile(
     [property: JsonPropertyName("profile_id")] string ProfileId,
     [property: JsonPropertyName("command_settle_ms")] int CommandSettleMs,
-    [property: JsonPropertyName("fixed")] JsonElement Fixed,
+    [property: JsonPropertyName("fixed")] Oe1022dFixedProfile Fixed,
     [property: JsonPropertyName("collector")] OeCollectorConfig Collector);
+
+public sealed record Oe1022dFixedProfile(
+    [property: JsonPropertyName("channel")] int Channel,
+    [property: JsonPropertyName("input_source")] int InputSource,
+    [property: JsonPropertyName("input_grounding")] int InputGrounding,
+    [property: JsonPropertyName("input_coupling")] int InputCoupling,
+    [property: JsonPropertyName("line_notch_filter")] int LineNotchFilter,
+    [property: JsonPropertyName("reference_source")] int ReferenceSource,
+    [property: JsonPropertyName("reference_slope")] int ReferenceSlope,
+    [property: JsonPropertyName("phase_deg")] double PhaseDeg,
+    [property: JsonPropertyName("harmonic_1")] int Harmonic1,
+    [property: JsonPropertyName("harmonic_2")] int Harmonic2,
+    [property: JsonPropertyName("dynamic_reserve")] int DynamicReserve,
+    [property: JsonPropertyName("sensitivity_index")] int SensitivityIndex,
+    [property: JsonPropertyName("time_constant_index")] int TimeConstantIndex,
+    [property: JsonPropertyName("filter_slope")] int FilterSlope,
+    [property: JsonPropertyName("sync_filter")] int SyncFilter,
+    [property: JsonPropertyName("sine_output_mode")] int SineOutputMode,
+    [property: JsonPropertyName("sine_output_voltage_vrms")] double SineOutputVoltageVrms);
 
 public sealed record OeCollectorConfig(
     [property: JsonPropertyName("poll_interval_ms")] int PollIntervalMs,

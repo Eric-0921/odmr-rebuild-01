@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Ivi.Visa;
 
@@ -19,6 +20,38 @@ public static class Oe1022dCommands
 {
     public static readonly byte[] IdnQueryBytes = Encoding.ASCII.GetBytes("*IDN?\r");
     public static readonly byte[] RallQueryBytes = Encoding.ASCII.GetBytes("RALL?\r");
+
+    public static string SetReferenceSource(int channel, int source) => $"FMODD {channel},{source}";
+
+    public static string SetInputSource(int channel, int source) => $"ISRCD {channel},{source}";
+
+    public static string SetInputGrounding(int channel, int grounding) => $"IGNDD {channel},{grounding}";
+
+    public static string SetInputCoupling(int channel, int coupling) => $"ICPLD {channel},{coupling}";
+
+    public static string SetLineNotchFilter(int channel, int filter) => $"ILIND {channel},{filter}";
+
+    public static string SetReferenceSlope(int channel, int slope) => $"RSLPD {channel},{slope}";
+
+    public static string SetPhaseDeg(int channel, double degree) =>
+        $"PHASD {channel},{degree.ToString(CultureInfo.InvariantCulture)}";
+
+    public static string SetHarmonic(int channel, int slot, int harmonic) => $"HARMD {channel},{slot},{harmonic}";
+
+    public static string SetDynamicReserve(int channel, int mode) => $"RMODD {channel},{mode}";
+
+    public static string SetSensitivityIndex(int channel, int index) => $"SENSD {channel},{index}";
+
+    public static string SetTimeConstantIndex(int channel, int index) => $"OFLTD {channel},{index}";
+
+    public static string SetFilterSlope(int channel, int slope) => $"OFSLD {channel},{slope}";
+
+    public static string SetSyncFilter(int channel, int enabled) => $"SYNCD {channel},{enabled}";
+
+    public static string SetSineOutputMode(int channel, int mode) => $"SWVTD {channel},{mode}";
+
+    public static string SetSineOutputVoltageVrms(int channel, double vrms) =>
+        $"SLVLD {channel},{vrms.ToString(CultureInfo.InvariantCulture)}";
 }
 
 public static class Oe1022dVisa
@@ -68,6 +101,11 @@ public sealed class Oe1022dVisaSession : IDisposable
     }
 
     public void WriteRallQuery() => session.RawIO.Write(Oe1022dCommands.RallQueryBytes);
+
+    public void SendAsciiCommand(string command)
+    {
+        session.RawIO.Write(Encoding.ASCII.GetBytes(command + "\r"));
+    }
 
     public long ReadRallFrame(byte[] payload)
     {

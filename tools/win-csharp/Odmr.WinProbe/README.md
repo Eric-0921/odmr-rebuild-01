@@ -45,8 +45,8 @@ Forbidden inside the loop:
 
 It does not implement GUI bridging, live bridging, RALL parsing, retries, or
 frame deadlines. `run-execute` restores the JSON-driven station/profile/plan
-runtime path; OE fixed profile commands are snapshot-only in this gate and are
-not sent to the instrument yet.
+runtime path and applies the OE fixed profile once before starting the frozen
+collector.
 
 ## Commands
 

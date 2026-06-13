@@ -72,6 +72,8 @@ public static class ConfigDrivenRun
             resolved_point_count = bundle.ResolvedPlan.ResolvedPointCount
         });
 
+        ApplyOeFixedProfile(bundle, eventsPath, processStart);
+
         using var collector = new OeRallCollector(
             bundle.Connections.OeResource,
             bundle.Connections.OeBaudRate,
@@ -388,6 +390,25 @@ public static class ConfigDrivenRun
         return session;
     }
 
+    private static void ApplyOeFixedProfile(RunConfigBundle bundle, string eventsPath, long processStart)
+    {
+        using var oe = Oe1022dVisa.Open(bundle.Connections.OeResource, bundle.Connections.OeBaudRate);
+        var commands = BuildOeFixedCommands(bundle.OeProfile.Fixed);
+        foreach (var command in commands)
+        {
+            oe.SendAsciiCommand(command);
+            Thread.Sleep(bundle.OeProfile.CommandSettleMs);
+        }
+
+        AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "oe_profile_applied", "profile", null, "oe1022d_main", new
+        {
+            profile_id = bundle.OeProfile.ProfileId,
+            fixed_commands_sent = true,
+            command_count = commands.Length,
+            channel = bundle.OeProfile.Fixed.Channel
+        });
+    }
+
     private static BaselineSnapshot LockBaseline(RunConfigBundle bundle, IReadOnlyList<ConfigMagAxis> axes, string baselinePath)
     {
         var policy = bundle.Plan.MagBaselinePolicy;
@@ -611,6 +632,26 @@ public static class ConfigDrivenRun
         $"LFO:FREQ {fixedProfile.LfFrequencyHz.ToString(CultureInfo.InvariantCulture)}Hz",
         $"LFO:SHAP {fixedProfile.LfShape}",
         $"SOUR:LFO:SIMP {fixedProfile.LfSourceImpedance}"
+    ];
+
+    private static string[] BuildOeFixedCommands(Oe1022dFixedProfile fixedProfile) =>
+    [
+        Oe1022dCommands.SetInputSource(fixedProfile.Channel, fixedProfile.InputSource),
+        Oe1022dCommands.SetInputGrounding(fixedProfile.Channel, fixedProfile.InputGrounding),
+        Oe1022dCommands.SetInputCoupling(fixedProfile.Channel, fixedProfile.InputCoupling),
+        Oe1022dCommands.SetLineNotchFilter(fixedProfile.Channel, fixedProfile.LineNotchFilter),
+        Oe1022dCommands.SetReferenceSource(fixedProfile.Channel, fixedProfile.ReferenceSource),
+        Oe1022dCommands.SetReferenceSlope(fixedProfile.Channel, fixedProfile.ReferenceSlope),
+        Oe1022dCommands.SetPhaseDeg(fixedProfile.Channel, fixedProfile.PhaseDeg),
+        Oe1022dCommands.SetHarmonic(fixedProfile.Channel, 1, fixedProfile.Harmonic1),
+        Oe1022dCommands.SetHarmonic(fixedProfile.Channel, 2, fixedProfile.Harmonic2),
+        Oe1022dCommands.SetDynamicReserve(fixedProfile.Channel, fixedProfile.DynamicReserve),
+        Oe1022dCommands.SetSensitivityIndex(fixedProfile.Channel, fixedProfile.SensitivityIndex),
+        Oe1022dCommands.SetTimeConstantIndex(fixedProfile.Channel, fixedProfile.TimeConstantIndex),
+        Oe1022dCommands.SetFilterSlope(fixedProfile.Channel, fixedProfile.FilterSlope),
+        Oe1022dCommands.SetSyncFilter(fixedProfile.Channel, fixedProfile.SyncFilter),
+        Oe1022dCommands.SetSineOutputMode(fixedProfile.Channel, fixedProfile.SineOutputMode),
+        Oe1022dCommands.SetSineOutputVoltageVrms(fixedProfile.Channel, fixedProfile.SineOutputVoltageVrms)
     ];
 
     private static QualityRecord ComputeQuality(
