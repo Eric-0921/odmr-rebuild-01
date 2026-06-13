@@ -58,6 +58,14 @@ SMB_SWEEP_MODE_CHOICES = ["AUTO", "MAN", "STEP"]
 SMB_SWEEP_SPACING_CHOICES = ["LIN", "LOG"]
 SMB_SWEEP_SHAPE_CHOICES = ["SAWT", "TRI"]
 SMB_TRIGGER_SOURCE_CHOICES = ["AUTO", "SING", "EXT"]
+FIELD_UNIT_CHOICES = ["nT", "uT", "mT"]
+CURRENT_UNIT_CHOICES = ["A", "mA"]
+VOLTAGE_UNIT_CHOICES = ["V", "mV"]
+TIME_UNIT_CHOICES = ["ms", "s"]
+FREQUENCY_UNIT_CHOICES = ["Hz", "kHz", "MHz", "GHz"]
+LOW_FREQUENCY_UNIT_CHOICES = ["Hz", "kHz", "MHz"]
+LF_VOLTAGE_UNIT_CHOICES = ["mV", "V"]
+LASER_POWER_UNIT_CHOICES = ["mW", "W"]
 
 OE_CHOICES = {
     "channel": [code_choice(1, "Ch-A"), code_choice(2, "Ch-B")],
@@ -215,12 +223,14 @@ class ConfigGeneratorApp(tk.Tk):
         self.axis_vars: dict[str, dict[str, tk.Variable]] = {}
         self.blocks: list[ScanBlock] = [self.default_block("x_line", "x")]
         self.current_step = 0
+        self._unit_last_values = {key: variable.get() for key, variable in self.unit_vars.items()}
 
         self._build_ui()
         self._load_default_paths()
         self._refresh_block_list()
         self._load_block(0)
         self._load_template_values()
+        self._install_unit_traces()
 
     def _build_ui(self) -> None:
         root = ttk.Frame(self, padding=10)
@@ -293,10 +303,8 @@ class ConfigGeneratorApp(tk.Tk):
         }
         self._form_field(parent, "Run ID", self.run_vars["run_id"], 1, 0)
         self._form_field(parent, "Operator", self.run_vars["operator"], 2, 0)
-        self._form_field(parent, "Acquisition window", self.run_vars["acquisition_window_ms"], 1, 2)
-        self._form_field(parent, "Point settle", self.run_vars["point_settle_ms"], 2, 2)
-        self._unit_selector(parent, "Magnetic field input unit", self.unit_vars["field"], ["nT", "uT", "mT"], 3, 0)
-        self._unit_selector(parent, "Time input unit", self.unit_vars["time"], ["ms", "s"], 3, 2)
+        self._form_field(parent, "Acquisition window", self.run_vars["acquisition_window_ms"], 1, 2, unit=(self.unit_vars["time"], TIME_UNIT_CHOICES))
+        self._form_field(parent, "Point settle", self.run_vars["point_settle_ms"], 2, 2, unit=(self.unit_vars["time"], TIME_UNIT_CHOICES))
 
         self._section_title(parent, "Scan blocks", 4)
         block_frame = ttk.Frame(parent)
@@ -340,8 +348,6 @@ class ConfigGeneratorApp(tk.Tk):
             "voltage_protection_v": tk.DoubleVar(value=75.0),
             "output_enabled": tk.BooleanVar(value=True),
         }
-        self._unit_selector(parent, "Current input unit", self.unit_vars["baseline_current"], ["A", "mA"], 1, 0)
-        self._unit_selector(parent, "Voltage input unit", self.unit_vars["voltage"], ["V", "mV"], 1, 2)
         self._form_grid(parent, self.baseline_vars, [
             ("baseline_x_a", "Baseline X current"),
             ("baseline_y_a", "Baseline Y current"),
@@ -352,9 +358,17 @@ class ConfigGeneratorApp(tk.Tk):
             ("voltage_v", "Voltage"),
             ("voltage_protection_v", "Voltage protection"),
             ("output_enabled", "Output enabled"),
-        ], start_row=2)
+        ], start_row=1, units={
+            "baseline_x_a": (self.unit_vars["baseline_current"], CURRENT_UNIT_CHOICES),
+            "baseline_y_a": (self.unit_vars["baseline_current"], CURRENT_UNIT_CHOICES),
+            "baseline_z_a": (self.unit_vars["baseline_current"], CURRENT_UNIT_CHOICES),
+            "settle_ms": (self.unit_vars["time"], TIME_UNIT_CHOICES),
+            "settle_tolerance_a": (self.unit_vars["baseline_current"], CURRENT_UNIT_CHOICES),
+            "voltage_v": (self.unit_vars["voltage"], VOLTAGE_UNIT_CHOICES),
+            "voltage_protection_v": (self.unit_vars["voltage"], VOLTAGE_UNIT_CHOICES),
+        })
 
-        self._section_title(parent, "Point quality thresholds", 8)
+        self._section_title(parent, "Point quality thresholds", 7)
         self.quality_vars = {
             "min_frames": tk.IntVar(value=20),
             "max_timeout_count": tk.IntVar(value=2),
@@ -366,7 +380,9 @@ class ConfigGeneratorApp(tk.Tk):
             ("max_timeout_count", "Max timeout count"),
             ("max_duplicate_ratio", "Max duplicate ratio"),
             ("max_last_frame_age_ms", "Max last frame age"),
-        ], start_row=9)
+        ], start_row=8, units={
+            "max_last_frame_age_ms": (self.unit_vars["time"], TIME_UNIT_CHOICES),
+        })
 
     def _build_smb_page(self, parent: ttk.Frame) -> None:
         self.smb_vars = {
@@ -401,14 +417,10 @@ class ConfigGeneratorApp(tk.Tk):
             ("profile_id", "Profile ID"),
             ("command_settle_ms", "Command settle"),
             ("error_check_after_write", "Check SYST:ERR? after batch"),
-        ], start_row=1)
-        self._section_title(parent, "SMB input units", 4)
-        self._unit_selector(parent, "RF start/stop unit", self.unit_vars["rf_frequency"], ["Hz", "kHz", "MHz", "GHz"], 5, 0)
-        self._unit_selector(parent, "RF step unit", self.unit_vars["rf_step"], ["Hz", "kHz", "MHz", "GHz"], 5, 2)
-        self._unit_selector(parent, "FM deviation unit", self.unit_vars["fm_deviation"], ["Hz", "kHz", "MHz", "GHz"], 6, 0)
-        self._unit_selector(parent, "LF frequency unit", self.unit_vars["lf_frequency"], ["Hz", "kHz", "MHz"], 6, 2)
-        self._unit_selector(parent, "LF voltage unit", self.unit_vars["lf_voltage"], ["mV", "V"], 7, 0)
-        self._section_title(parent, "SMB fixed modulation profile", 9)
+        ], start_row=1, units={
+            "command_settle_ms": (self.unit_vars["time"], TIME_UNIT_CHOICES),
+        })
+        self._section_title(parent, "SMB fixed modulation profile", 4)
         self._form_grid(parent, self.smb_vars, [
             ("modulation_enabled", "Modulation enabled"),
             ("fm_enabled", "FM enabled"),
@@ -420,22 +432,34 @@ class ConfigGeneratorApp(tk.Tk):
             ("lf_frequency_hz", "LF frequency"),
             ("lf_shape", "LF shape", SMB_LF_SHAPE_CHOICES),
             ("lf_source_impedance", "LF source impedance", SMB_LF_IMPEDANCE_CHOICES),
-        ], start_row=10)
-        self._section_title(parent, "SMB default RF sweep", 16)
+        ], start_row=5, units={
+            "fm_deviation_hz": (self.unit_vars["fm_deviation"], FREQUENCY_UNIT_CHOICES),
+            "lf_voltage_mv": (self.unit_vars["lf_voltage"], LF_VOLTAGE_UNIT_CHOICES),
+            "lf_frequency_hz": (self.unit_vars["lf_frequency"], LOW_FREQUENCY_UNIT_CHOICES),
+        })
+        self._section_title(parent, "SMB default RF sweep", 11)
         self._form_grid(parent, self.smb_vars, [
             ("start_hz", "Start"),
             ("stop_hz", "Stop"),
             ("step_hz", "Step"),
             ("dwell_ms", "Dwell"),
-            ("power_dbm", "Power dBm"),
+            ("power_dbm", "Power"),
             ("sweep_mode", "Sweep mode", SMB_SWEEP_MODE_CHOICES),
             ("spacing", "Spacing", SMB_SWEEP_SPACING_CHOICES),
             ("shape", "Shape", SMB_SWEEP_SHAPE_CHOICES),
             ("trigger_source", "Trigger source", SMB_TRIGGER_SOURCE_CHOICES),
-            ("output_voltage_start_v", "Output voltage start V"),
-            ("output_voltage_stop_v", "Output voltage stop V"),
+            ("output_voltage_start_v", "Output voltage start"),
+            ("output_voltage_stop_v", "Output voltage stop"),
             ("rf_output_enabled", "RF output enabled"),
-        ], start_row=17)
+        ], start_row=12, units={
+            "start_hz": (self.unit_vars["rf_frequency"], FREQUENCY_UNIT_CHOICES),
+            "stop_hz": (self.unit_vars["rf_frequency"], FREQUENCY_UNIT_CHOICES),
+            "step_hz": (self.unit_vars["rf_step"], FREQUENCY_UNIT_CHOICES),
+            "dwell_ms": (self.unit_vars["time"], TIME_UNIT_CHOICES),
+            "power_dbm": "dBm",
+            "output_voltage_start_v": "V",
+            "output_voltage_stop_v": "V",
+        })
 
     def _build_oe_page(self, parent: ttk.Frame) -> None:
         self.oe_vars = {
@@ -493,20 +517,19 @@ class ConfigGeneratorApp(tk.Tk):
         self.laser_vars = {
             "profile_id": tk.StringVar(),
             "mode": tk.StringVar(value="off_background"),
-            "power_mw": tk.IntVar(value=0),
+            "power_mw": tk.DoubleVar(value=0),
             "settle_ms": tk.DoubleVar(value=1000),
         }
         self._section_title(parent, "CNI laser run background profile", 0)
         self._form_field(parent, "Profile ID", self.laser_vars["profile_id"], 1, 0)
         self._form_field(parent, "Mode", self.laser_vars["mode"], 2, 0, choices=["off_background", "on_background"])
-        self._unit_selector(parent, "Power input unit", self.unit_vars["laser_power"], ["mW", "W"], 3, 0)
-        self._form_field(parent, "Power", self.laser_vars["power_mw"], 4, 0)
-        self._form_field(parent, "Settle", self.laser_vars["settle_ms"], 5, 0)
+        self._form_field(parent, "Power", self.laser_vars["power_mw"], 3, 0, unit=(self.unit_vars["laser_power"], LASER_POWER_UNIT_CHOICES))
+        self._form_field(parent, "Settle", self.laser_vars["settle_ms"], 4, 0, unit=(self.unit_vars["time"], TIME_UNIT_CHOICES))
         ttk.Label(
             parent,
             text="Laser is generated as a run-level background profile. The C# runtime opens/closes it at run boundaries, not per point.",
             wraplength=840,
-        ).grid(row=6, column=0, columnspan=4, sticky="w", pady=14)
+        ).grid(row=5, column=0, columnspan=4, sticky="w", pady=14)
 
     def _build_generate_page(self, parent: ttk.Frame) -> None:
         self._section_title(parent, "Generate JSON files", 0)
@@ -532,6 +555,7 @@ class ConfigGeneratorApp(tk.Tk):
         fields: list[tuple[str, str] | tuple[str, str, list[str]]],
         start_row: int,
         columns: int = 2,
+        units: dict[str, tuple[tk.StringVar, list[str]] | str] | None = None,
     ) -> None:
         for index, field in enumerate(fields):
             key = field[0]
@@ -539,7 +563,7 @@ class ConfigGeneratorApp(tk.Tk):
             choices = field[2] if len(field) > 2 else None
             row = start_row + index // columns
             col = (index % columns) * 2
-            self._form_field(parent, label, values[key], row, col, choices=choices)
+            self._form_field(parent, label, values[key], row, col, choices=choices, unit=units.get(key) if units else None)
 
     def _form_field(
         self,
@@ -549,27 +573,26 @@ class ConfigGeneratorApp(tk.Tk):
         row: int,
         column: int,
         choices: list[str] | None = None,
+        unit: tuple[tk.StringVar, list[str]] | str | None = None,
     ) -> None:
         ttk.Label(parent, text=label, wraplength=180).grid(row=row, column=column, sticky="w", padx=(0, 8), pady=4)
         if isinstance(variable, tk.BooleanVar):
             ttk.Checkbutton(parent, variable=variable).grid(row=row, column=column + 1, sticky="w", pady=4)
         elif choices:
             ttk.Combobox(parent, textvariable=variable, values=choices, state="readonly").grid(row=row, column=column + 1, sticky="ew", pady=4)
+        elif unit:
+            value_frame = ttk.Frame(parent)
+            value_frame.grid(row=row, column=column + 1, sticky="ew", pady=4)
+            value_frame.columnconfigure(0, weight=1)
+            ttk.Entry(value_frame, textvariable=variable).grid(row=0, column=0, sticky="ew")
+            if isinstance(unit, str):
+                ttk.Label(value_frame, text=unit, width=max(4, len(unit))).grid(row=0, column=1, sticky="e", padx=(6, 0))
+            else:
+                unit_var, unit_choices = unit
+                ttk.Combobox(value_frame, textvariable=unit_var, values=unit_choices, state="readonly", width=7).grid(row=0, column=1, sticky="e", padx=(6, 0))
         else:
             ttk.Entry(parent, textvariable=variable).grid(row=row, column=column + 1, sticky="ew", pady=4)
         parent.columnconfigure(column + 1, weight=1)
-
-    def _unit_selector(
-        self,
-        parent: ttk.Frame,
-        label: str,
-        variable: tk.StringVar,
-        choices: list[str],
-        row: int,
-        column: int,
-    ) -> None:
-        ttk.Label(parent, text=label, wraplength=180).grid(row=row, column=column, sticky="w", padx=(0, 8), pady=4)
-        ttk.Combobox(parent, textvariable=variable, values=choices, state="readonly", width=10).grid(row=row, column=column + 1, sticky="w", pady=4)
 
     def _axis_panel(self, parent: ttk.Frame, axis: str, column: int) -> None:
         group = ttk.LabelFrame(parent, text=f"{axis.upper()} axis")
@@ -587,11 +610,12 @@ class ConfigGeneratorApp(tk.Tk):
         self.axis_vars[axis] = vars_for_axis
         self._form_field(group, "Active", vars_for_axis["enabled"], 0, 0)
         self._form_field(group, "Mode", vars_for_axis["mode"], 1, 0, choices=["range", "list"])
-        self._form_field(group, "Fixed", vars_for_axis["fixed"], 2, 0)
-        self._form_field(group, "Start", vars_for_axis["start"], 3, 0)
-        self._form_field(group, "Stop", vars_for_axis["stop"], 4, 0)
-        self._form_field(group, "Step", vars_for_axis["step"], 5, 0)
-        self._form_field(group, "Explicit list", vars_for_axis["values_text"], 6, 0)
+        field_unit = (self.unit_vars["field"], FIELD_UNIT_CHOICES)
+        self._form_field(group, "Fixed", vars_for_axis["fixed"], 2, 0, unit=field_unit)
+        self._form_field(group, "Start", vars_for_axis["start"], 3, 0, unit=field_unit)
+        self._form_field(group, "Stop", vars_for_axis["stop"], 4, 0, unit=field_unit)
+        self._form_field(group, "Step", vars_for_axis["step"], 5, 0, unit=field_unit)
+        self._form_field(group, "Explicit list", vars_for_axis["values_text"], 6, 0, unit=field_unit)
 
     def _load_default_paths(self) -> None:
         self.template_vars["plan"].set(str(self.repo_root / "configs" / "plans" / "x_axis_1d_bounce_15min.json"))
@@ -613,6 +637,89 @@ class ConfigGeneratorApp(tk.Tk):
             self._set_laser_values(laser)
         except Exception as exc:
             messagebox.showerror("Load templates failed", str(exc), parent=self)
+
+    def _install_unit_traces(self) -> None:
+        for key, variable in self.unit_vars.items():
+            variable.trace_add("write", lambda *_args, unit_key=key: self._on_unit_changed(unit_key))
+
+    def _on_unit_changed(self, key: str) -> None:
+        old_unit = self._unit_last_values.get(key)
+        new_unit = self.unit_vars[key].get()
+        if not old_unit or old_unit == new_unit:
+            return
+        try:
+            if key == "field":
+                self._convert_field_unit(old_unit, new_unit)
+            elif key == "baseline_current":
+                self._convert_variables([
+                    self.baseline_vars["baseline_x_a"],
+                    self.baseline_vars["baseline_y_a"],
+                    self.baseline_vars["baseline_z_a"],
+                    self.baseline_vars["settle_tolerance_a"],
+                ], "current_a", old_unit, new_unit)
+            elif key == "voltage":
+                self._convert_variables([
+                    self.baseline_vars["voltage_v"],
+                    self.baseline_vars["voltage_protection_v"],
+                ], "voltage_v", old_unit, new_unit)
+            elif key == "time":
+                self._convert_variables([
+                    self.run_vars["acquisition_window_ms"],
+                    self.run_vars["point_settle_ms"],
+                    self.baseline_vars["settle_ms"],
+                    self.quality_vars["max_last_frame_age_ms"],
+                    self.smb_vars["command_settle_ms"],
+                    self.smb_vars["dwell_ms"],
+                    self.oe_vars["command_settle_ms"],
+                    self.laser_vars["settle_ms"],
+                ], "time_ms", old_unit, new_unit)
+            elif key == "rf_frequency":
+                self._convert_variables([self.smb_vars["start_hz"], self.smb_vars["stop_hz"]], "frequency_hz", old_unit, new_unit)
+            elif key == "rf_step":
+                self._convert_variables([self.smb_vars["step_hz"]], "frequency_hz", old_unit, new_unit)
+            elif key == "fm_deviation":
+                self._convert_variables([self.smb_vars["fm_deviation_hz"]], "frequency_hz", old_unit, new_unit)
+            elif key == "lf_frequency":
+                self._convert_variables([self.smb_vars["lf_frequency_hz"]], "frequency_hz", old_unit, new_unit)
+            elif key == "lf_voltage":
+                self._convert_variables([self.smb_vars["lf_voltage_mv"]], "voltage_mv", old_unit, new_unit)
+            elif key == "laser_power":
+                self._convert_variables([self.laser_vars["power_mw"]], "power_mw", old_unit, new_unit)
+        finally:
+            self._unit_last_values[key] = new_unit
+
+    def _convert_variables(self, variables: list[tk.Variable], unit_kind: str, old_unit: str, new_unit: str) -> None:
+        for variable in variables:
+            try:
+                variable.set(from_canonical_unit(to_canonical_unit(variable.get(), unit_kind, old_unit), unit_kind, new_unit))
+            except Exception:
+                continue
+
+    def _convert_field_unit(self, old_unit: str, new_unit: str) -> None:
+        selected = self._selected_block_index()
+        if selected is not None:
+            try:
+                self.blocks[selected] = self._read_block()
+            except Exception:
+                selected = None
+        for block in self.blocks:
+            for spec in block.axes.values():
+                spec.fixed = self._convert_number(spec.fixed, "field", old_unit, new_unit)
+                spec.start = self._convert_number(spec.start, "field", old_unit, new_unit)
+                spec.stop = self._convert_number(spec.stop, "field", old_unit, new_unit)
+                spec.step = self._convert_number(spec.step, "field", old_unit, new_unit)
+                try:
+                    spec.values_text = ", ".join(
+                        format_number(self._convert_number(value, "field", old_unit, new_unit))
+                        for value in parse_values(spec.values_text)
+                    )
+                except Exception:
+                    pass
+        if selected is not None:
+            self._load_block(selected)
+
+    def _convert_number(self, value: object, unit_kind: str, old_unit: str, new_unit: str) -> float:
+        return from_canonical_unit(to_canonical_unit(value, unit_kind, old_unit), unit_kind, new_unit)
 
     def _set_run_values(self, plan: dict) -> None:
         time_unit = self.unit_vars["time"].get()
