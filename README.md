@@ -4,12 +4,12 @@
 
 ## 当前主栈状态
 
-`win-csharp-rebuild` 分支的主运行栈已经迁移到 Windows C#：
+`main` 分支的主运行栈是 Windows C#：
 
 - 主入口：`tools/win-csharp/Odmr.WinProbe`
 - 主命令：`run-execute`、`run-resolve`、`artifact-check`、`audit-continuity`、各设备 probe、`device-command-check`
 - 主设备链路：OE1022D 走 NI-VISA ASRL，SMB100A 走 Raw TCP 5025，M8812/CNI Laser 走 Windows Serial
-- Rust 代码保留为归档参考和历史真值，不再作为日常实验、审计或 GUI/live 的必要依赖
+- Rust 工程本体保留在 `win-csharp-rebuild` 分支作为归档参考，不在 `main` 日常主栈中保留
 
 OE1022D `RALL?` collector 热路径仍是项目内唯一冻结链路：
 
@@ -23,12 +23,11 @@ append frame index
 
 artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 collector 外侧。
 
-当前仓库包含四类内容：
+当前 `main` 仓库包含三类内容：
 
 - `docs/equipment_manual/`：设备手册真值文档、冻结参考资料、命令真值层
 - `docs/rebuild/`：重建范围、架构、runtime 协议、artifact 设计、连接事实
 - `tools/win-csharp/`：当前主运行栈
-- `crates/`、`apps/odmr-cli/`：归档 Rust 参考，不再作为日常入口
 
 当前阶段约束：
 
@@ -39,7 +38,7 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 语言边界已经更新：
 
 - C# 负责设备命令、transport、runtime、artifact、离线审查和连续性 audit
-- Rust 保留为归档参考，不再作为日常运行依赖
+- Rust 归档参考保留在 `win-csharp-rebuild` 分支，不再作为 `main` 运行依赖
 - Python 负责 plan 生成、calibration 拟合、replay 后分析
 - Python 不进入实时采集链路，不直接连接设备
 

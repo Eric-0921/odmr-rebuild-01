@@ -107,8 +107,8 @@ artifacts only and does not open instruments or touch the collector.
 `audit-continuity` is an offline device-packet-counter audit. It does not parse
 RALL payloads in the collector thread.
 
-`device-command-check` lists the migrated C# command catalog and the Rust command
-crate source each entry came from.
+`device-command-check` lists the migrated C# command catalog and the archived
+`win-csharp-rebuild` Rust command source each entry came from.
 
 `live-replay` reduces existing `events.jsonl`, frame index, and summary files
 into a current live snapshot. It does not connect to hardware.

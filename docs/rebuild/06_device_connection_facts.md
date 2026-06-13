@@ -7,7 +7,7 @@
 - 只复用旧项目里已经被真实设备验证过的连接事实。
 - 不复用旧项目的 step 生命周期、GUI 工作流和 runtime 抽象。
 - 端口路径只能是 hint，不能作为永久身份。
-- 新项目中，设备连接统一由 Rust 负责；Python 不直接连接任何设备。
+- 当前 main 中，设备连接统一由 Windows C# 主栈负责；Python 不直接连接任何设备。
 
 本次 rebuild 真机 smoke 已经证明：
 
@@ -17,19 +17,20 @@
 
 ## 总体结论
 
-### Rust / Python 边界
+### C# / Python 边界
 
-- Rust 负责：
+- C# 负责：
   - socket / serial transport
   - 设备身份探测
-  - station verify
+  - device probes
   - 运行时 collector 和 cleanup
+  - artifact-check 和 audit-continuity
 - Python 负责：
   - plan 生成
   - calibration 拟合
   - artifact 读取和分析
 
-这意味着“连接设备”这件事第一版必须落在 Rust，不应由 Python 承担。
+这意味着“连接设备”这件事落在 C# 主栈，不应由 Python 承担。
 
 ### 设备身份原则
 
@@ -45,9 +46,9 @@
 
 当前代码基线已经进一步收紧为：
 
-- `station verify` / `run execute` 每次都先枚举当前串口池
-- hint 只影响候选排序
-- `resolved_spec` 和 `station_snapshot.json` 必须写出本轮实际认领端口
+- 当前 C# 默认连接事实是：OE `ASRL8::INSTR`，SMB `169.254.2.20:5025`，M8812 `COM4/COM6/COM3`，Laser `COM9`
+- C# probes 负责验证这些连接事实
+- run provenance 由 snapshots、`device_state.jsonl`、segments/raw/frame index 和离线审查工具给出
 
 ### 本次 rebuild 真机已验证结果
 
@@ -122,7 +123,7 @@
 
 ### 新项目应直接继承的事实
 
-- `smb100a` transport 用 Rust 实现 TCP socket。
+- `smb100a` transport 用 C# Raw TCP 5025。
 - 最小 verify 以 query-only 为主，不在 verify 阶段发 `OUTP ON`、`SWE:EXEC` 等状态改变命令。
 
 ## OE1022D
@@ -180,7 +181,7 @@
 
 ### 新项目应直接继承的事实
 
-- OE 连接、collector、cleanup 必须用 Rust 实现。
+- OE 连接、collector、cleanup 由 C# NI-VISA ASRL 实现。
 - Python 不直接碰 OE 串口。
 - point 切换不允许重启 collector。
 
@@ -257,8 +258,8 @@
 
 ### 新项目应直接继承的事实
 
-- M8812 连接必须用 Rust serial transport。
-- station verify 依赖 `*IDN?` 严格匹配 SN，不依赖 `/dev/cu.PL2303G-*` 这类动态路径。
+- M8812 连接由 C# Windows Serial transport 实现。
+- C# probe 依赖 `*IDN?` 严格匹配 SN，不依赖旧 macOS `/dev/cu.PL2303G-*` 这类动态路径。
 - 第一版 point 运行期只需要：
   - `CURR`
   - `OUTP`
@@ -291,7 +292,7 @@
 
 ### 新项目应直接继承的事实
 
-- Laser 连接也由 Rust 负责。
+- Laser 连接由 C# Windows Serial transport 负责。
 - 第一版只需要最小控制：
   - 设功率
   - 开

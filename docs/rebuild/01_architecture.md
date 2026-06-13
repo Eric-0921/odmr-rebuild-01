@@ -10,20 +10,11 @@ configs/
   calibrations/
   plans/
 
-crates/
-  smb100a-commands/
-  oe1022d-commands/
-  m8812-commands/
-  cni-laser-commands/
-  device-transport/
-  station-resolver/
-  calibration-core/
-  artifact-log/
-  acquisition-runtime/
-  replay-core/
-
-apps/
-  odmr-cli/
+tools/win-csharp/
+  Odmr.Devices/
+  Odmr.Runtime/
+  Odmr.Artifacts/
+  Odmr.WinProbe/
 
 python/
   odmr_plan/
@@ -33,11 +24,11 @@ python/
 runs/
 ```
 
-当前仓库已有 `*-commands` crate。后续 runtime 只能通过这些白名单命令或后续审查过的命令模块生成设备命令，不允许业务层拼接裸命令字符串。
+当前仓库主栈是 `tools/win-csharp`。runtime 只能通过 C# command catalog、设备 session 或后续审查过的命令模块生成设备命令，不允许业务层拼接未审查的裸命令字符串。
 
 语言边界：
 
-- Rust 负责设备连接、transport、station resolve、runtime、artifact。
+- C# 负责设备连接、transport、config resolve、runtime、artifact、离线审查。
 - Python 负责 plan 生成、calibration 拟合、replay 后分析。
 - Python 不直接连接设备，不参与实时采集主循环。
 

@@ -1,6 +1,6 @@
 # C# 主栈与 Rust 归档边界
 
-本文定义 `win-csharp-rebuild` 分支当前的运行入口和归档边界。
+本文定义 `main` 分支当前的 C# 运行入口和 Rust 归档边界。
 
 当前实验主链路的 RF sweep window、point device context 和暂缓 live frontend 边界见
 [`14_experiment_reliability_without_live_frontend.md`](14_experiment_reliability_without_live_frontend.md)。
@@ -32,13 +32,13 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 -
 
 ## Rust 归档边界
 
-Rust 代码保留在仓库中作为归档参考：
+Rust 工程本体保留在 `win-csharp-rebuild` 分支作为归档参考：
 
 - 历史 runtime 和 GUI/live bridge 的实现参考。
 - 历史 artifact/audit 行为的对照参考。
 - 不再作为日常实验运行、审查或设备验证的必要依赖。
 
-新增功能默认进入 C# 主栈。只有在查历史行为或回归定位时才读取 Rust 实现。
+新增功能默认进入 C# 主栈。只有在查历史行为或回归定位时才到 `win-csharp-rebuild` 读取 Rust 实现。
 
 ## Collector 边界
 
@@ -67,7 +67,7 @@ append frame index
 
 - C# `run-execute` 已完成 minimal 3-point 和 15min laser background 真机验证。
 - C# `artifact-check` 已通过 15min run artifact 合同检查。
-- C# `audit-continuity` 已在关键字段上对齐 Rust 归档 audit。
-- C# `device-command-check` 已覆盖 OE1022D、SMB100A、M8812、CNI Laser 当前 Rust command crates 的命令面。
+- C# `audit-continuity` 已在关键字段上对齐归档 Rust audit。
+- C# `device-command-check` 已覆盖 OE1022D、SMB100A、M8812、CNI Laser 在 `win-csharp-rebuild` 归档分支中的命令面。
 - C# `live-replay` 已提供 artifact/events 驱动的 live reducer 基础层，不连接设备，不订阅 collector。
 - 当前阶段暂缓 OE 常驻 `RALL?` reader 和前端 live monitor，优先保证实验采集链路可信。

@@ -1,6 +1,6 @@
 # Rust 归档退出边界
 
-本文定义当前仓库从 Rust 主栈退出后的边界。
+本文定义 `main` 从 Rust 主栈退出后的边界。Rust 工程本体保留在 `win-csharp-rebuild` 分支，`main` 不再保留 Rust workspace。
 
 ## 当前结论
 
@@ -14,7 +14,7 @@ C# 是唯一日常实验主栈：
 - audit-continuity
 - device command catalog
 
-Rust 保留为归档参考，不再作为以下流程的必要依赖：
+Rust 在 `win-csharp-rebuild` 分支保留为归档参考，不再作为以下流程的必要依赖：
 
 - 日常实验采集
 - 真机验收
@@ -42,9 +42,9 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y 
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 ```
 
-## Rust 目录状态
+## Rust 归档位置
 
-以下目录保留但归档：
+以下内容已从 `main` 删除，只在 `win-csharp-rebuild` 分支归档：
 
 - `crates/`
 - `apps/odmr-cli/`
@@ -66,7 +66,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 -
 
 ## Python GUI 状态
 
-`python/odmr_gui` 是旧 GUI/live bridge 参考。当前阶段不做前端，不自动启动 Rust `gui-bridge`。
+旧 `python/odmr_gui` 是 Rust `gui-bridge` 参考，已从 `main` 删除，只在历史分支保留。
 
 需要恢复 GUI/live 时，应优先基于 C# artifact/events/live reducer 重新设计，不能把旧 Cargo bridge 重新变成默认依赖。
 

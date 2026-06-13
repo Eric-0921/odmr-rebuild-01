@@ -21,10 +21,11 @@ public sealed record DeviceCommandCheckReport(
 
 public static class DeviceCommandCatalog
 {
-    private const string OeRust = "crates/oe1022d-commands/src/lib.rs";
-    private const string SmbRust = "crates/smb100a-commands/src/lib.rs";
-    private const string M8812Rust = "crates/m8812-commands/src/lib.rs";
-    private const string LaserRust = "crates/cni-laser-commands/src/lib.rs";
+    private const string ArchiveBranch = "win-csharp-rebuild";
+    private const string OeRust = ArchiveBranch + ":crates/oe1022d-commands/src/lib.rs";
+    private const string SmbRust = ArchiveBranch + ":crates/smb100a-commands/src/lib.rs";
+    private const string M8812Rust = ArchiveBranch + ":crates/m8812-commands/src/lib.rs";
+    private const string LaserRust = ArchiveBranch + ":crates/cni-laser-commands/src/lib.rs";
 
     public static readonly IReadOnlyList<DeviceCommandCatalogEntry> All =
     [
