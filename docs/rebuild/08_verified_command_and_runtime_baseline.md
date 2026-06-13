@@ -398,38 +398,43 @@ run 结束后额外只读核验：
 - `continuous raw + frame index + segment boundary` 才是最终事实来源
 - `frames.parsed` 是 companion truth，不替代 raw
 
-## 当前默认 observed profile 基线（2026-06-12）
+## 当前 Windows / LabVIEW-like RALL 基线（2026-06-13）
 
-当前默认真机基线是这组配置：
+当前 Windows full stack 基线配置：
 
-- `plan = configs/plans/minimal_3point_runtime.json`
-- `smb-profile = configs/profiles/smb100a_run_pll_default.json`
-- `oe-profile = configs/profiles/oe1022d_run_ch_b_observed.json`
-- `laser-profile = configs/profiles/cni_laser_run_on_background.json`
+- `station = configs/stations/lab_a.json`
+- `plan = configs/plans/x_axis_1d_bounce_15min.json`
+- `smb-profile = configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json`
+- `oe-profile = configs/profiles/oe1022d_run_ch_b_tc100ms.json`
+- `laser-profile = configs/profiles/cni_laser_run_on_background_180mw.json`
 
-当前默认 `OE1022D` 热路径参数：
+当前 `OE1022D` runtime 热路径已经和原厂 LabVIEW `OE1022D_USB_Query Data.vi` 对齐：
 
-- `ASCII query timeout = 300ms`
-- `rall_post_write_delay = 30ms`
-- `rall_chunk_timeout = 5ms`
-- `rall_first_byte_deadline = 30ms`
-- `rall_frame_deadline = 120ms`
-- `zero_byte_retry_limit = 1`
+- Windows backend：NI-VISA/PyVISA `visa_resource`
+- resolver 仍通过 `*IDN?` + SN identity-first 认领 OE，不硬绑 COM 号
+- 采集循环：
+  - 写 `RALL?`
+  - 等 `30ms`
+  - blocking exact read `12288B`
+  - 读完立即进入下一轮
+- `poll_interval_ms` 不再控制定长 `RALL?` 热路径
+- 旧 `rall_chunk_timeout`、`rall_first_byte_deadline`、`rall_frame_deadline`、`zero_byte_retry_limit` 已从 runtime collector profile 中移除
 
-原厂 LabVIEW `OE1022D_USB_Query Data.vi` 的 RALL 热路径是：
+采样时间轴按设备语义固定为 `1ms/sample`，不是 host 轮询间隔推导值。
 
-- 写 `RALL?`
-- 等 `30ms`
-- 固定读 `12288B`
-- 转 `U8[]` 后交给 `OE1022D_DATA Transmit.vi`
+当前 frame 连续性口径：
 
-因此 rebuild collector 只在打开串口后清一次输入缓冲区，不在每次 `RALL?` 读前清输入，避免丢弃已经到达的连续采集帧。
+- `raw/oe1022d.frames.idx.jsonl` 写入 `device_packet_counter = payload[12287]`
+- `delta=1`：新 50ms 窗口连续到达
+- `delta=0`：重复窗口，tight loop 读得比设备窗口更新更快时可出现
+- `delta>1`：疑似漏 50ms 窗口
+- `run audit-continuity` 用该 counter 审计窗口连续性；quality 仍以 point 内 timeout、unique windows、last frame age 为主
 
-采样时间轴按设备语义固定为 `1ms/sample`，不是 `poll_interval_ms / 50`。原厂 `SSI_check packet.vi` 的包连续性逻辑已复核，但 `2026-06-12` 的 60 帧 OE 直读验证中，`payload[0]` 不是包序号，全 12288B payload 也未扫到稳定 `+1 mod 256` offset；因此暂不把 packet counter 写入正式 artifact 或 quality 判定。
+当前 `quality` / 诊断语义：
 
-当前默认 `quality` / 诊断语义：
-
-- `timeout_count > max_timeout_count` 才会判成 `failed_timeout`
+- `frames_unique < min_frames` -> `failed_min_frames`
+- `timeout_count > max_timeout_count` -> `failed_timeout`
+- `duplicate_ratio` 保留为诊断字段，不再单独导致失败
 - `quality.jsonl` 额外输出：
   - `collector_health = clean | recovered_timeout | degraded_timeout`
   - `timeout_budget_remaining`
@@ -438,25 +443,36 @@ run 结束后额外只读核验：
   - `collector_recovered`
   - `collector_stopped`
 
-### 3-run 真机验收
+### Windows full stack 长测验收
 
 真机运行目录：
+
+- `runs/win_full_x_axis_15min_simplified_20260613`
+
+验收结果：
+
+- `summary.status = completed`
+- `points_passed = 21 / 21`
+- point timeout 合计 `0`
+- collector timeout 全程 `0`
+- `raw/oe1022d.frames.idx.jsonl` 行数 `28534`
+- `raw/oe1022d.rall` 大小 `350625792 = 28534 * 12288`
+- `run audit-continuity`：
+  - `verdict = continuous`
+  - `delta_gt1_count = 0`
+  - `estimated_missing_windows = 0`
+  - `suspected_missing_boundaries = 0`
+  - `suspected_content_boundaries = 0`
+
+### 2026-06-12 observed profile 3-run 短验收（历史）
+
+以下运行是旧 `observed` profile 收敛过程中的历史记录，不能再作为当前 RALL 热路径参数来源：
 
 - `runs/manual_live_recheck_20260612_d30_r1`
 - `runs/manual_live_recheck_20260612_d30_r2`
 - `runs/manual_live_recheck_20260612_d30_r3`
 
-验收结果：
-
-- 三轮都是 `points_passed = 3 / 3`
-- 三轮都是 `collector_stopped.data.timeout_count = 0`
-- 三轮 `quality.jsonl` 全 point：
-  - `timeout_count = 0`
-  - `collector_health = clean`
-  - `quality_status = passed`
-- `raw/oe1022d.frames.idx.jsonl`：
-  - `max(frame_gap_ms)` 分别约为 `54.35 / 54.34 / 54.55`
-  - 没有 `>=100ms` gap
+当时的结论只保留为历史对照：3/3 points passed，collector timeout 为 0，但仍使用过已被移除的 serial deadline/retry 配置口径。
 
 结论：
 

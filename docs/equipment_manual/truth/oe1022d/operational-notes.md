@@ -20,6 +20,8 @@ It is not treated as a per-point reconfigured mini-runtime.
 
 - `RALL?` is the only acquisition path that matters in first version
 - one collector owns the `RALL?` loop
+- the current run collector loop is LabVIEW-like: write `RALL?`, wait `30ms`, blocking exact read `12288` bytes, then immediately start the next read
+- first-byte deadlines, frame deadlines, zero-byte retry, and poll-interval sleep are not part of the current exact-read hot path
 - other components consume the resulting stream
 
 This is the key runtime direction that the old GUI integration violated.
@@ -48,4 +50,3 @@ Anything beyond that stays out of scope until the continuous path is stable.
 - no attempt to expose every remote command
 - no per-step collector restart
 - no point-level thread lifecycle tied to acquisition
-

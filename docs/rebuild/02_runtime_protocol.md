@@ -89,7 +89,7 @@ OE1022D collector 是 run 级单实例。
 
 职责：
 
-- 固定节拍发送 `RALL?`，写后按 profile 等待再读定长 frame。
+- 按 LabVIEW-like tight loop 持续执行定长 `RALL?`：写 `RALL?`，等待 `30ms`，blocking exact read `12288B`，读完立即进入下一轮。
 - 读取完整 frame。
 - 打 monotonic timestamp 和 wall timestamp。
 - 分配连续 frame sequence。
@@ -104,14 +104,15 @@ OE1022D collector 是 run 级单实例。
 - 同一 OE1022D 串口只能有一个 reader。
 - OE1022D collector 只在打开串口后清一次输入缓冲区；热循环内不逐帧清输入。
 - `RALL` 设备采样间隔按 `1ms/sample` 处理；host poll interval 不反推出采样点间隔。
-- 原厂 `SSI_check packet.vi` 的包序号逻辑已确认存在，但当前未映射到 `RALL?` 12288B raw payload 的稳定 offset；未确认前不进入 quality 判定。
+- 定长 `RALL?` 热路径不使用 `poll_interval_ms` 做额外 sleep，不使用 first-byte deadline、frame deadline、zero-byte retry 或 timeout 后 clear/retry。
+- `payload[12287]` 当前作为 `device_packet_counter` 进入 frame index 和 continuity audit：`delta=1` 是新窗口，`delta=0` 是重复窗口，`delta>1` 是疑似漏 50ms 窗口。
 - producer 不使用 `try_send` 静默丢帧作为主链策略。
 - raw writer / health consumer 必须持续 drain。
 - stop 必须包含 request、observed、port close、thread joined 四个阶段。
 - `Drop` 不等于线程已经退出。
 - 最小 `RALL` 字段解析不在 collector 线程执行，而在 point 从 `raw + frames.idx + segments` 回切之后执行。
 - ring buffer 只是即时消费层，不是最终事实层。
-- ring buffer 容量仍按 `estimated_sweep_duration_ms / poll_interval_ms + guard` 动态估算，但只服务观察体验，不再承担 point 保真。
+- ring buffer 容量仍按估算值加 guard 动态规划，但只服务观察体验，不再承担 point 保真。
 - point 真值边界必须取 committed cursor，不能取 ring cursor。
 
 ## Point 执行协议
@@ -219,7 +220,7 @@ point 失败不必默认终止整个 run。是否继续由 plan 中的 failure p
 允许：
 
 - run 开始前执行固定配置。
-- run 中持续执行 `RALL?`。
+- run 中由单一 collector 按 LabVIEW-like exact-read 循环持续执行 `RALL?`。
 - 记录 collector health。
 - 为 point 提供按时间窗拉取的 ring buffer 只读接口。
 

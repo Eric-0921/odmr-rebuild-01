@@ -59,7 +59,7 @@
   - `mag_x -> 080020960220402020`
   - `mag_y -> 080020960220402022`
   - `mag_z -> 080020960220402003`
-- 当前 smoke 中 `OE1022D RALL?` 单帧 payload：
+- 早期 smoke `until_timeout` 诊断路径中的 `OE1022D RALL?` 单帧 payload：
   - `15168 bytes`
 - 当前最小 runtime `run execute` 中，定长 `RALL?` 真值帧：
   - `12288 bytes`
@@ -70,7 +70,7 @@
 这两个数字并不矛盾，原因必须写清楚：
 
 - `15168` 来自早期 smoke 的 `query_rall_frame_until_timeout(max_bytes)` 路径
-- `12288` 来自当前 runtime 的 `query_rall_frame(expected_len=12288)` 定长读取路径
+- `12288` 来自当前 runtime 的 LabVIEW-like 定长读取路径：写 `RALL?` -> 等 `30ms` -> blocking exact read `12288B`
 - 对第一版 runtime 来说，`12288 bytes` 才是 collector 和 parser 应锁定的协议真值
 - `until_timeout` 路径只保留给 smoke / 诊断，不能当作 runtime 帧协议
 
@@ -131,6 +131,8 @@
 
 - transport：USB CDC 串口
 - 旧项目稳定工作参数：`921600` baud
+- Windows 当前主 backend：NI-VISA/PyVISA `ASRL*::INSTR`，由 resolver 枚举 resource 后用 `*IDN?` + SN 认领，不硬绑 COM 号
+- macOS 当前保留 serial_port backend
 - 最小身份命令：`*IDN?`
 - run 级核心读取命令：`RALL?`
 - 真机快照中的身份响应示例：
@@ -158,20 +160,23 @@
 - `RALL?` 是唯一核心数据路径。
 - 同一串口只能有一个 reader。
 - 不支持 pipeline：连续排队多个 `RALL?` 会返回垃圾或空数据。
-- 旧项目稳定性验证基于：
+- 当前 `run execute` 定长采集基于：
   - run 级单 collector
-  - 独立 producer
+  - 写 `RALL?`
+  - 等 `30ms`
+  - blocking exact read `12288B`
+  - 读完立即下一轮
   - 持续 consumer drain
-- 旧项目 collector 的关键经验：
-  - 采集前 `clear(Input)`
-  - 读取节拍约 `48ms`
-  - 去重可基于 `X[0]`
+- 旧 first-byte deadline、frame deadline、zero-byte retry、poll sleep 已从 runtime collector 热路径移除。
+- frame index 写入 `device_packet_counter = payload[12287]`，continuity audit 用它判断 50ms 窗口连续性。
 
 ### 本次 rebuild 真机已验证事实
 
 - `*IDN?` 已在 rebuild smoke 中重验
 - `RALL?` 单帧已在 rebuild smoke 中重验
-- 当前单帧 `payload_len = 15168`
+- 早期 smoke `until_timeout` 诊断路径观测过 `payload_len = 15168`
+- 当前 `run execute` runtime 帧协议锁定为 `12288 bytes`
+- Windows full stack 15 分钟长测已验证 `device_packet_counter delta_gt1_count = 0`
 
 ### 新项目应直接继承的事实
 

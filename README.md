@@ -57,13 +57,15 @@
 
 当前 `OE1022D` 读取链的最新收敛状态：
 
-- 默认 `observed` profile 已固定为：
-  - ASCII query timeout = `300ms`
-  - `rall_chunk_timeout = 5ms`
-  - `rall_first_byte_deadline = 30ms`
-  - `rall_frame_deadline = 120ms`
-  - `zero_byte_retry_limit = 1`
-- `quality` 现在真正按 `max_timeout_count` 阈值判定，不再把 `timeout_count > 0` 直接视为失败
+- Windows `OE1022D` 默认使用 NI-VISA/PyVISA backend，resolver 仍先枚举 VISA ASRL resource 并用 `*IDN?` + SN 认领设备。
+- `run execute` 的定长 `RALL?` 热路径已经收敛到 LabVIEW-like simple loop：
+  - 写 `RALL?`
+  - 等 `30ms`
+  - blocking exact read `12288B`
+  - 读完立即进入下一轮
+- `poll_interval_ms` 不再参与定长 `RALL?` 热路径；旧的 first-byte deadline、frame deadline、zero-byte retry 旋钮已经从 runtime collector 配置中移除。
+- `payload[12287]` 作为 `device_packet_counter` 写入 frame index，并由 `run audit-continuity` 做 `delta=1/0/>1` 连续性审计。
+- `quality` 用 unique RALL windows 判断 `min_frames`，重复窗口只记录为诊断字段，不再因为 duplicate ratio 单独失败。
 - `quality.jsonl` 现在额外输出：
   - `collector_health = clean | recovered_timeout | degraded_timeout`
   - `timeout_budget_remaining`
@@ -71,11 +73,12 @@
   - `collector_timeout`
   - `collector_recovered`
   - `collector_stopped`
-- `minimal_3point_runtime + smb100a_run_pll_default + oe1022d_run_ch_b_observed + cni_laser_run_on_background`
-  已在 `2026-06-12` 真机连续跑通 3 次：
-  - 3/3 points passed
+- `2026-06-13` Windows full stack long run 已验证：
+  - `21/21 points passed`
   - `collector_timeout_total = 0`
-  - `max(frame_gap_ms) ≈ 54.3 ~ 54.6ms`
+  - `raw_len = 12288` 全部成立
+  - `device_packet_counter delta_gt1_count = 0`
+  - `run audit-continuity` verdict = `continuous`
 
 GUI 本地环境与启动约束：
 

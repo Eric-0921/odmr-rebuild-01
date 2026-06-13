@@ -105,7 +105,7 @@
 运行约束：
 
 - setup 只在 run 前执行。
-- run 中只允许 collector 周期性执行 `RALL?`。
+- run 中只允许 collector 按 LabVIEW-like exact-read loop 持续执行 `RALL?`。
 - point 不允许修改 OE 配置。
 - 任何 viewer 不允许直接查询 OE 串口。
 - `RSLPD` 当前必须分开理解：
