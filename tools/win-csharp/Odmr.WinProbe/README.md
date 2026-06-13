@@ -61,6 +61,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station con
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json --out-dir runs/win_csharp_run_execute_minimal
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- artifact-check --run runs/win_csharp_run_execute_minimal
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run runs/win_csharp_run_execute_minimal --out runs/win_csharp_run_execute_minimal/continuity_audit.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- device-command-check
 ```
 
 `oe-rall` writes:
@@ -104,3 +105,6 @@ artifacts only and does not open instruments or touch the collector.
 
 `audit-continuity` is an offline device-packet-counter audit. It does not parse
 RALL payloads in the collector thread.
+
+`device-command-check` lists the migrated C# command catalog and the Rust command
+crate source each entry came from.
