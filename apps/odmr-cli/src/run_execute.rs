@@ -136,21 +136,6 @@ fn sleep_with_interrupt(
     Ok(())
 }
 
-fn wait_remaining(start: Instant, interval_ms: u64, stop_flag: &Arc<AtomicBool>) {
-    loop {
-        let elapsed = start.elapsed().as_millis() as u64;
-        if elapsed >= interval_ms {
-            return;
-        }
-        let remaining = interval_ms - elapsed;
-        let nap = remaining.min(10);
-        if stop_flag.load(Ordering::SeqCst) {
-            return;
-        }
-        thread::sleep(Duration::from_millis(nap));
-    }
-}
-
 #[derive(Debug, Clone)]
 struct RunEtaSummary {
     estimated_point_duration_ms: Option<u64>,
@@ -2307,9 +2292,6 @@ fn oe_config(
             port_path: port_path.clone(),
             baud_rate: *baud_rate,
             rall_post_write_delay: Duration::from_millis(collector.rall_post_write_delay_ms),
-            rall_chunk_timeout: Duration::from_millis(collector.rall_chunk_timeout_ms),
-            rall_first_byte_deadline: Duration::from_millis(collector.rall_first_byte_deadline_ms),
-            rall_frame_deadline: Duration::from_millis(collector.rall_frame_deadline_ms),
             ..Oe1022dTransportConfig::default()
         }),
         TransportHint::VisaResource {
@@ -2323,9 +2305,6 @@ fn oe_config(
             visa_resource: Some(resource.clone()),
             timeout: Duration::from_millis(10_000),
             rall_post_write_delay: Duration::from_millis(collector.rall_post_write_delay_ms),
-            rall_chunk_timeout: Duration::from_millis(collector.rall_chunk_timeout_ms),
-            rall_first_byte_deadline: Duration::from_millis(collector.rall_first_byte_deadline_ms),
-            rall_frame_deadline: Duration::from_millis(collector.rall_frame_deadline_ms),
             ..Oe1022dTransportConfig::default()
         }),
         TransportHint::TcpSocket { .. } => Err(format!(
@@ -2519,10 +2498,8 @@ impl CollectorHandle {
             parsed_path,
         } = artifacts;
         let producer_done = Arc::new(AtomicBool::new(false));
-        let poll_interval = config.poll_interval_ms;
         let frame_exact_bytes = config.frame_exact_bytes;
         let frame_max_bytes = config.frame_max_bytes;
-        let zero_byte_retry_limit = config.zero_byte_retry_limit;
         let producer_stop = Arc::clone(&stop_flag);
         let consumer_stop = Arc::clone(&stop_flag);
         let producer_done_clone = Arc::clone(&producer_done);
@@ -2541,8 +2518,6 @@ impl CollectorHandle {
             device_id: device.device_id.clone(),
             run_start_instant,
         };
-        let labview_tight_loop =
-            matches!(device_config.backend, Oe1022dBackendKind::VisaPy) && frame_exact_bytes > 0;
 
         let producer_join = thread::spawn(move || {
             let mut transport = Oe1022dTransport::open(&device_config)
@@ -2556,42 +2531,13 @@ impl CollectorHandle {
                         break;
                     }
 
-                    let read_start = Instant::now();
                     match if frame_exact_bytes > 0 {
-                        transport.query_rall_frame_exact_with_zero_retry(
-                            frame_exact_bytes,
-                            zero_byte_retry_limit,
-                        )
+                        transport.query_rall_frame_labview_exact(frame_exact_bytes)
                     } else {
-                        transport
-                            .query_rall_frame_until_timeout(frame_max_bytes)
-                            .map(|payload| oe1022d_transport::RallFrameReadOutcome {
-                                payload,
-                                zero_byte_retry_count: 0,
-                            })
+                        transport.query_rall_frame_until_timeout(frame_max_bytes)
                     } {
-                        Ok(outcome) if !outcome.payload.is_empty() => {
-                            for retry_index in 0..outcome.zero_byte_retry_count {
-                                let (timeout_total, cursor) =
-                                    record_collector_timeout(&shared_producer)?;
-                                consecutive_timeouts += 1;
-                                if timeout_streak_started_at.is_none() {
-                                    timeout_streak_started_at = Some(Instant::now());
-                                }
-                                diag_emitter.emit(
-                                    "collector_timeout",
-                                    json!({
-                                        "kind": "zero_byte_timeout",
-                                        "retry_attempt": retry_index + 1,
-                                        "zero_byte_retry_count": outcome.zero_byte_retry_count,
-                                        "consecutive_timeouts": consecutive_timeouts,
-                                        "total_timeouts": timeout_total,
-                                        "committed_frame_seq": cursor.next_frame_seq,
-                                        "committed_raw_offset": cursor.next_raw_offset
-                                    }),
-                                )?;
-                            }
-                            let payload_len = outcome.payload.len() as u64;
+                        Ok(payload) if !payload.is_empty() => {
+                            let payload_len = payload.len() as u64;
                             {
                                 let mut guard = shared_producer.lock().map_err(|_| {
                                     "collector ring buffer mutex poisoned".to_string()
@@ -2605,7 +2551,7 @@ impl CollectorHandle {
                             let produced = ProducedFrame {
                                 ts: now_ts_string(),
                                 monotonic_ns: monotonic_ns(&run_start_instant),
-                                payload: outcome.payload,
+                                payload,
                             };
                             enqueue_produced_frame(&frame_tx, produced)?;
                             if consecutive_timeouts > 0 {
@@ -2618,7 +2564,6 @@ impl CollectorHandle {
                                     "collector_recovered",
                                     json!({
                                         "recovered_after_ms": recovered_after_ms,
-                                        "zero_byte_retry_count": outcome.zero_byte_retry_count,
                                         "consecutive_timeouts": consecutive_timeouts,
                                         "committed_frame_seq": cursor.next_frame_seq,
                                         "committed_raw_offset": cursor.next_raw_offset
@@ -2639,7 +2584,6 @@ impl CollectorHandle {
                                 json!({
                                     "kind": "zero_byte_timeout",
                                     "reason": "empty_payload",
-                                    "zero_byte_retry_count": 0,
                                     "consecutive_timeouts": consecutive_timeouts,
                                     "total_timeouts": timeout_total,
                                     "committed_frame_seq": cursor.next_frame_seq,
@@ -2660,7 +2604,6 @@ impl CollectorHandle {
                                 json!({
                                     "kind": kind,
                                     "partial_len": partial_len,
-                                    "zero_byte_retry_count": 0,
                                     "consecutive_timeouts": consecutive_timeouts,
                                     "total_timeouts": timeout_total,
                                     "committed_frame_seq": cursor.next_frame_seq,
@@ -2669,10 +2612,6 @@ impl CollectorHandle {
                                 }),
                             )?;
                         }
-                    }
-
-                    if !labview_tight_loop {
-                        wait_remaining(read_start, poll_interval, &producer_stop);
                     }
                 }
                 Ok(())
@@ -3119,10 +3058,6 @@ mod tests {
             ring_capacity_frames: 64,
             guard_margin_ms: 3000,
             rall_post_write_delay_ms: 30,
-            rall_chunk_timeout_ms: 5,
-            rall_first_byte_deadline_ms: 20,
-            rall_frame_deadline_ms: 120,
-            zero_byte_retry_limit: 1,
         };
         let smb_profile = Smb100aRunProfile {
             profile_id: "test".to_string(),

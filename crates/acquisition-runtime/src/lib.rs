@@ -230,34 +230,10 @@ pub struct CollectorConfig {
     pub guard_margin_ms: u64,
     #[serde(default = "default_rall_post_write_delay_ms")]
     pub rall_post_write_delay_ms: u64,
-    #[serde(default = "default_rall_chunk_timeout_ms")]
-    pub rall_chunk_timeout_ms: u64,
-    #[serde(default = "default_rall_first_byte_deadline_ms")]
-    pub rall_first_byte_deadline_ms: u64,
-    #[serde(default = "default_rall_frame_deadline_ms")]
-    pub rall_frame_deadline_ms: u64,
-    #[serde(default = "default_zero_byte_retry_limit")]
-    pub zero_byte_retry_limit: usize,
-}
-
-const fn default_rall_chunk_timeout_ms() -> u64 {
-    5
 }
 
 const fn default_rall_post_write_delay_ms() -> u64 {
     30
-}
-
-const fn default_rall_first_byte_deadline_ms() -> u64 {
-    20
-}
-
-const fn default_rall_frame_deadline_ms() -> u64 {
-    120
-}
-
-const fn default_zero_byte_retry_limit() -> usize {
-    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
