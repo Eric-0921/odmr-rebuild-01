@@ -7,5 +7,6 @@
 
   <ItemGroup>
     <PackageReference Include="NationalInstruments.Visa" Version="25.5.0.13" />
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
   </ItemGroup>
 </Project>

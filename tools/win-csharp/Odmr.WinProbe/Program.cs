@@ -28,6 +28,7 @@ static int Run(string[] args)
             "oe-idn" => OeIdn(options),
             "oe-rall" => OeRall(options),
             "smb-probe" => SmbProbe(options),
+            "m8812-probe" => M8812Probe(options),
             _ => Fail($"unknown command: {command}")
         };
     }
@@ -36,6 +37,28 @@ static int Run(string[] args)
         Console.Error.WriteLine(ex.Message);
         return 1;
     }
+}
+
+static int M8812Probe(IReadOnlyDictionary<string, string> options)
+{
+    var xPort = GetOption(options, "x", M8812Defaults.XPort);
+    var yPort = GetOption(options, "y", M8812Defaults.YPort);
+    var zPort = GetOption(options, "z", M8812Defaults.ZPort);
+    var result = M8812Serial.Probe(xPort, yPort, zPort);
+
+    Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Pretty));
+
+    if (!result.AllIdentityMatched)
+    {
+        return Fail("M8812 identity mismatch");
+    }
+
+    if (!result.CleanupOk)
+    {
+        return Fail("M8812 cleanup failed");
+    }
+
+    return 0;
 }
 
 static int VisaList()
@@ -296,5 +319,6 @@ static void PrintUsage()
       Odmr.WinProbe oe-idn [--resource ASRL8::INSTR] [--baud 921600]
       Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
+      Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
     """);
 }

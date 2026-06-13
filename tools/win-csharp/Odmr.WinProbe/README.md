@@ -53,6 +53,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- visa-list
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-idn --resource ASRL8::INSTR --baud 921600
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-rall --resource ASRL8::INSTR --baud 921600 --duration-sec 300 --out-dir runs/win_csharp_oe_rall_5min
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 ```
 
 `oe-rall` writes:
@@ -67,3 +68,10 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.
 - `*IDN?`
 - `SYST:ERR?`
 - `OUTP?`
+
+`m8812-probe` only performs the safe minimum serial check:
+
+- `*IDN?`
+- `SYST:REM`
+- `MEAS:CURR?`
+- cleanup: `CURR 0.00000`, `OUTP 0`, `SYST:LOC`
