@@ -75,7 +75,8 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 - `tools/win-csharp/Odmr.Artifacts`：artifact writer、contract check、continuity audit
 - `tools/win-csharp/Odmr.WinProbe`：CLI 入口
 - `tools/win-csharp/Odmr.ControlPanel.WinForms`：Windows Run Bundle 控制面板
-- `tools/plan-json-generator`：独立浏览器版磁场扫描 `plan.json` 生成器
+- `tools/config-generator`：跨 Mac/Windows 的 Python 配置生成器，输出 `plan + SMB/OE/Laser profile`
+- `tools/plan-json-generator`：独立浏览器版磁场扫描 `plan.json` 生成器，只作为轻量 plan-only 辅助工具
 
 当前已经真机验证过的命令和链路见：
 
@@ -114,8 +115,9 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 当前 UI 边界：
 
 - Windows 控制面板只负责组合一次 run 所需的六个 JSON：`station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`，并显示解析摘要。
-- 磁场扫描计划由 `tools/plan-json-generator/index.html` 独立生成；生成器只输出 C# runtime 已支持的 `points[]` plan，不引入 `field_space/groups` 或新的 run bundle schema。
-- SMB/OE/Laser 参数继续通过 profile JSON 选择，不在 plan generator 内编辑。
+- 日常配置编辑优先使用 `tools/config-generator/odmr_config_generator.py`：它同时生成磁场 `plan.json`、SMB sweep profile、OE fixed profile 和 Laser profile。
+- `tools/plan-json-generator/index.html` 只保留为 plan-only 的浏览器辅助工具；它不编辑 SMB/OE/Laser。
+- 配置生成器输出的 JSON 仍然是现有 C# runtime schema，不引入 `field_space/groups` 或新的 run bundle schema。
 
 第一版 runtime 默认配置：
 
