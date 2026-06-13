@@ -13,6 +13,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station con
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- artifact-check --run runs/win_csharp_primary_15min
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run runs/win_csharp_primary_15min --out runs/win_csharp_primary_15min/continuity_audit.json
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- device-command-check
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/win_csharp_primary_15min
 ```
 
 设备 probe 入口：
@@ -64,3 +65,4 @@ append frame index
 - C# `artifact-check` 已通过 15min run artifact 合同检查。
 - C# `audit-continuity` 已在关键字段上对齐 Rust 归档 audit。
 - C# `device-command-check` 已覆盖 OE1022D、SMB100A、M8812、CNI Laser 当前 Rust command crates 的命令面。
+- C# `live-replay` 已提供 artifact/events 驱动的 live reducer 基础层，不连接设备，不订阅 collector。

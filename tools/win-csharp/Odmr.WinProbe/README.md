@@ -62,6 +62,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station con
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- artifact-check --run runs/win_csharp_run_execute_minimal
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run runs/win_csharp_run_execute_minimal --out runs/win_csharp_run_execute_minimal/continuity_audit.json
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- device-command-check
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/win_csharp_run_execute_minimal
 ```
 
 `oe-rall` writes:
@@ -108,3 +109,6 @@ RALL payloads in the collector thread.
 
 `device-command-check` lists the migrated C# command catalog and the Rust command
 crate source each entry came from.
+
+`live-replay` reduces existing `events.jsonl`, frame index, and summary files
+into a current live snapshot. It does not connect to hardware.

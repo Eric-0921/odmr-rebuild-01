@@ -36,6 +36,7 @@ static int Run(string[] args)
             "artifact-check" => ArtifactCheckCommand(options),
             "audit-continuity" => AuditContinuityCommand(options),
             "device-command-check" => DeviceCommandCheck(),
+            "live-replay" => LiveReplayCommand(options),
             "m8812-probe" => M8812Probe(options),
             "laser-probe" => LaserProbe(options),
             _ => Fail($"unknown command: {command}")
@@ -227,6 +228,15 @@ static int DeviceCommandCheck()
     var report = DeviceCommandCatalog.Check();
     Console.WriteLine(JsonSerializer.Serialize(report, JsonOptions.Pretty));
     return report.Passed ? 0 : 2;
+}
+
+static int LiveReplayCommand(IReadOnlyDictionary<string, string> options)
+{
+    var snapshot = LiveReplay.Replay(
+        GetRequiredOption(options, "run"),
+        GetIntOption(options, "tail-events", 20));
+    Console.WriteLine(JsonSerializer.Serialize(snapshot, JsonOptions.Pretty));
+    return snapshot.CollectorHealth == "clean" ? 0 : 2;
 }
 
 static int OeRall(IReadOnlyDictionary<string, string> options)
@@ -460,6 +470,7 @@ static void PrintUsage()
       Odmr.WinProbe artifact-check --run <run-dir>
       Odmr.WinProbe audit-continuity --run <run-dir> --out <json>
       Odmr.WinProbe device-command-check
+      Odmr.WinProbe live-replay --run <run-dir> [--tail-events 20]
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);
