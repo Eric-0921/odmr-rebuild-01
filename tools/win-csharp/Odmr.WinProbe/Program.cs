@@ -190,20 +190,80 @@ static int RunResolveCommand(IReadOnlyDictionary<string, string> options)
 
 static int RunExecuteCommand(IReadOnlyDictionary<string, string> options)
 {
-    var summary = ConfigDrivenRun.Execute(new ConfigDrivenRunOptions(
-        GetRequiredOption(options, "station"),
-        GetRequiredOption(options, "calibration"),
-        GetRequiredOption(options, "plan"),
-        GetRequiredOption(options, "smb-profile"),
-        GetRequiredOption(options, "oe-profile"),
-        GetRequiredOption(options, "laser-profile"),
-        GetRequiredOption(options, "out-dir")));
+    var planPath = GetRequiredOption(options, "plan");
+    var outDir = GetRequiredOption(options, "out-dir");
+    var plan = RunConfigLoader.ReadJson<AcquisitionRunPlan>(planPath);
+    var progressPath = GetOptionalOption(options, "progress-jsonl");
+    using var progress = string.IsNullOrWhiteSpace(progressPath)
+        ? null
+        : new ProgressJsonlWriter(progressPath, plan.RunId);
+    using var cancellation = new CancellationTokenSource();
+    using var watcherCancellation = new CancellationTokenSource();
+    var watcher = StartStopRequestWatcher(GetOptionalOption(options, "stop-request-file"), cancellation, watcherCancellation.Token);
 
-    Console.WriteLine($"run-execute done: run_id={summary.RunId}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={GetRequiredOption(options, "out-dir")}");
+    RunSummaryRecord summary;
+    try
+    {
+        summary = ConfigDrivenRun.Execute(new ConfigDrivenRunOptions(
+            GetRequiredOption(options, "station"),
+            GetRequiredOption(options, "calibration"),
+            planPath,
+            GetRequiredOption(options, "smb-profile"),
+            GetRequiredOption(options, "oe-profile"),
+            GetRequiredOption(options, "laser-profile"),
+            outDir,
+            progress,
+            cancellation.Token));
+    }
+    finally
+    {
+        watcherCancellation.Cancel();
+        WaitForWatcher(watcher);
+    }
+
+    Console.WriteLine($"run-execute done: run_id={summary.RunId}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
     return summary.Status is "completed" or "completed_with_failed_points" &&
         summary.TimeoutCount == 0 &&
         summary.RawLenBadCount == 0 &&
         summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
+}
+
+static Task? StartStopRequestWatcher(string? stopRequestPath, CancellationTokenSource runCancellation, CancellationToken cancellationToken)
+{
+    if (string.IsNullOrWhiteSpace(stopRequestPath))
+    {
+        return null;
+    }
+
+    return Task.Run(async () =>
+    {
+        while (!cancellationToken.IsCancellationRequested && !runCancellation.IsCancellationRequested)
+        {
+            if (File.Exists(stopRequestPath))
+            {
+                runCancellation.Cancel();
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken).ConfigureAwait(false);
+        }
+    }, cancellationToken);
+}
+
+static void WaitForWatcher(Task? watcher)
+{
+    if (watcher is null)
+    {
+        return;
+    }
+
+    try
+    {
+        watcher.Wait(TimeSpan.FromSeconds(1));
+    }
+    catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is TaskCanceledException or OperationCanceledException))
+    {
+    }
 }
 
 static int ArtifactCheckCommand(IReadOnlyDictionary<string, string> options)
@@ -407,6 +467,9 @@ static string GetRequiredOption(IReadOnlyDictionary<string, string> options, str
 static string GetOption(IReadOnlyDictionary<string, string> options, string key, string defaultValue) =>
     options.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : defaultValue;
 
+static string? GetOptionalOption(IReadOnlyDictionary<string, string> options, string key) =>
+    options.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+
 static int GetIntOption(IReadOnlyDictionary<string, string> options, string key, int defaultValue)
 {
     if (!options.TryGetValue(key, out var value))
@@ -466,7 +529,7 @@ static void PrintUsage()
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
       Odmr.WinProbe run-resolve --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json>
-      Odmr.WinProbe run-execute --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json> --out-dir <dir>
+      Odmr.WinProbe run-execute --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json> --out-dir <dir> [--progress-jsonl <path>] [--stop-request-file <path>]
       Odmr.WinProbe artifact-check --run <run-dir>
       Odmr.WinProbe audit-continuity --run <run-dir> --out <json>
       Odmr.WinProbe device-command-check
@@ -474,4 +537,69 @@ static void PrintUsage()
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);
+}
+
+sealed class ProgressJsonlWriter : IProgress<RunProgressEvent>, IDisposable
+{
+    private readonly string runId;
+    private readonly StreamWriter writer;
+    private readonly object gate = new();
+    private bool failed;
+
+    public ProgressJsonlWriter(string path, string runId)
+    {
+        this.runId = runId;
+        var fullPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        writer = new StreamWriter(new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.ReadWrite), new UTF8Encoding(false))
+        {
+            AutoFlush = true
+        };
+    }
+
+    public void Report(RunProgressEvent value)
+    {
+        if (failed)
+        {
+            return;
+        }
+
+        try
+        {
+            var record = new
+            {
+                schema_version = 1,
+                ts = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", CultureInfo.InvariantCulture),
+                pid = Environment.ProcessId,
+                run_id = runId,
+                state = value.State.ToString(),
+                event_name = value.EventName,
+                message = value.Message,
+                point_id = value.PointId,
+                point_index = value.PointIndex,
+                points_total = value.PointsTotal,
+                frames_total = value.FramesTotal,
+                timeout_count = value.TimeoutCount,
+                raw_len_bad_count = value.RawLenBadCount,
+                delta_gt1_count = value.DeltaGt1Count,
+                quality_status = value.QualityStatus
+            };
+
+            lock (gate)
+            {
+                writer.WriteLine(JsonSerializer.Serialize(record, JsonOptions.Default));
+            }
+        }
+        catch
+        {
+            failed = true;
+        }
+    }
+
+    public void Dispose() => writer.Dispose();
 }
