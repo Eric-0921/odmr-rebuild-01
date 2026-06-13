@@ -1,6 +1,10 @@
+using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
+using System.Text;
+using System.Text.Json;
 using System.Windows.Forms;
+using Odmr.Artifacts;
 using Odmr.Runtime;
 
 namespace Odmr.ControlPanel.WinForms;
@@ -8,50 +12,30 @@ namespace Odmr.ControlPanel.WinForms;
 internal sealed class MainForm : Form
 {
     private readonly ConfigCatalogService catalog;
-    private readonly DraftConfigService drafts = new();
     private readonly RunLaunchService launcher = new();
 
-    private ComboBox stationBox = null!;
-    private ComboBox calibrationBox = null!;
-    private ComboBox planBox = null!;
-    private ComboBox smbProfileBox = null!;
-    private ComboBox oeProfileBox = null!;
-    private ComboBox laserProfileBox = null!;
+    private ConfigPicker stationPicker = null!;
+    private ConfigPicker calibrationPicker = null!;
+    private ConfigPicker planPicker = null!;
+    private ConfigPicker smbProfilePicker = null!;
+    private ConfigPicker oeProfilePicker = null!;
+    private ConfigPicker laserProfilePicker = null!;
     private TextBox outputRootBox = null!;
-    private TextBox runIdBox = null!;
-    private TextBox operatorBox = null!;
-    private ComboBox cycleModeBox = null!;
-    private NumericUpDown totalPointsBox = null!;
-    private AxisEditor xAxis = null!;
-    private AxisEditor yAxis = null!;
-    private AxisEditor zAxis = null!;
-    private TextBox baselineXBox = null!;
-    private TextBox baselineYBox = null!;
-    private TextBox baselineZBox = null!;
-    private NumericUpDown baselineSettleBox = null!;
-    private TextBox voltageBox = null!;
-    private TextBox voltageProtectionBox = null!;
-    private CheckBox magOutputBox = null!;
-    private TextBox smbStartBox = null!;
-    private TextBox smbStopBox = null!;
-    private TextBox smbStepBox = null!;
-    private NumericUpDown smbDwellBox = null!;
-    private TextBox smbPowerBox = null!;
-    private CheckBox smbRfOutputBox = null!;
-    private NumericUpDown oeTimeConstantBox = null!;
-    private NumericUpDown oeFilterSlopeBox = null!;
+    private TextBox bundleSummaryBox = null!;
+    private TextBox bundleDetailsBox = null!;
     private Label resolveSummaryLabel = null!;
     private Label outDirLabel = null!;
     private Label stateLabel = null!;
     private Label metricsLabel = null!;
     private ProgressBar progressBar = null!;
     private ListBox eventList = null!;
-    private TextBox diffBox = null!;
     private Button resolveButton = null!;
     private Button runButton = null!;
     private Button stopButton = null!;
 
-    private DraftResult? lastDraft;
+    private ConfigSelection? lastSelection;
+    private RunConfigBundle? lastBundle;
+    private string? lastOutDir;
 
     public MainForm()
     {
@@ -62,7 +46,6 @@ internal sealed class MainForm : Form
         catalog = new ConfigCatalogService();
         BuildUi();
         LoadCatalogs();
-        LoadDefaultsFromSelectedFiles();
     }
 
     private void BuildUi()
@@ -74,169 +57,122 @@ internal sealed class MainForm : Form
             RowCount = 3,
             Padding = new Padding(10)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 300));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150));
         Controls.Add(root);
 
-        root.Controls.Add(BuildRunSetupPanel(), 0, 0);
+        root.Controls.Add(BuildRunBundlePanel(), 0, 0);
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
-        tabs.TabPages.Add(BuildPlanTab());
-        tabs.TabPages.Add(BuildProfileTab());
-        tabs.TabPages.Add(BuildAdvancedTab());
+        tabs.TabPages.Add(BuildBundleDetailsTab());
         root.Controls.Add(tabs, 0, 1);
         root.Controls.Add(BuildRunStatusPanel(), 0, 2);
     }
 
-    private Control BuildRunSetupPanel()
+    private Control BuildRunBundlePanel()
     {
-        var group = new GroupBox { Text = "Run Setup", Dock = DockStyle.Fill };
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 4, Padding = new Padding(8) };
-        for (var i = 0; i < 6; i++)
+        var group = new GroupBox { Text = "Run Bundle", Dock = DockStyle.Fill };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(8) };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 68));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
+        group.Controls.Add(root);
+
+        var left = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 8 };
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        left.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.Controls.Add(left, 0, 0);
+
+        stationPicker = AddPicker(left, "Hardware station");
+        calibrationPicker = AddPicker(left, "Field calibration");
+        planPicker = AddPicker(left, "Magnetic plan");
+        smbProfilePicker = AddPicker(left, "SMB100A profile");
+        oeProfilePicker = AddPicker(left, "OE1022D profile");
+        laserProfilePicker = AddPicker(left, "Laser profile");
+        left.Controls.Add(BuildOutputRow(), 0, 6);
+
+        var actionRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1 };
+        actionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        actionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        actionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        resolveButton = new Button { Text = "Validate Bundle", Dock = DockStyle.Fill };
+        resolveButton.Click += (_, _) => ResolveBundle(showDialogOnError: true);
+        actionRow.Controls.Add(resolveButton, 0, 0);
+        resolveSummaryLabel = new Label { Text = "Bundle: not validated", Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
+        actionRow.Controls.Add(resolveSummaryLabel, 1, 0);
+        outDirLabel = new Label { Text = "Out-dir: not generated", Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
+        actionRow.Controls.Add(outDirLabel, 2, 0);
+        left.Controls.Add(actionRow, 0, 7);
+
+        var summaryGroup = new GroupBox { Text = "Run Bundle Summary", Dock = DockStyle.Fill };
+        bundleSummaryBox = new TextBox
         {
-            table.ColumnStyles.Add(new ColumnStyle(i % 2 == 0 ? SizeType.Absolute : SizeType.Percent, i % 2 == 0 ? 95 : 33));
-        }
-        group.Controls.Add(table);
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            Font = new Font(FontFamily.GenericMonospace, 9),
+            Text = "Validate the bundle to preview station, plan, profiles, and output."
+        };
+        summaryGroup.Controls.Add(bundleSummaryBox);
+        root.Controls.Add(summaryGroup, 1, 0);
 
-        stationBox = AddCombo(table, "Station", 0, 0);
-        calibrationBox = AddCombo(table, "Calibration", 2, 0);
-        planBox = AddCombo(table, "Plan source", 4, 0);
-        smbProfileBox = AddCombo(table, "SMB profile", 0, 1);
-        oeProfileBox = AddCombo(table, "OE profile", 2, 1);
-        laserProfileBox = AddCombo(table, "Laser profile", 4, 1);
-
-        table.Controls.Add(new Label { Text = "Output root", Anchor = AnchorStyles.Left, AutoSize = true }, 0, 2);
-        outputRootBox = new TextBox { Dock = DockStyle.Fill };
-        table.Controls.Add(outputRootBox, 1, 2);
-        table.SetColumnSpan(outputRootBox, 3);
-        var browse = new Button { Text = "Browse...", Dock = DockStyle.Fill };
-        browse.Click += (_, _) => BrowseOutputRoot();
-        table.Controls.Add(browse, 4, 2);
-
-        resolveButton = new Button { Text = "Resolve / Save Draft", Dock = DockStyle.Fill };
-        resolveButton.Click += (_, _) => ResolveDraft();
-        table.Controls.Add(resolveButton, 5, 2);
-
-        resolveSummaryLabel = new Label { Text = "Resolve summary: not resolved", Dock = DockStyle.Fill, AutoEllipsis = true };
-        table.Controls.Add(resolveSummaryLabel, 0, 3);
-        table.SetColumnSpan(resolveSummaryLabel, 4);
-        outDirLabel = new Label { Text = "Out-dir: not generated", Dock = DockStyle.Fill, AutoEllipsis = true };
-        table.Controls.Add(outDirLabel, 4, 3);
-        table.SetColumnSpan(outDirLabel, 2);
-
-        foreach (var combo in new[] { planBox, smbProfileBox, oeProfileBox })
+        foreach (var picker in AllPickers())
         {
-            combo.SelectedIndexChanged += (_, _) => LoadDefaultsFromSelectedFiles();
+            picker.SelectionChanged += (_, _) => InvalidateResolvedBundle();
         }
 
         return group;
     }
 
-    private TabPage BuildPlanTab()
+    private ConfigPicker AddPicker(TableLayoutPanel parent, string label)
     {
-        var page = new TabPage("Plan Builder");
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, Padding = new Padding(8) };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
-        table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 135));
-        page.Controls.Add(table);
-
-        var axisGroup = new GroupBox { Text = "Cartesian Field Grid (nT)", Dock = DockStyle.Fill };
-        var axisPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(8) };
-        axisGroup.Controls.Add(axisPanel);
-        xAxis = new AxisEditor("X");
-        yAxis = new AxisEditor("Y");
-        zAxis = new AxisEditor("Z");
-        axisPanel.Controls.Add(xAxis);
-        axisPanel.Controls.Add(yAxis);
-        axisPanel.Controls.Add(zAxis);
-        table.Controls.Add(axisGroup, 0, 0);
-
-        var planGroup = new GroupBox { Text = "Plan Identity", Dock = DockStyle.Fill };
-        var planTable = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, Padding = new Padding(8) };
-        planTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
-        planTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        planGroup.Controls.Add(planTable);
-        runIdBox = AddText(planTable, "Run ID", 0, "ui_grid_run");
-        operatorBox = AddText(planTable, "Operator", 1, "local");
-        cycleModeBox = AddComboRaw(planTable, "Cycle mode", 2, new[] { "raster", "bounce_1d_x" });
-        totalPointsBox = AddNumeric(planTable, "Total points", 3, 1, 1_000_000, 1);
-        planTable.Controls.Add(new Label { Text = "RALL locked", Anchor = AnchorStyles.Left, AutoSize = true }, 0, 4);
-        planTable.Controls.Add(new Label { Text = "12288 bytes, 30ms post-write", Anchor = AnchorStyles.Left, AutoSize = true }, 1, 4);
-        table.Controls.Add(planGroup, 1, 0);
-
-        var baselineGroup = new GroupBox { Text = "Maynuo Baseline / Output", Dock = DockStyle.Fill };
-        var baselineTable = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 2, Padding = new Padding(8) };
-        baselineGroup.Controls.Add(baselineTable);
-        baselineXBox = AddSmallText(baselineTable, "Base X A", 0, "0.0");
-        baselineYBox = AddSmallText(baselineTable, "Base Y A", 2, "0.0");
-        baselineZBox = AddSmallText(baselineTable, "Base Z A", 4, "0.0");
-        baselineSettleBox = AddNumericInline(baselineTable, "Settle ms", 6, 1000);
-        voltageBox = AddSmallText(baselineTable, "Volt", 0, "75.0", row: 1);
-        voltageProtectionBox = AddSmallText(baselineTable, "V prot", 2, "75.0", row: 1);
-        magOutputBox = new CheckBox { Text = "Output enabled", Checked = true, Anchor = AnchorStyles.Left, AutoSize = true };
-        baselineTable.Controls.Add(magOutputBox, 4, 1);
-        table.Controls.Add(baselineGroup, 0, 1);
-        table.SetColumnSpan(baselineGroup, 2);
-
-        return page;
+        var picker = new ConfigPicker(label) { Dock = DockStyle.Fill };
+        parent.Controls.Add(picker);
+        return picker;
     }
 
-    private TabPage BuildProfileTab()
+    private Control BuildOutputRow()
     {
-        var page = new TabPage("Profiles");
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(8) };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        page.Controls.Add(table);
-
-        var smbGroup = new GroupBox { Text = "SMB100A Sweep Overrides", Dock = DockStyle.Fill };
-        var smbTable = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 7, Padding = new Padding(8), AutoSize = true };
-        smbTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-        smbTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        smbGroup.Controls.Add(smbTable);
-        smbStartBox = AddText(smbTable, "Start Hz", 0, "2830000000");
-        smbStopBox = AddText(smbTable, "Stop Hz", 1, "2890000000");
-        smbStepBox = AddText(smbTable, "Step Hz", 2, "500000");
-        smbDwellBox = AddNumeric(smbTable, "Dwell ms", 3, 1, 1_000_000, 300);
-        smbPowerBox = AddText(smbTable, "Power dBm", 4, "-10");
-        smbRfOutputBox = new CheckBox { Text = "RF output enabled", Checked = true, Anchor = AnchorStyles.Left, AutoSize = true };
-        smbTable.Controls.Add(new Label { Text = "RF output", Anchor = AnchorStyles.Left, AutoSize = true }, 0, 5);
-        smbTable.Controls.Add(smbRfOutputBox, 1, 5);
-        table.Controls.Add(smbGroup, 0, 0);
-
-        var oeGroup = new GroupBox { Text = "OE1022D Common Fields", Dock = DockStyle.Fill };
-        var oeTable = new TableLayoutPanel { Dock = DockStyle.Top, ColumnCount = 2, RowCount = 7, Padding = new Padding(8), AutoSize = true };
-        oeTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
-        oeTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        oeGroup.Controls.Add(oeTable);
-        oeTimeConstantBox = AddNumeric(oeTable, "Time constant index", 0, 0, 255, 9);
-        oeFilterSlopeBox = AddNumeric(oeTable, "Filter slope", 1, 0, 255, 1);
-        oeTable.Controls.Add(new Label { Text = "RALL frame bytes", Anchor = AnchorStyles.Left, AutoSize = true }, 0, 2);
-        oeTable.Controls.Add(new Label { Text = "12288 (locked)", Anchor = AnchorStyles.Left, AutoSize = true }, 1, 2);
-        oeTable.Controls.Add(new Label { Text = "RALL post-write", Anchor = AnchorStyles.Left, AutoSize = true }, 0, 3);
-        oeTable.Controls.Add(new Label { Text = "30 ms (locked)", Anchor = AnchorStyles.Left, AutoSize = true }, 1, 3);
-        oeTable.Controls.Add(new Label { Text = "Hot path", Anchor = AnchorStyles.Left, AutoSize = true }, 0, 4);
-        oeTable.Controls.Add(new Label { Text = RuntimeContracts.FrozenRallHotPath, Anchor = AnchorStyles.Left, AutoSize = true }, 1, 4);
-        table.Controls.Add(oeGroup, 1, 0);
-
-        return page;
+        var row = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1 };
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
+        row.Controls.Add(new Label { Text = "Output root", Anchor = AnchorStyles.Left, AutoSize = true }, 0, 0);
+        outputRootBox = new TextBox { Dock = DockStyle.Fill };
+        outputRootBox.TextChanged += (_, _) => InvalidateResolvedBundle();
+        row.Controls.Add(outputRootBox, 1, 0);
+        var browse = new Button { Text = "Browse...", Dock = DockStyle.Fill };
+        browse.Click += (_, _) => BrowseOutputRoot();
+        row.Controls.Add(browse, 2, 0);
+        var open = new Button { Text = "Open Dir", Dock = DockStyle.Fill };
+        open.Click += (_, _) => OpenDirectory(outputRootBox.Text, createIfMissing: true);
+        row.Controls.Add(open, 3, 0);
+        row.Controls.Add(new Label { Text = "Run outputs", Anchor = AnchorStyles.Left, AutoSize = true }, 4, 0);
+        return row;
     }
 
-    private TabPage BuildAdvancedTab()
+    private TabPage BuildBundleDetailsTab()
     {
-        var page = new TabPage("Advanced JSON / Diff");
-        diffBox = new TextBox
+        var page = new TabPage("Bundle Details");
+        bundleDetailsBox = new TextBox
         {
             Dock = DockStyle.Fill,
             Multiline = true,
             ScrollBars = ScrollBars.Both,
             Font = new Font(FontFamily.GenericMonospace, 9),
-            ReadOnly = true
+            ReadOnly = true,
+            Text = "Bundle details will appear after validation."
         };
-        page.Controls.Add(diffBox);
+        page.Controls.Add(bundleDetailsBox);
         return page;
     }
 
@@ -273,102 +209,78 @@ internal sealed class MainForm : Form
 
     private void LoadCatalogs()
     {
-        LoadCombo(stationBox, catalog.Stations(), "lab_a.json");
-        LoadCombo(calibrationBox, catalog.Calibrations(), "main.json");
-        LoadCombo(planBox, catalog.Plans(), "x_axis_1d_bounce_15min.json");
-        LoadCombo(smbProfileBox, catalog.Profiles("smb100a"), "smb100a_run_monitor_2830_2890_-10dbm.json");
-        LoadCombo(oeProfileBox, catalog.Profiles("oe1022d"), "oe1022d_run_ch_b_observed.json");
-        LoadCombo(laserProfileBox, catalog.Profiles("cni_laser"), "cni_laser_run_off_background.json");
+        LoadPicker(stationPicker, catalog.Stations(), "lab_a.json");
+        LoadPicker(calibrationPicker, catalog.Calibrations(), "main.json");
+        LoadPicker(planPicker, catalog.Plans(), "x_axis_1d_bounce_15min.json");
+        LoadPicker(smbProfilePicker, catalog.Profiles("smb100a"), "smb100a_run_monitor_2830_2890_-10dbm.json");
+        LoadPicker(oeProfilePicker, catalog.Profiles("oe1022d"), "oe1022d_run_ch_b_observed.json");
+        LoadPicker(laserProfilePicker, catalog.Profiles("cni_laser"), "cni_laser_run_off_background.json");
         outputRootBox.Text = catalog.DefaultOutputRoot();
     }
 
-    private static void LoadCombo(ComboBox box, IReadOnlyList<string> paths, string preferredName)
+    private static void LoadPicker(ConfigPicker picker, IReadOnlyList<string> paths, string preferredName)
     {
-        box.Items.Clear();
-        foreach (var path in paths)
-        {
-            box.Items.Add(path);
-        }
         var preferred = paths.FirstOrDefault(path => Path.GetFileName(path).Equals(preferredName, StringComparison.OrdinalIgnoreCase));
-        box.SelectedItem = preferred ?? paths.FirstOrDefault();
+        picker.LoadPaths(paths, preferred ?? paths.FirstOrDefault());
     }
 
-    private void LoadDefaultsFromSelectedFiles()
+    private bool ResolveBundle(bool showDialogOnError)
     {
         try
         {
-            if (File.Exists(planBox.Text))
-            {
-                var plan = RunConfigLoader.ReadJson<AcquisitionRunPlan>(planBox.Text);
-                runIdBox.Text = $"{plan.RunId}_ui";
-                operatorBox.Text = plan.Operator;
-                baselineXBox.Text = plan.MagBaselinePolicy.BaselineCurrentA.ElementAtOrDefault(0).ToString(CultureInfo.InvariantCulture);
-                baselineYBox.Text = plan.MagBaselinePolicy.BaselineCurrentA.ElementAtOrDefault(1).ToString(CultureInfo.InvariantCulture);
-                baselineZBox.Text = plan.MagBaselinePolicy.BaselineCurrentA.ElementAtOrDefault(2).ToString(CultureInfo.InvariantCulture);
-                baselineSettleBox.Value = ClampDecimal(plan.MagBaselinePolicy.SettleMs, baselineSettleBox.Minimum, baselineSettleBox.Maximum);
-                voltageBox.Text = (plan.MagBaselinePolicy.VoltageV ?? 75.0).ToString(CultureInfo.InvariantCulture);
-                voltageProtectionBox.Text = (plan.MagBaselinePolicy.VoltageProtectionV ?? 75.0).ToString(CultureInfo.InvariantCulture);
-                magOutputBox.Checked = plan.MagBaselinePolicy.OutputEnabled;
-                if (plan.PointSource is not null)
-                {
-                    xAxis.SetExplicit(plan.PointSource.AxesNt.X);
-                    yAxis.SetExplicit(plan.PointSource.AxesNt.Y);
-                    zAxis.SetExplicit(plan.PointSource.AxesNt.Z);
-                    cycleModeBox.SelectedItem = plan.PointSource.CycleMode;
-                    totalPointsBox.Value = ClampDecimal(plan.PointSource.StopCondition.TotalPoints, totalPointsBox.Minimum, totalPointsBox.Maximum);
-                }
-            }
+            var selection = BuildSelection();
+            ValidatePickerJson(stationPicker, selection.StationPath, RunConfigLoader.ReadJson<StationSpec>);
+            ValidatePickerJson(calibrationPicker, selection.CalibrationPath, RunConfigLoader.ReadJson<CalibrationProfile>);
+            ValidatePickerJson(planPicker, selection.PlanPath, RunConfigLoader.ReadJson<AcquisitionRunPlan>);
+            ValidatePickerJson(smbProfilePicker, selection.SmbProfilePath, RunConfigLoader.ReadJson<Smb100aRunProfile>);
+            ValidatePickerJson(oeProfilePicker, selection.OeProfilePath, RunConfigLoader.ReadJson<Oe1022dRunProfile>);
+            ValidatePickerJson(laserProfilePicker, selection.LaserProfilePath, RunConfigLoader.ReadJson<LaserRunProfile>);
 
-            if (File.Exists(smbProfileBox.Text))
-            {
-                var smb = RunConfigLoader.ReadJson<Smb100aRunProfile>(smbProfileBox.Text);
-                smbStartBox.Text = smb.DefaultSweep.StartHz.ToString(CultureInfo.InvariantCulture);
-                smbStopBox.Text = smb.DefaultSweep.StopHz.ToString(CultureInfo.InvariantCulture);
-                smbStepBox.Text = smb.DefaultSweep.StepHz.ToString(CultureInfo.InvariantCulture);
-                smbDwellBox.Value = ClampDecimal(smb.DefaultSweep.DwellMs, smbDwellBox.Minimum, smbDwellBox.Maximum);
-                smbPowerBox.Text = smb.DefaultSweep.PowerDbm.ToString(CultureInfo.InvariantCulture);
-                smbRfOutputBox.Checked = smb.DefaultSweep.RfOutputEnabled;
-            }
+            var bundle = RunConfigLoader.Load(
+                selection.StationPath,
+                selection.CalibrationPath,
+                selection.PlanPath,
+                selection.SmbProfilePath,
+                selection.OeProfilePath,
+                selection.LaserProfilePath);
+            var outDir = UniqueRunDirectory(outputRootBox.Text, bundle.Plan.RunId);
 
-            if (File.Exists(oeProfileBox.Text))
-            {
-                var oe = RunConfigLoader.ReadJson<Oe1022dRunProfile>(oeProfileBox.Text);
-                oeTimeConstantBox.Value = ClampDecimal(oe.Fixed.TimeConstantIndex, oeTimeConstantBox.Minimum, oeTimeConstantBox.Maximum);
-                oeFilterSlopeBox.Value = ClampDecimal(oe.Fixed.FilterSlope, oeFilterSlopeBox.Minimum, oeFilterSlopeBox.Maximum);
-            }
-        }
-        catch (Exception ex)
-        {
-            AppendLog($"load defaults failed: {ex.Message}");
-        }
-    }
+            lastSelection = selection;
+            lastBundle = bundle;
+            lastOutDir = outDir;
 
-    private void ResolveDraft()
-    {
-        try
-        {
-            lastDraft = drafts.SaveDrafts(BuildSelection(), BuildPlanDraft(), BuildProfileDraft(), catalog.RepoRoot, outputRootBox.Text);
-            var r = lastDraft.Resolution;
-            var duration = lastDraft.EstimatedRunDurationMs.HasValue
-                ? TimeSpan.FromMilliseconds(lastDraft.EstimatedRunDurationMs.Value).ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture)
+            var summary = bundle.ToSummary();
+            var duration = bundle.ResolvedPlan.EstimatedRunDurationMs.HasValue
+                ? TimeSpan.FromMilliseconds(bundle.ResolvedPlan.EstimatedRunDurationMs.Value).ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture)
                 : "-";
-            resolveSummaryLabel.Text = $"Resolved: {r.ResolvedPointCount} points, est={duration}, source={r.SourceKind}, first={r.FirstPoint?.PointId}, last={r.LastPoint?.PointId}, SMB={r.SmbProfileId}, OE={r.OeProfileId}";
-            outDirLabel.Text = $"Out-dir: {lastDraft.OutDir}";
-            diffBox.Text = lastDraft.Paths.DiffText;
-            AppendLog("resolved and saved generated draft configs");
+            resolveSummaryLabel.Text = $"Bundle: {summary.RunId}, {summary.ResolvedPointCount} points, {summary.SourceKind}, est={duration}";
+            outDirLabel.Text = $"Out-dir: {outDir}";
+            bundleSummaryBox.Text = BuildSummaryText(bundle, outDir);
+            bundleDetailsBox.Text = BuildDetailsText(selection, bundle, outDir);
+            AppendLog("bundle validated");
+            return true;
         }
         catch (Exception ex)
         {
-            lastDraft = null;
-            AppendLog($"resolve failed: {ex.Message}");
-            MessageBox.Show(this, ex.Message, "Resolve failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            lastSelection = null;
+            lastBundle = null;
+            lastOutDir = null;
+            resolveSummaryLabel.Text = "Bundle: validation failed";
+            outDirLabel.Text = "Out-dir: not generated";
+            bundleSummaryBox.Text = ex.Message;
+            bundleDetailsBox.Text = ex.ToString();
+            AppendLog($"bundle validation failed: {ex.Message}");
+            if (showDialogOnError)
+            {
+                MessageBox.Show(this, ex.Message, "Bundle validation failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            return false;
         }
     }
 
     private async Task RunAsync()
     {
-        ResolveDraft();
-        if (lastDraft is null)
+        if (!ResolveBundle(showDialogOnError: true) || lastSelection is null || lastOutDir is null)
         {
             return;
         }
@@ -380,7 +292,7 @@ internal sealed class MainForm : Form
         try
         {
             var progress = new Progress<RunLaunchSnapshot>(UpdateRunProgress);
-            var summary = await launcher.RunAsync(BuildSelection(), lastDraft.Paths, lastDraft.OutDir, progress);
+            var summary = await launcher.RunAsync(lastSelection, lastOutDir, progress);
             AppendLog($"run finished: {summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames={summary.FramesTotal}, timeouts={summary.TimeoutCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}");
             stateLabel.Text = $"State: {summary.Status}";
         }
@@ -413,35 +325,13 @@ internal sealed class MainForm : Form
     }
 
     private ConfigSelection BuildSelection() =>
-        new(stationBox.Text, calibrationBox.Text, planBox.Text, smbProfileBox.Text, oeProfileBox.Text, laserProfileBox.Text);
-
-    private PlanDraft BuildPlanDraft() =>
         new(
-            runIdBox.Text,
-            operatorBox.Text,
-            xAxis.ToDraft(),
-            yAxis.ToDraft(),
-            zAxis.ToDraft(),
-            cycleModeBox.Text,
-            (int)totalPointsBox.Value,
-            ParseDouble(baselineXBox.Text, "baseline X"),
-            ParseDouble(baselineYBox.Text, "baseline Y"),
-            ParseDouble(baselineZBox.Text, "baseline Z"),
-            (int)baselineSettleBox.Value,
-            ParseDouble(voltageBox.Text, "voltage"),
-            ParseDouble(voltageProtectionBox.Text, "voltage protection"),
-            magOutputBox.Checked);
-
-    private ProfileDraft BuildProfileDraft() =>
-        new(
-            ParseDouble(smbStartBox.Text, "SMB start"),
-            ParseDouble(smbStopBox.Text, "SMB stop"),
-            ParseDouble(smbStepBox.Text, "SMB step"),
-            (int)smbDwellBox.Value,
-            ParseDouble(smbPowerBox.Text, "SMB power"),
-            smbRfOutputBox.Checked,
-            (int)oeTimeConstantBox.Value,
-            (int)oeFilterSlopeBox.Value);
+            stationPicker.SelectedPath,
+            calibrationPicker.SelectedPath,
+            planPicker.SelectedPath,
+            smbProfilePicker.SelectedPath,
+            oeProfilePicker.SelectedPath,
+            laserProfilePicker.SelectedPath);
 
     private void BrowseOutputRoot()
     {
@@ -456,6 +346,15 @@ internal sealed class MainForm : Form
         }
     }
 
+    private void InvalidateResolvedBundle()
+    {
+        lastSelection = null;
+        lastBundle = null;
+        lastOutDir = null;
+        resolveSummaryLabel.Text = "Bundle: not validated";
+        outDirLabel.Text = "Out-dir: not generated";
+    }
+
     private void AppendLog(string message)
     {
         eventList.Items.Insert(0, $"{DateTime.Now:HH:mm:ss} {message}");
@@ -465,122 +364,240 @@ internal sealed class MainForm : Form
         }
     }
 
-    private static ComboBox AddCombo(TableLayoutPanel table, string label, int column, int row)
+    private IEnumerable<ConfigPicker> AllPickers()
     {
-        table.Controls.Add(new Label { Text = label, Anchor = AnchorStyles.Left, AutoSize = true }, column, row);
-        var box = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDown };
-        table.Controls.Add(box, column + 1, row);
-        return box;
+        yield return stationPicker;
+        yield return calibrationPicker;
+        yield return planPicker;
+        yield return smbProfilePicker;
+        yield return oeProfilePicker;
+        yield return laserProfilePicker;
     }
 
-    private static ComboBox AddComboRaw(TableLayoutPanel table, string label, int row, string[] values)
+    private static void ValidatePickerJson<T>(ConfigPicker picker, string path, Func<string, T> reader)
     {
-        table.Controls.Add(new Label { Text = label, Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
-        var box = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-        box.Items.AddRange(values.Cast<object>().ToArray());
-        box.SelectedIndex = 0;
-        table.Controls.Add(box, 1, row);
-        return box;
-    }
-
-    private static TextBox AddText(TableLayoutPanel table, string label, int row, string value)
-    {
-        table.Controls.Add(new Label { Text = label, Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
-        var box = new TextBox { Dock = DockStyle.Fill, Text = value };
-        table.Controls.Add(box, 1, row);
-        return box;
-    }
-
-    private static TextBox AddSmallText(TableLayoutPanel table, string label, int column, string value, int row = 0)
-    {
-        table.Controls.Add(new Label { Text = label, Anchor = AnchorStyles.Left, AutoSize = true }, column, row);
-        var box = new TextBox { Dock = DockStyle.Fill, Text = value };
-        table.Controls.Add(box, column + 1, row);
-        return box;
-    }
-
-    private static NumericUpDown AddNumeric(TableLayoutPanel table, string label, int row, decimal min, decimal max, decimal value)
-    {
-        table.Controls.Add(new Label { Text = label, Anchor = AnchorStyles.Left, AutoSize = true }, 0, row);
-        var box = new NumericUpDown { Dock = DockStyle.Fill, Minimum = min, Maximum = max, Value = value };
-        table.Controls.Add(box, 1, row);
-        return box;
-    }
-
-    private static NumericUpDown AddNumericInline(TableLayoutPanel table, string label, int column, decimal value)
-    {
-        table.Controls.Add(new Label { Text = label, Anchor = AnchorStyles.Left, AutoSize = true }, column, 0);
-        var box = new NumericUpDown { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1_000_000, Value = value };
-        table.Controls.Add(box, column + 1, 0);
-        return box;
-    }
-
-    private static double ParseDouble(string value, string name) =>
-        double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : throw new InvalidOperationException($"{name} must be a number: {value}");
-
-    private static decimal ClampDecimal(decimal value, decimal min, decimal max) => Math.Max(min, Math.Min(max, value));
-
-    private sealed class AxisEditor : UserControl
-    {
-        private readonly CheckBox explicitCheck = new() { Text = "Explicit", AutoSize = true, Anchor = AnchorStyles.Left };
-        private readonly TextBox explicitBox = new() { Dock = DockStyle.Fill };
-        private readonly TextBox startBox = new() { Dock = DockStyle.Fill };
-        private readonly TextBox stopBox = new() { Dock = DockStyle.Fill };
-        private readonly TextBox stepBox = new() { Dock = DockStyle.Fill };
-
-        public AxisEditor(string axis)
+        if (string.IsNullOrWhiteSpace(path))
         {
-            Dock = DockStyle.Top;
-            Height = 58;
-            var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 2 };
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 42));
-            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-            Controls.Add(table);
-            table.Controls.Add(new Label { Text = axis, Anchor = AnchorStyles.Left, AutoSize = true }, 0, 0);
-            table.Controls.Add(explicitCheck, 1, 0);
-            table.Controls.Add(new Label { Text = "List", Anchor = AnchorStyles.Left, AutoSize = true }, 3, 0);
-            table.Controls.Add(explicitBox, 4, 0);
-            table.SetColumnSpan(explicitBox, 5);
-            table.Controls.Add(new Label { Text = "Start", Anchor = AnchorStyles.Left, AutoSize = true }, 1, 1);
-            table.Controls.Add(startBox, 2, 1);
-            table.Controls.Add(new Label { Text = "Stop", Anchor = AnchorStyles.Left, AutoSize = true }, 3, 1);
-            table.Controls.Add(stopBox, 4, 1);
-            table.Controls.Add(new Label { Text = "Step", Anchor = AnchorStyles.Left, AutoSize = true }, 5, 1);
-            table.Controls.Add(stepBox, 6, 1);
-            table.Controls.Add(new Label { Text = "nT", Anchor = AnchorStyles.Left, AutoSize = true }, 7, 1);
-            startBox.Text = "0";
-            stopBox.Text = "0";
-            stepBox.Text = "10";
-            explicitBox.Text = "0";
+            picker.SetStatus("missing", false);
+            throw new InvalidOperationException($"{picker.Title} path is required");
         }
 
-        public void SetExplicit(IReadOnlyList<double> values)
+        if (!File.Exists(path))
         {
-            explicitCheck.Checked = true;
-            explicitBox.Text = string.Join(", ", values.Select(value => value.ToString(CultureInfo.InvariantCulture)));
-            if (values.Count > 0)
+            picker.SetStatus("missing", false);
+            throw new InvalidOperationException($"{picker.Title} does not exist: {path}");
+        }
+
+        _ = reader(path);
+        picker.SetStatus("OK", true);
+    }
+
+    private static string BuildSummaryText(RunConfigBundle bundle, string outDir)
+    {
+        var plan = bundle.ResolvedPlan;
+        var defaultSweep = bundle.SmbProfile.DefaultSweep;
+        var duration = plan.EstimatedRunDurationMs.HasValue
+            ? TimeSpan.FromMilliseconds(plan.EstimatedRunDurationMs.Value).ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture)
+            : "-";
+        return string.Join(Environment.NewLine, new[]
+        {
+            $"run_id: {bundle.Plan.RunId}",
+            $"station: {bundle.Station.StationId}",
+            $"points: {plan.ResolvedPointCount} ({plan.SourceKind})",
+            $"cycle: {plan.CycleMode ?? "-"}",
+            $"estimated: {duration}",
+            $"SMB: {bundle.SmbProfile.ProfileId}",
+            $"RF sweep: {defaultSweep.StartHz:0} -> {defaultSweep.StopHz:0} Hz, step {defaultSweep.StepHz:0} Hz",
+            $"RF power: {defaultSweep.PowerDbm:0.###} dBm, dwell {defaultSweep.DwellMs} ms",
+            $"OE: {bundle.OeProfile.ProfileId}",
+            $"RALL: {bundle.OeProfile.Collector.FrameExactBytes} bytes, {bundle.OeProfile.Collector.RallPostWriteDelayMs} ms post-write",
+            $"Laser: {bundle.LaserProfile.ProfileId}, {bundle.LaserProfile.Mode}, {bundle.LaserProfile.PowerMw} mW",
+            $"out_dir: {outDir}"
+        });
+    }
+
+    private static string BuildDetailsText(ConfigSelection selection, RunConfigBundle bundle, string outDir)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("[Input files]");
+        builder.AppendLine($"station: {selection.StationPath}");
+        builder.AppendLine($"calibration: {selection.CalibrationPath}");
+        builder.AppendLine($"plan: {selection.PlanPath}");
+        builder.AppendLine($"smb_profile: {selection.SmbProfilePath}");
+        builder.AppendLine($"oe_profile: {selection.OeProfilePath}");
+        builder.AppendLine($"laser_profile: {selection.LaserProfilePath}");
+        builder.AppendLine($"out_dir: {outDir}");
+        builder.AppendLine();
+
+        builder.AppendLine("[Connections]");
+        builder.AppendLine(JsonSerializer.Serialize(bundle.Connections, JsonOptions.Pretty));
+        builder.AppendLine();
+
+        builder.AppendLine("[Resolved plan]");
+        builder.AppendLine(JsonSerializer.Serialize(bundle.ResolvedPlan, JsonOptions.Pretty));
+        builder.AppendLine();
+
+        builder.AppendLine("[Profile ids]");
+        builder.AppendLine($"smb: {bundle.SmbProfile.ProfileId}");
+        builder.AppendLine($"oe: {bundle.OeProfile.ProfileId}");
+        builder.AppendLine($"laser: {bundle.LaserProfile.ProfileId}");
+        builder.AppendLine();
+        builder.AppendLine("[RALL collector rule]");
+        builder.AppendLine(RuntimeContracts.FrozenRallHotPath);
+        return builder.ToString();
+    }
+
+    private static string UniqueRunDirectory(string outputRoot, string runId)
+    {
+        if (string.IsNullOrWhiteSpace(outputRoot))
+        {
+            throw new InvalidOperationException("output root is required");
+        }
+
+        Directory.CreateDirectory(outputRoot);
+        var safeRunId = SanitizeId(runId);
+        var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+        var basePath = Path.Combine(outputRoot, $"{stamp}_{safeRunId}");
+        var candidate = basePath;
+        var index = 1;
+        while (Directory.Exists(candidate))
+        {
+            candidate = $"{basePath}_{index:00}";
+            index++;
+        }
+
+        return candidate;
+    }
+
+    private static string SanitizeId(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value.Trim())
+        {
+            builder.Append(char.IsLetterOrDigit(ch) || ch is '_' or '-' ? ch : '_');
+        }
+
+        return builder.Length == 0 ? $"ui_run_{DateTime.Now:yyyyMMdd_HHmmss}" : builder.ToString();
+    }
+
+    private static void OpenDirectory(string path, bool createIfMissing = false)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var dir = File.Exists(path) ? Path.GetDirectoryName(path) : path;
+        if (string.IsNullOrWhiteSpace(dir))
+        {
+            return;
+        }
+
+        if (!Directory.Exists(dir))
+        {
+            if (!createIfMissing)
             {
-                startBox.Text = values.First().ToString(CultureInfo.InvariantCulture);
-                stopBox.Text = values.Last().ToString(CultureInfo.InvariantCulture);
+                return;
             }
-            stepBox.Text = values.Count > 1 ? (values[1] - values[0]).ToString(CultureInfo.InvariantCulture) : "10";
+
+            Directory.CreateDirectory(dir);
         }
 
-        public AxisDraft ToDraft() =>
-            new(
-                explicitCheck.Checked,
-                explicitBox.Text,
-                ParseDouble(startBox.Text, "axis start"),
-                ParseDouble(stopBox.Text, "axis stop"),
-                ParseDouble(stepBox.Text, "axis step"));
+        Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
+    }
+
+    private sealed class ConfigPicker : UserControl
+    {
+        private readonly ComboBox combo = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDown };
+        private readonly Label status = new() { Text = "not checked", Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
+
+        public ConfigPicker(string title)
+        {
+            Title = title;
+            Height = 28;
+            var table = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1 };
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
+            table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
+            Controls.Add(table);
+
+            table.Controls.Add(new Label { Text = title, Anchor = AnchorStyles.Left, AutoSize = true }, 0, 0);
+            combo.SelectedIndexChanged += (_, _) => SelectionChanged?.Invoke(this, EventArgs.Empty);
+            combo.TextChanged += (_, _) => SelectionChanged?.Invoke(this, EventArgs.Empty);
+            table.Controls.Add(combo, 1, 0);
+
+            var browse = new Button { Text = "Browse...", Dock = DockStyle.Fill };
+            browse.Click += (_, _) => Browse();
+            table.Controls.Add(browse, 2, 0);
+
+            var open = new Button { Text = "Open Dir", Dock = DockStyle.Fill };
+            open.Click += (_, _) => OpenDirectory(SelectedPath);
+            table.Controls.Add(open, 3, 0);
+            table.Controls.Add(status, 4, 0);
+        }
+
+        public event EventHandler? SelectionChanged;
+
+        public string Title { get; }
+
+        public string SelectedPath
+        {
+            get => combo.Text;
+            private set => combo.Text = value;
+        }
+
+        public void LoadPaths(IReadOnlyList<string> paths, string? selectedPath)
+        {
+            combo.Items.Clear();
+            foreach (var path in paths)
+            {
+                combo.Items.Add(path);
+            }
+            if (!string.IsNullOrWhiteSpace(selectedPath))
+            {
+                combo.SelectedItem = selectedPath;
+                if (combo.SelectedItem is null)
+                {
+                    combo.Text = selectedPath;
+                }
+            }
+        }
+
+        public void SetStatus(string text, bool ok)
+        {
+            status.Text = text;
+            status.ForeColor = ok ? Color.DarkGreen : Color.DarkRed;
+        }
+
+        private void Browse()
+        {
+            using var dialog = new OpenFileDialog
+            {
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                FileName = Path.GetFileName(SelectedPath),
+                InitialDirectory = InitialDirectory()
+            };
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                SelectedPath = dialog.FileName;
+            }
+        }
+
+        private string InitialDirectory()
+        {
+            if (File.Exists(SelectedPath))
+            {
+                return Path.GetDirectoryName(SelectedPath) ?? Environment.CurrentDirectory;
+            }
+
+            if (Directory.Exists(SelectedPath))
+            {
+                return SelectedPath;
+            }
+
+            return Environment.CurrentDirectory;
+        }
     }
 }
