@@ -105,6 +105,7 @@ public static class ConfigDrivenRun
                 .ToArray();
 
             ApplySmbFixedProfile(smb, bundle.SmbProfile);
+            ApplySmbRunRfOutput(smb, bundle, eventsPath, processStart);
 
             for (var index = 0; index < bundle.ResolvedPlan.Points.Count; index++)
             {
@@ -498,7 +499,7 @@ public static class ConfigDrivenRun
         });
 
         var sweep = bundle.SmbProfile.DefaultSweep.ApplyOverride(point.SmbOverride);
-        ConfigureSmbSweep(smb, bundle.SmbProfile, sweep);
+        var smbConfigureError = ConfigureSmbSweepForPointPreparation(smb, bundle.SmbProfile, sweep);
 
         var segmentId = $"seg_{point.PointId}_0000";
         var timeoutsBefore = collector.Snapshot().Stats.TimeoutCount;
@@ -513,10 +514,37 @@ public static class ConfigDrivenRun
         {
             segment_id = segmentId,
             resolved_point_count = bundle.ResolvedPlan.ResolvedPointCount,
-            estimated_sweep_duration_ms = sweep.EstimatedSweepDurationMs
+            estimated_sweep_duration_ms = sweep.EstimatedSweepDurationMs,
+            rf_output_policy = "run_level_on",
+            sweep_window_policy = "segment_scoped_sweep"
         });
 
-        var sweepObservation = smb.ExecuteSweep(sweep);
+        var rfExposureStartedTs = UtcNowString();
+        var rfExposureStartedMonotonicNs = MonotonicNsSince(processStart);
+        AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_exposure_started", "rf", point.PointId, "smb100a_main", new
+        {
+            segment_id = segmentId,
+            output_state = "run_level_on",
+            frequency_mode = "SWE",
+            start_hz = sweep.StartHz
+        });
+        var sweepObservation = ExecuteSmbSweepInsideSegment(smb, bundle.SmbProfile, sweep);
+        AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_sweep_executed", "rf", point.PointId, "smb100a_main", new
+        {
+            segment_id = segmentId,
+            estimated_sweep_duration_ms = sweepObservation.EstimatedSweepDurationMs,
+            opc_wait_ms = sweepObservation.OpcWaitMs,
+            fallback_used = sweepObservation.FallbackUsed
+        });
+        ReturnSmbToCwStart(smb, bundle.SmbProfile, sweep);
+        var rfExposureEndedTs = UtcNowString();
+        var rfExposureEndedMonotonicNs = MonotonicNsSince(processStart);
+        AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_exposure_ended", "rf", point.PointId, "smb100a_main", new
+        {
+            segment_id = segmentId,
+            frequency_mode = "CW",
+            cw_frequency_hz = sweep.StartHz
+        });
 
         var segmentEndTs = UtcNowString();
         var segmentEndMonotonicNs = MonotonicNsSince(processStart);
@@ -529,7 +557,12 @@ public static class ConfigDrivenRun
             segment_id = segmentId,
             estimated_sweep_duration_ms = sweepObservation.EstimatedSweepDurationMs,
             opc_wait_ms = sweepObservation.OpcWaitMs,
-            fallback_used = sweepObservation.FallbackUsed
+            fallback_used = sweepObservation.FallbackUsed,
+            smb_configure_error = smbConfigureError,
+            rf_exposure_started_ts = rfExposureStartedTs,
+            rf_exposure_ended_ts = rfExposureEndedTs,
+            rf_exposure_started_monotonic_ns = rfExposureStartedMonotonicNs,
+            rf_exposure_ended_monotonic_ns = rfExposureEndedMonotonicNs
         });
 
         var segment = new SegmentRecord(
@@ -589,25 +622,55 @@ public static class ConfigDrivenRun
         }
     }
 
-    private static void ConfigureSmbSweep(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep)
+    private static void ApplySmbRunRfOutput(Smb100aSession smb, RunConfigBundle bundle, string eventsPath, long processStart)
     {
-        foreach (var command in sweep.ToCommands())
+        SendSmbProfileCommand(smb, bundle.SmbProfile, Smb100aCommands.OutputOn);
+        var output = smb.Query(Smb100aCommands.QueryOutput);
+        if (output.Trim() != "1")
         {
-            SendSmbProfileCommand(smb, profile, command);
+            throw new IOException($"SMB100A run-level output state mismatch: expected 1, observed {output}");
         }
 
-        var expectedOutput = sweep.RfOutputEnabled ? "1" : "0";
-        var output = smb.Query(Smb100aCommands.QueryOutput);
-        if (output.Trim() != expectedOutput)
+        AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "smb_rf_output_enabled", "rf", null, "smb100a_main", new
         {
-            throw new IOException($"SMB100A output state mismatch: expected {expectedOutput}, observed {output}");
+            output_state = output.Trim(),
+            policy = "run_level_on"
+        });
+    }
+
+    private static string ConfigureSmbSweepForPointPreparation(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep)
+    {
+        if (!sweep.RfOutputEnabled)
+        {
+            throw new InvalidOperationException("config-driven runtime requires smb sweep rf_output_enabled=true for run-level RF output policy");
+        }
+
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeCw);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.SetFrequencyHz(sweep.StartHz));
+        foreach (var command in sweep.ToCommands())
+        {
+            SendSmbProfileCommandWithoutErrorCheck(smb, profile, command);
+        }
+
+        var error = smb.Query(Smb100aCommands.QuerySystemError);
+        if (!Smb100aTcp.ErrorIsClean(error))
+        {
+            throw new IOException($"SMB100A point sweep configuration error: {error}");
+        }
+
+        var output = smb.Query(Smb100aCommands.QueryOutput);
+        if (output.Trim() != "1")
+        {
+            throw new IOException($"SMB100A output state mismatch before segment: expected 1, observed {output}");
         }
 
         var frequencyMode = smb.Query(Smb100aCommands.QueryFrequencyMode);
-        if (frequencyMode.Trim() != "SWE")
+        if (!IsCwFrequencyMode(frequencyMode))
         {
-            throw new IOException($"SMB100A frequency mode mismatch: expected SWE, observed {frequencyMode}");
+            throw new IOException($"SMB100A frequency mode mismatch before segment: expected CW, observed {frequencyMode}");
         }
+
+        return error;
     }
 
     private static void SendSmbProfileCommand(Smb100aSession smb, Smb100aRunProfile profile, string command)
@@ -618,6 +681,37 @@ public static class ConfigDrivenRun
         {
             smb.EnsureNoError();
         }
+    }
+
+    private static void SendSmbProfileCommandWithoutErrorCheck(Smb100aSession smb, Smb100aRunProfile profile, string command)
+    {
+        smb.Send(command);
+        Thread.Sleep(profile.CommandSettleMs);
+    }
+
+    private static SmbSweepObservation ExecuteSmbSweepInsideSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep)
+    {
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeSweep);
+        return smb.ExecuteSweep(sweep);
+    }
+
+    private static void ReturnSmbToCwStart(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep)
+    {
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeCw);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.SetFrequencyHz(sweep.StartHz));
+        var error = smb.Query(Smb100aCommands.QuerySystemError);
+        if (!Smb100aTcp.ErrorIsClean(error))
+        {
+            throw new IOException($"SMB100A return-to-CW error: {error}");
+        }
+    }
+
+    private static bool IsCwFrequencyMode(string value)
+    {
+        var normalized = value.Trim();
+        return normalized.Equals("CW", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("FIX", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("FIXED", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string[] BuildSmbFixedCommands(SmbFixedProfile fixedProfile) =>

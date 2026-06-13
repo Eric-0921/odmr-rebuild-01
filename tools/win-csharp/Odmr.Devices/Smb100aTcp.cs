@@ -28,6 +28,8 @@ public static class Smb100aCommands
     public const string OutputOn = "OUTP ON";
     public const string OutputOff = "OUTP OFF";
 
+    public static string SetFrequencyHz(long hz) => $"FREQ {hz}";
+
     public static readonly string[] FixedSweepProfile =
     [
         "MOD:STAT ON",
@@ -92,7 +94,6 @@ public sealed record SmbSweepSpec(
 
     public string[] ToCommands() =>
     [
-        Smb100aCommands.FrequencyModeSweep,
         $"POW {PowerDbm}dBm",
         $"FREQ:STAR {StartHz}Hz",
         $"FREQ:STOP {StopHz}Hz",
@@ -103,8 +104,7 @@ public sealed record SmbSweepSpec(
         $"SWE:SHAP {Shape}",
         $"TRIG:FSW:SOUR {TriggerSource}",
         $"SWE:OVOL:STAR {OutputVoltageStartV}",
-        $"SWE:OVOL:STOP {OutputVoltageStopV}",
-        RfOutputEnabled ? Smb100aCommands.OutputOn : Smb100aCommands.OutputOff
+        $"SWE:OVOL:STOP {OutputVoltageStopV}"
     ];
 
     [JsonPropertyName("sweep_points")]
@@ -253,10 +253,12 @@ public sealed class Smb100aSession : IDisposable
 
     public void ConfigureSweep(SmbSweepSpec spec, int settleMs)
     {
+        SendAndCheck(Smb100aCommands.FrequencyModeSweep, settleMs);
         foreach (var command in spec.ToCommands())
         {
             SendAndCheck(command, settleMs);
         }
+        SendAndCheck(spec.RfOutputEnabled ? Smb100aCommands.OutputOn : Smb100aCommands.OutputOff, settleMs);
 
         var output = Query(Smb100aCommands.QueryOutput);
         var expectedOutput = spec.RfOutputEnabled ? "1" : "0";

@@ -69,7 +69,7 @@ public static class DeviceCommandCatalog
         Smb("clear_status", "action", "*CLS", "DeviceCommandCatalog", false),
         Smb("set_output", "set", "OUTP {ON|OFF}", "Smb100aCommands.OutputOn/OutputOff", true),
         Smb("query_output", "query", "OUTP?", "Smb100aCommands.QueryOutput", true),
-        Smb("set_frequency_hz", "set", "FREQ {hz}", "DeviceCommandCatalog", false),
+        Smb("set_frequency_hz", "set", "FREQ {hz}", "Smb100aCommands.SetFrequencyHz", true),
         Smb("set_frequency_mode", "set", "FREQ:MODE {mode}", "Smb100aCommands.FrequencyModeSweep/FrequencyModeCw", true),
         Smb("query_frequency", "query", "FREQ?", "DeviceCommandCatalog", false),
         Smb("query_frequency_mode", "query", "FREQ:MODE?", "Smb100aCommands.QueryFrequencyMode", true),
