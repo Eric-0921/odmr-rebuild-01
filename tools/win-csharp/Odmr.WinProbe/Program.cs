@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,12 +8,17 @@ using Ivi.Visa;
 
 const string DefaultResource = "ASRL8::INSTR";
 const int DefaultBaudRate = 921600;
+const string DefaultSmbHost = "169.254.2.20";
+const int DefaultSmbPort = 5025;
+const int SmbTimeoutMs = 3000;
 const int RallFrameBytes = 12288;
 const int DevicePacketCounterOffset = 12287;
 const int RallPostWriteDelayMs = 30;
 const int VisaTimeoutMs = 300;
 const string OeIdnRequiredPrefix = "SSI LIA-OE1022D";
 const string OeIdnRequiredSerial = "SN:D6522078";
+const string SmbIdnRequiredVendor = "Rohde&Schwarz";
+const string SmbIdnRequiredModel = "SMB100A";
 
 var exitCode = Run(args);
 Environment.Exit(exitCode);
@@ -35,6 +41,7 @@ static int Run(string[] args)
             "visa-list" => VisaList(),
             "oe-idn" => OeIdn(options),
             "oe-rall" => OeRall(options),
+            "smb-probe" => SmbProbe(options),
             _ => Fail($"unknown command: {command}")
         };
     }
@@ -43,6 +50,46 @@ static int Run(string[] args)
         Console.Error.WriteLine(ex.Message);
         return 1;
     }
+}
+
+static int SmbProbe(IReadOnlyDictionary<string, string> options)
+{
+    var host = GetOption(options, "host", DefaultSmbHost);
+    var port = GetIntOption(options, "port", DefaultSmbPort);
+
+    using var client = new TcpClient();
+    client.ReceiveTimeout = SmbTimeoutMs;
+    client.SendTimeout = SmbTimeoutMs;
+    client.Connect(host, port);
+
+    using var stream = client.GetStream();
+    var idn = QueryTcpAsciiLine(stream, "*IDN?");
+    var error = QueryTcpAsciiLine(stream, "SYST:ERR?");
+    var output = QueryTcpAsciiLine(stream, "OUTP?");
+
+    var result = new SmbProbeSummary(
+        host,
+        port,
+        idn,
+        error,
+        output,
+        idn.Contains(SmbIdnRequiredVendor, StringComparison.Ordinal) &&
+            idn.Contains(SmbIdnRequiredModel, StringComparison.Ordinal),
+        SmbErrorIsClean(error));
+
+    Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Pretty));
+
+    if (!result.IdentityMatched)
+    {
+        return Fail($"SMB100A identity mismatch: expected `{SmbIdnRequiredVendor}` and `{SmbIdnRequiredModel}`");
+    }
+
+    if (!result.ErrorQueueClean)
+    {
+        return Fail($"SMB100A error queue is not clean: {error}");
+    }
+
+    return 0;
 }
 
 static int VisaList()
@@ -270,6 +317,53 @@ static string ReadAsciiLine(IMessageBasedSession session, int maxBytes)
     return Encoding.ASCII.GetString(buffer.ToArray()).Trim();
 }
 
+static string QueryTcpAsciiLine(NetworkStream stream, string command)
+{
+    var payload = Encoding.ASCII.GetBytes(command + "\n");
+    stream.Write(payload, 0, payload.Length);
+
+    var buffer = new List<byte>(128);
+    var scratch = new byte[1];
+
+    while (buffer.Count < 4096)
+    {
+        var read = stream.Read(scratch, 0, 1);
+        if (read == 0)
+        {
+            if (buffer.Count == 0)
+            {
+                throw new IOException($"empty TCP response for {command}");
+            }
+
+            break;
+        }
+
+        var value = scratch[0];
+        if (value is 10 or 13)
+        {
+            if (buffer.Count == 0)
+            {
+                continue;
+            }
+
+            break;
+        }
+
+        buffer.Add(value);
+    }
+
+    if (buffer.Count >= 4096)
+    {
+        throw new IOException($"TCP response exceeds 4096 bytes for {command}");
+    }
+
+    return Encoding.ASCII.GetString(buffer.ToArray()).Trim();
+}
+
+static bool SmbErrorIsClean(string response) =>
+    response.StartsWith("0,", StringComparison.Ordinal) ||
+    response.Contains("No error", StringComparison.OrdinalIgnoreCase);
+
 static void WriteFrameIndexRecord(
     StreamWriter writer,
     long frameSeq,
@@ -400,6 +494,7 @@ static void PrintUsage()
       Odmr.WinProbe visa-list
       Odmr.WinProbe oe-idn [--resource ASRL8::INSTR] [--baud 921600]
       Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
+      Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
     """);
 }
 
@@ -483,6 +578,15 @@ sealed record ProbeSummary(
     [property: JsonPropertyName("index_path")] string IndexPath,
     [property: JsonPropertyName("segments_path")] string SegmentsPath,
     [property: JsonPropertyName("packet_counter")] PacketCounterSummary PacketCounter);
+
+sealed record SmbProbeSummary(
+    [property: JsonPropertyName("host")] string Host,
+    [property: JsonPropertyName("port")] int Port,
+    [property: JsonPropertyName("idn")] string Idn,
+    [property: JsonPropertyName("system_error")] string SystemError,
+    [property: JsonPropertyName("output_state")] string OutputState,
+    [property: JsonPropertyName("identity_matched")] bool IdentityMatched,
+    [property: JsonPropertyName("error_queue_clean")] bool ErrorQueueClean);
 
 sealed record SegmentRecord(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
