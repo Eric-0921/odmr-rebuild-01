@@ -74,7 +74,7 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 - `tools/win-csharp/Odmr.Runtime`：配置驱动 runtime
 - `tools/win-csharp/Odmr.Artifacts`：artifact writer、contract check、continuity audit
 - `tools/win-csharp/Odmr.WinProbe`：CLI 入口
-- `tools/win-csharp/Odmr.ControlPanel.WinForms`：Windows Run Bundle 控制面板
+- `tools/win-csharp/Odmr.ControlPanel.WinForms`：Windows Run Bundle legacy/fallback 控制面板
 - `tools/config-generator`：跨 Mac/Windows 的 Python 配置生成器，输出 `plan + SMB/OE/Laser profile`
 - `tools/odmr-console-python`：Python/PySide6 控制台，负责配置组合、配置生成、C# CLI 启动、progress JSONL tail、stop-after-current-point request 和 artifact 审查入口
 - `tools/plan-json-generator`：独立浏览器版磁场扫描 `plan.json` 生成器，只作为轻量 plan-only 辅助工具
@@ -115,8 +115,8 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 
 当前 UI 边界：
 
-- Windows 控制面板只负责组合一次 run 所需的六个 JSON：`station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`，并显示解析摘要。
-- 日常配置编辑优先使用 `tools/config-generator/odmr_config_generator.py`：它同时生成磁场 `plan.json`、SMB sweep profile、OE fixed profile 和 Laser profile。
+- PySide6 console 是当前主 UI，负责组合一次 run 所需的六个 JSON：`station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`，并显示解析摘要、启动 run、tail progress、触发 artifact 审查。
+- 日常配置编辑优先使用 PySide6 console 内置的 Config Generator；Tk 版 `tools/config-generator/odmr_config_generator.py` 保留为 fallback。二者都生成磁场 `plan.json`、SMB sweep profile、OE fixed profile 和 Laser profile。
 - Python/PySide6 控制台只调用 C# `Odmr.WinProbe`，不直接操作 VISA/串口/TCP；PySide6 UI 复用 console core，不重新实现设备控制。
 - Python 配置生成器是单线程离线 GUI；UI 可选择输入单位，但写入 JSON 时统一回到现有 C# runtime units：磁场 `nT`、频率 `Hz`、时间 `ms`、电流 `A`、laser `mW`。
 - 配置生成器中的设备枚举来自仓库说明书/命令真值，SMB/OE 的可选 token 和 OE `j` 编码使用下拉框；只有连续数值和实验身份字段允许手动输入。

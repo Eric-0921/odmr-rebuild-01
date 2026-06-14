@@ -7,8 +7,8 @@
 - `oe1022d profile.json`
 - `cni_laser profile.json`
 
-它不连接设备，不调用 C# runtime，不改 OE `RALL?` collector。生成后的 JSON 由
-Windows C# Run Bundle 控制面板选择并运行。
+它不连接设备，不调用 C# runtime，不改 OE `RALL?` collector。生成后的 JSON 优先由
+PySide6 console 的 Run Bundle 页面选择并运行；Tk 生成器和 WinForms 控制面板只保留为 fallback。
 
 ## Run
 
@@ -31,7 +31,7 @@ python3 tools/config-generator/tests/test_config_core.py
 ## Boundary
 
 - 生成器负责配置编辑和 JSON 输出。
-- C# WinForms 负责选择 JSON、校验 bundle、启动 run。
+- PySide6 console 负责选择 JSON、校验 bundle、启动 run 和查看 artifact 审查入口。
 - SMB/OE/Laser 参数继续写在 profile JSON 中。
 - 磁场扫描点写在 C# runtime 已支持的 `points[]` plan 中。
 - Python GUI 是单线程 Tkinter 工具：只做离线表单编辑和本地 JSON 文件写入，不连接设备，不启动采集，不引入后台 worker。
@@ -47,7 +47,7 @@ python3 tools/config-generator/tests/test_config_core.py
 4. SMB100A：定义固定调制 profile 和默认 RF sweep。
 5. OE1022D：定义 fixed profile；collector `12288B / 30ms` 只校验不编辑。
 6. CNI Laser：定义 run 级背景模式和功率。
-7. Generate：生成 JSON，交给 C# Run Bundle 控制面板选择运行。
+7. Generate：生成 JSON，交给 PySide6 console 的 Run Bundle 页面选择运行。
 
 界面使用分页和滚动表单，避免把不同设备的大量字段挤在同一页。
 

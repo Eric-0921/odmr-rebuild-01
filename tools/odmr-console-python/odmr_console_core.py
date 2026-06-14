@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -273,6 +274,34 @@ def read_progress(path: str | Path) -> list[dict[str, Any]]:
             if stripped:
                 records.append(json.loads(stripped))
     return records
+
+
+def process_is_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if sys.platform.startswith("win"):
+        result = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return result.returncode == 0 and str(pid) in result.stdout and "INFO:" not in result.stdout
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def read_text_tail(path: str | Path, max_chars: int = 6000) -> str:
+    target = Path(path)
+    if not target.exists():
+        return ""
+    text = target.read_text(encoding="utf-8", errors="replace")
+    return text[-max_chars:]
 
 
 def tail_progress(path: str | Path, poll_sec: float = 0.2) -> Iterator[dict[str, Any]]:

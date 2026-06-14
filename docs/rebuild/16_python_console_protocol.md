@@ -1,6 +1,6 @@
 # Python Console Protocol Gate
 
-本文记录 Python 前端进入 PySide6 之前的协议层 gate。
+本文记录 Python 前端进入 PySide6 之前的协议层 Gate 24。当前主 UI 已推进到 `docs/rebuild/17_pyside6_console.md` 记录的 PySide6 console；本文保留为协议历史和边界说明。
 
 ## 目标
 
@@ -38,7 +38,7 @@
 
 ## Python Core
 
-`tools/odmr-console-python` 是后续 PySide6 的无 GUI core：
+`tools/odmr-console-python` 的无 GUI core 是 PySide6 console 复用的控制核心：
 
 - 复用 `tools/config-generator/odmr_config_core.py`
 - 生成当前 C# runtime 可读的 plan/profile JSON
@@ -60,7 +60,7 @@
 
 - Python 不直接发 VISA、Serial、TCP 命令。
 - Python 不解析 RALL raw，不进入 OE collector。
-- PySide6 后置；当前 gate 只验证协议和稳定性。
+- PySide6 已在后续 gate 落地；当前文档只记录协议层验证。
 - C# WinForms 保留为 legacy/fallback，不再作为主 UI 投入方向。
 
 ## 验证

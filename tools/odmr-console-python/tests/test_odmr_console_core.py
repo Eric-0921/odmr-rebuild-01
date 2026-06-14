@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import os
 from pathlib import Path
 import sys
 import unittest
@@ -13,7 +14,9 @@ from odmr_console_core import (  # noqa: E402
     control_paths_for_out_dir,
     demo_generator_request,
     generate_config_bundle,
+    process_is_running,
     read_progress,
+    read_text_tail,
     request_stop,
     run_execute_command,
 )
@@ -51,6 +54,14 @@ class OdmrConsoleCoreTests(unittest.TestCase):
             progress.parent.mkdir(parents=True, exist_ok=True)
             progress.write_text('{"event_name":"run_opened"}\n{"event_name":"collector_started"}\n', encoding="utf-8")
             self.assertEqual([record["event_name"] for record in read_progress(progress)], ["run_opened", "collector_started"])
+
+    def test_process_status_and_text_tail_helpers(self) -> None:
+        self.assertTrue(process_is_running(os.getpid()))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "log.txt"
+            path.write_text("abcdef", encoding="utf-8")
+            self.assertEqual(read_text_tail(path, 3), "def")
+            self.assertEqual(read_text_tail(Path(tmp) / "missing.txt"), "")
 
 
 if __name__ == "__main__":

@@ -46,7 +46,9 @@ from odmr_console_core import (
     default_bundle,
     generate_config_bundle,
     load_json,
+    process_is_running,
     read_progress,
+    read_text_tail,
     request_stop,
     resolve_bundle,
     start_run,
@@ -1027,7 +1029,7 @@ class ConfigGeneratorPage(QWidget):
             axes={axis: self._read_axis(axis) for axis in ("x", "y", "z")},
         )
 
-    def _add_or_update_block(self) -> None:
+    def _add_or_update_block(self, show_error: bool = True) -> bool:
         try:
             block = self._read_block()
             expand_block(block)
@@ -1037,8 +1039,11 @@ class ConfigGeneratorPage(QWidget):
             else:
                 self.blocks[row] = block
             self._refresh_block_list()
+            return True
         except Exception as exc:
-            QMessageBox.warning(self, "Invalid scan block", str(exc))
+            if show_error:
+                QMessageBox.warning(self, "Invalid scan block", str(exc))
+            return False
 
     def _remove_block(self) -> None:
         row = self.block_list.currentRow()
@@ -1057,7 +1062,8 @@ class ConfigGeneratorPage(QWidget):
         self._refresh_block_list()
 
     def _request(self) -> GeneratorRequest:
-        self._add_or_update_block()
+        if not self._add_or_update_block(show_error=False):
+            raise ValueError("current magnetic scan block is invalid; fix it before generating JSON")
         return GeneratorRequest(
             run_id=self.run_id.text().strip(),
             operator=self.operator.text().strip(),
@@ -1285,6 +1291,7 @@ class RunMonitorPage(QWidget):
     def _failed(self, message: str) -> None:
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
+        self.timer.stop()
         self.log.setPlainText(message)
 
     def stop_after_point(self) -> None:
@@ -1312,6 +1319,21 @@ class RunMonitorPage(QWidget):
                 self.timer.stop()
                 self.start_button.setEnabled(True)
                 self.stop_button.setEnabled(False)
+                return
+        if not process_is_running(int(self.handle.pid)):
+            self.timer.stop()
+            self.start_button.setEnabled(True)
+            self.stop_button.setEnabled(False)
+            self.state.setText("process exited")
+            stdout_tail = read_text_tail(self.handle.control_paths.stdout_log)
+            stderr_tail = read_text_tail(self.handle.control_paths.stderr_log)
+            self.log.appendPlainText(
+                "\nC# run process exited before a terminal progress event was observed."
+                "\n\nSTDOUT tail:\n"
+                + (stdout_tail or "<empty>")
+                + "\n\nSTDERR tail:\n"
+                + (stderr_tail or "<empty>")
+            )
 
     def _append_record(self, record: dict[str, Any]) -> None:
         row = self.table.rowCount()

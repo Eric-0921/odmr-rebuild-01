@@ -1049,7 +1049,7 @@ class ConfigGeneratorApp(tk.Tk):
             self.summary.insert(tk.END, "Generated JSON files for C# Run Bundle:\n\n")
             for key, path in paths.items():
                 self.summary.insert(tk.END, f"{key}: {path}\n")
-            self.summary.insert(tk.END, "\nNext step:\nOpen the Windows C# Control Panel, select these generated JSON files in Run Bundle, validate, then run.\n")
+            self.summary.insert(tk.END, "\nNext step:\nOpen the PySide6 console, select these generated JSON files in Run Bundle, validate, then run.\n")
             self._show_step(6)
         except Exception as exc:
             messagebox.showerror("Generate failed", str(exc), parent=self)
