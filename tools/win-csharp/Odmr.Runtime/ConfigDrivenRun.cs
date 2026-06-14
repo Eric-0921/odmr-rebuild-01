@@ -644,6 +644,7 @@ public static class ConfigDrivenRun
         for (var index = 0; index < axes.Count; index++)
         {
             var axis = axes[index];
+            EnsureCurrentWithinM8812Range($"baseline_current_a[{index}]", policy.BaselineCurrentA[index]);
             if (policy.VoltageV.HasValue)
             {
                 axis.Session.SetVoltage(policy.VoltageV.Value);
@@ -716,7 +717,7 @@ public static class ConfigDrivenRun
 
             deltaCurrentA = bundle.Calibration.DeltaCurrentA(point.TargetBNt!);
             targetCurrentA = bundle.Calibration.TargetCurrentA(baselineCurrentA, point.TargetBNt!);
-            EnsureNonnegativeTargetCurrents(point.PointId, targetCurrentA);
+            EnsureTargetCurrentsWithinM8812Range(point.PointId, targetCurrentA);
 
             for (var axisIndex = 0; axisIndex < magAxes.Count; axisIndex++)
             {
@@ -1184,14 +1185,24 @@ public static class ConfigDrivenRun
         }
     }
 
-    private static void EnsureNonnegativeTargetCurrents(string pointId, IReadOnlyList<double> currents)
+    private static void EnsureTargetCurrentsWithinM8812Range(string pointId, IReadOnlyList<double> currents)
     {
         for (var index = 0; index < currents.Count; index++)
         {
-            if (currents[index] < 0.0)
-            {
-                throw new InvalidOperationException($"point {pointId} target current must be nonnegative: axis_index={index}, current={currents[index]}A");
-            }
+            EnsureCurrentWithinM8812Range($"point {pointId} target_current_a[{index}]", currents[index]);
+        }
+    }
+
+    private static void EnsureCurrentWithinM8812Range(string label, double currentA)
+    {
+        if (currentA < 0.0)
+        {
+            throw new InvalidOperationException($"{label} must be nonnegative: current={currentA}A");
+        }
+
+        if (currentA > 2.0)
+        {
+            throw new InvalidOperationException($"{label} exceeds M8812 2A limit: current={currentA}A");
         }
     }
 
