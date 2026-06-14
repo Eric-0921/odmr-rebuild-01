@@ -1,6 +1,6 @@
-# ODMR Python Console Core
+# ODMR Python Console
 
-This is the non-GUI control core for the future Python/PySide6 ODMR console.
+This directory contains the Python control core and the PySide6 console.
 
 It does not talk to VISA, serial, TCP, OE1022D, SMB100A, M8812, or CNI Laser
 directly. Device control remains in the C# runtime and `Odmr.WinProbe` CLI.
@@ -10,7 +10,29 @@ directly. Device control remains in the C# runtime and `Odmr.WinProbe` CLI.
 - Python owns config composition, process launch, progress tailing, and stop request files.
 - C# owns station resolution, device control, `RALL?` collection, artifacts, audit, and cleanup.
 - `RALL?` hot path remains only in C# and is not touched by this console core.
-- PySide6 UI is intentionally not introduced yet; this gate validates the protocol first.
+- PySide6 is the main UI direction; the Tk generator remains a fallback.
+
+## PySide6 UI
+
+Install the UI dependency:
+
+```bash
+python3 -m pip install --user -r tools/odmr-console-python/requirements-pyside6.txt
+```
+
+Start the console:
+
+```bash
+python3 tools/odmr-console-python/odmr_console_qt.py
+```
+
+The UI pages are:
+
+- `Run Bundle`: choose station, calibration, plan, SMB profile, OE profile, laser profile, and output.
+- `Config Generator`: generate plan/profile JSON with the existing config-generator core.
+- `Resolve / Estimate`: call C# `run-resolve`.
+- `Run Monitor`: call C# `run-execute --progress-jsonl --stop-request-file`.
+- `Artifact Review`: call C# `artifact-check` and `audit-continuity`.
 
 ## Commands
 
@@ -113,7 +135,7 @@ files from `configs/generated`.
 ## Tests
 
 ```bash
-python3 -m py_compile tools/odmr-console-python/odmr_console_core.py tools/odmr-console-python/odmr_console.py
+python3 -m py_compile tools/odmr-console-python/odmr_console_core.py tools/odmr-console-python/odmr_console.py tools/odmr-console-python/odmr_console_qt.py
 python3 tools/odmr-console-python/tests/test_odmr_console_core.py
 python3 tools/config-generator/tests/test_config_core.py
 ```
