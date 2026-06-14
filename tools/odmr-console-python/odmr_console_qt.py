@@ -313,6 +313,7 @@ class NumberUnitInput(QWidget):
         self.value_edit.setMinimumWidth(width)
         layout.addWidget(self.value_edit, 1)
         self.unit_combo: QComboBox | None = None
+        self.fixed_unit = unit or ""
         if units:
             self.unit_combo = QComboBox()
             self.unit_combo.addItems(units)
@@ -334,11 +335,13 @@ class NumberUnitInput(QWidget):
         return float(self.text())
 
     def unit(self) -> str:
-        return self.unit_combo.currentText() if self.unit_combo else ""
+        return self.unit_combo.currentText() if self.unit_combo else self.fixed_unit
 
     def set_unit(self, unit: str) -> None:
         if self.unit_combo:
             self.unit_combo.setCurrentText(unit)
+        else:
+            self.fixed_unit = unit
 
     def canonical(self, unit_kind: str) -> float:
         return to_canonical_unit(self.value(), unit_kind, self.unit())
