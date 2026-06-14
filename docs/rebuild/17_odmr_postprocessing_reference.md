@@ -55,10 +55,18 @@
 - 保留 label、sample weight、group id、run id，避免数据泄漏。
 - 对 bad/warn/good 样本做筛选或降权。
 
-所以当前后处理必须同时产出至少两套信号：
+所以当前后处理必须同时产出至少两套信号。
 
-- `signal_fit = b_x_mean / baseline - 1`: 保留 contrast，给物理拟合和可解释分析。
-- `signal_ml_z = zscore(b_x_mean - baseline)`: 去掉每条谱线的绝对幅值，给 ML baseline。
+对荧光强度型数据：
+
+- `signal_fit = fluorescence / baseline - 1`: 保留 contrast，给物理拟合和可解释分析。
+- `signal_ml_z = zscore(fluorescence - baseline)`: 去掉每条谱线的绝对幅值，给 ML baseline。
+
+对当前 OE1022D `B-X/B-Y` lock-in 输出：
+
+- 不使用 `b_x_mean / baseline - 1` 作为主视图，因为 lock-in X/Y 可以过零，baseline 可能接近 0。
+- 使用 `b_x_detrended`、`b_y_detrended`、`b_r_detrended` 给人看。
+- 使用 `b_x_smooth9_z`、`b_y_smooth9_z`、`b_r_smooth9_z` 给网页版 GPT 或机器判断峰型。
 
 原始 `b_x` 不能被覆盖。
 
@@ -138,3 +146,43 @@ frequency_hz = start_hz + frequency_index * step_hz
 - 生成固定长度 `.npz` 或 `.parquet` 训练集，避免长期依赖 CSV。
 - 增加 group split 字段，例如 `run_id/date/sample_id`，防止同一 run 的相邻点同时进入 train/test。
 - 在积累足够数据后比较三条路线：多峰拟合、GPR、小型 1D-CNN。
+
+## 8. 加偏置小磁铁后的网页版 GPT 整理流程
+
+用于快速让网页版 GPT 判断 LI-ODMR 偏置磁场过零点附近的共振峰或反对称结构：
+
+```bash
+python3 tools/odmr-postprocess/build_li_odmr_gpt_review.py \
+  --run runs/<run_id> \
+  --extract-missing-point-fields
+```
+
+该工具会：
+
+1. 检查 `point_fields.jsonl` 和 `point_fields/*.npz` 是否存在。
+2. 如果缺失，用 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 离线重建 sidecar。
+3. 从 `points.jsonl` 和 SMB snapshot 构建 `frequency_hz/frequency_ghz`。
+4. 按 `dwell_ms / 1ms` 把 `B-X/B-Y/B-Noise` 折叠成每个频点的均值。
+5. 对 `B-X/B-Y/R=sqrt(X^2+Y^2)` 做线性去趋势。
+6. 输出 `smooth9`、`smooth21` 和 robust Z-score 列。
+7. 输出 `peak_hint_b_x_smooth9`，用于快速定位局部极大/极小。
+
+输出文件：
+
+```text
+runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>.csv
+runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_summary.json
+```
+
+给网页版 GPT 的提示词可以直接写：
+
+```text
+请重点看 frequency_ghz、b_x_smooth9_z、b_y_smooth9_z、b_r_smooth9_z 和 peak_hint_b_x_smooth9，判断 LI-ODMR 偏置磁场过零点附近的共振峰/反对称结构。b_x_mean/b_y_mean 是 lock-in 原始输出，不是荧光强度。quality_status 只代表采集连续，还要看 overload ratio。
+```
+
+有效性边界：
+
+- `b_input_overload_ratio` 必须接近 `0`。
+- `b_gain_overload_ratio` 必须接近 `0`。
+- `b_pll_locked_ratio` 应接近 `1`。
+- 如果这些条件不满足，CSV 仍可用于排查设备状态，但不应当给出峰位物理结论。
