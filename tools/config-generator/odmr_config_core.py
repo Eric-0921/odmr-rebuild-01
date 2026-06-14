@@ -46,6 +46,9 @@ class GeneratorRequest:
     acquisition_window_ms: int
     point_settle_ms: int
     blocks: list[ScanBlock]
+    plan_kind: str = "magnetic_scan"
+    acquisition_step_count: int = 1
+    fixed_b_nt: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     mag_baseline_policy: dict[str, Any] = field(default_factory=dict)
     quality_thresholds: dict[str, Any] = field(default_factory=dict)
     smb_profile_id: str = "smb100a_generated"
@@ -86,9 +89,17 @@ def build_plan(template: dict[str, Any], request: GeneratorRequest) -> dict[str,
     if request.quality_thresholds:
         plan["quality_thresholds"] = normalize_quality_thresholds(request.quality_thresholds)
     plan.pop("point_source", None)
-    points: list[dict[str, Any]] = []
-    for block in request.blocks:
-        points.extend(expand_block(block))
+    points: list[dict[str, Any]]
+    if request.plan_kind == "no_magnetic_control":
+        points = acquisition_only_points(request.acquisition_step_count)
+    elif request.plan_kind == "constant_field":
+        points = constant_field_points(request.fixed_b_nt)
+    elif request.plan_kind == "magnetic_scan":
+        points = []
+        for block in request.blocks:
+            points.extend(expand_block(block))
+    else:
+        raise ValueError(f"unsupported plan_kind: {request.plan_kind}")
     if not points:
         raise ValueError("generated plan has no points")
     plan["points"] = points
@@ -180,8 +191,32 @@ def expand_block(block: ScanBlock) -> list[dict[str, Any]]:
         {
             "point_id": f"{prefix}_p{index + 1:06d}",
             "target_b_nt": base_targets[index % len(base_targets)],
+            "magnetic_mode": "controlled",
         }
         for index in range(count)
+    ]
+
+
+def acquisition_only_points(count: int) -> list[dict[str, Any]]:
+    total = max(1, non_negative_int(count, "acquisition_step_count"))
+    return [
+        {
+            "point_id": f"acq_p{index + 1:06d}",
+            "magnetic_mode": "none",
+        }
+        for index in range(total)
+    ]
+
+
+def constant_field_points(target_b_nt: list[float]) -> list[dict[str, Any]]:
+    if len(target_b_nt) != 3:
+        raise ValueError("fixed_b_nt must contain exactly 3 values")
+    return [
+        {
+            "point_id": "field_p000001",
+            "target_b_nt": [round9(float(value)) for value in target_b_nt],
+            "magnetic_mode": "controlled",
+        }
     ]
 
 

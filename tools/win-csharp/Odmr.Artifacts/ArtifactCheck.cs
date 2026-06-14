@@ -167,7 +167,7 @@ public static class ArtifactCheck
             passed);
     }
 
-    private sealed record PointIndex(string PointId, int? Index);
+    private sealed record PointIndex(string PointId, int? Index, string? MagneticMode, bool? M8812Commanded);
 
     private sealed record SegmentIndex(
         string PointId,
@@ -220,9 +220,14 @@ public static class ArtifactCheck
             {
                 issues.Add($"device_state point_id {pointId} missing from points.jsonl");
             }
-            else if (GetNullableInt32(root, "point_index") is { } pointIndex && point.Index is { } expectedIndex && pointIndex != expectedIndex)
+            else
             {
-                issues.Add($"device_state point_id {pointId} point_index {pointIndex} != points index {expectedIndex}");
+                if (GetNullableInt32(root, "point_index") is { } pointIndex && point.Index is { } expectedIndex && pointIndex != expectedIndex)
+                {
+                    issues.Add($"device_state point_id {pointId} point_index {pointIndex} != points index {expectedIndex}");
+                }
+
+                ValidateDevicePointContext(root, pointId, point, issues);
             }
 
             if (!segments.TryGetValue(pointId, out var segment))
@@ -272,10 +277,120 @@ public static class ArtifactCheck
                 continue;
             }
 
-            result.Add(pointId, new PointIndex(pointId, GetNullableInt32(root, "index")));
+            var magneticMode = GetRequiredString(root, "magnetic_mode", issues, $"points line {lineNumber}");
+            var m8812Commanded = GetNullableBool(root, "m8812_commanded");
+            ValidatePointContext(root, pointId, magneticMode, m8812Commanded, issues, $"points line {lineNumber}");
+
+            result.Add(pointId, new PointIndex(pointId, GetNullableInt32(root, "index"), magneticMode, m8812Commanded));
         }
 
         return result;
+    }
+
+    private static void ValidatePointContext(
+        JsonElement root,
+        string pointId,
+        string? magneticMode,
+        bool? m8812Commanded,
+        List<string> issues,
+        string context)
+    {
+        var pointKind = GetRequiredString(root, "point_kind", issues, context);
+        if (!string.Equals(pointKind, "acquisition_step", StringComparison.Ordinal))
+        {
+            issues.Add($"{context} point_id {pointId} point_kind {pointKind} != acquisition_step");
+        }
+
+        if (m8812Commanded is null)
+        {
+            issues.Add($"{context} point_id {pointId} missing m8812_commanded");
+        }
+
+        switch (magneticMode)
+        {
+            case "controlled":
+                if (m8812Commanded != true)
+                {
+                    issues.Add($"{context} point_id {pointId} controlled point must have m8812_commanded=true");
+                }
+                RequireArrayLength(root, "target_b_nt", 3, pointId, issues, context);
+                RequireArrayLength(root, "baseline_current_a", 3, pointId, issues, context);
+                RequireArrayLength(root, "calibrated_delta_current_a", 3, pointId, issues, context);
+                RequireArrayLength(root, "target_current_a", 3, pointId, issues, context);
+                break;
+            case "none":
+                if (m8812Commanded != false)
+                {
+                    issues.Add($"{context} point_id {pointId} none point must have m8812_commanded=false");
+                }
+                RequireNull(root, "target_b_nt", pointId, issues, context);
+                RequireNull(root, "baseline_current_a", pointId, issues, context);
+                RequireNull(root, "calibrated_delta_current_a", pointId, issues, context);
+                RequireNull(root, "target_current_a", pointId, issues, context);
+                break;
+            default:
+                issues.Add($"{context} point_id {pointId} unsupported magnetic_mode {magneticMode}");
+                break;
+        }
+    }
+
+    private static void ValidateDevicePointContext(
+        JsonElement root,
+        string pointId,
+        PointIndex point,
+        List<string> issues)
+    {
+        var magneticMode = GetRequiredString(root, "magnetic_mode", issues, $"device_state point_id {pointId}");
+        var m8812Commanded = GetNullableBool(root, "m8812_commanded");
+        ValidateDeviceContextFields(root, pointId, magneticMode, m8812Commanded, issues);
+
+        if (!string.Equals(magneticMode, point.MagneticMode, StringComparison.Ordinal))
+        {
+            issues.Add($"device_state point_id {pointId} magnetic_mode {magneticMode} != points {point.MagneticMode}");
+        }
+        if (m8812Commanded != point.M8812Commanded)
+        {
+            issues.Add($"device_state point_id {pointId} m8812_commanded {m8812Commanded?.ToString() ?? "null"} != points {point.M8812Commanded?.ToString() ?? "null"}");
+        }
+    }
+
+    private static void ValidateDeviceContextFields(
+        JsonElement root,
+        string pointId,
+        string? magneticMode,
+        bool? m8812Commanded,
+        List<string> issues)
+    {
+        var pointKind = GetRequiredString(root, "point_kind", issues, $"device_state point_id {pointId}");
+        if (!string.Equals(pointKind, "acquisition_step", StringComparison.Ordinal))
+        {
+            issues.Add($"device_state point_id {pointId} point_kind {pointKind} != acquisition_step");
+        }
+
+        switch (magneticMode)
+        {
+            case "controlled":
+                if (m8812Commanded != true)
+                {
+                    issues.Add($"device_state point_id {pointId} controlled point must have m8812_commanded=true");
+                }
+                RequireArrayLength(root, "target_b_nt", 3, pointId, issues, "device_state");
+                RequireArrayLength(root, "target_current_a", 3, pointId, issues, "device_state");
+                RequireArrayLength(root, "measured_current_a", 3, pointId, issues, "device_state");
+                break;
+            case "none":
+                if (m8812Commanded != false)
+                {
+                    issues.Add($"device_state point_id {pointId} none point must have m8812_commanded=false");
+                }
+                RequireNull(root, "target_b_nt", pointId, issues, "device_state");
+                RequireNull(root, "target_current_a", pointId, issues, "device_state");
+                RequireNull(root, "measured_current_a", pointId, issues, "device_state");
+                break;
+            default:
+                issues.Add($"device_state point_id {pointId} unsupported magnetic_mode {magneticMode}");
+                break;
+        }
     }
 
     private static Dictionary<string, SegmentIndex> ReadSegmentIndexes(string path, List<string> issues)
@@ -526,6 +641,41 @@ public static class ArtifactCheck
         return property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var parsed)
             ? parsed
             : null;
+    }
+
+    private static bool? GetNullableBool(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property) ||
+            property.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null
+        };
+    }
+
+    private static void RequireArrayLength(JsonElement element, string propertyName, int length, string pointId, List<string> issues, string context)
+    {
+        if (!element.TryGetProperty(propertyName, out var property) ||
+            property.ValueKind != JsonValueKind.Array ||
+            property.GetArrayLength() != length)
+        {
+            issues.Add($"{context} point_id {pointId} {propertyName} must be array[{length}]");
+        }
+    }
+
+    private static void RequireNull(JsonElement element, string propertyName, string pointId, List<string> issues, string context)
+    {
+        if (!element.TryGetProperty(propertyName, out var property) ||
+            property.ValueKind != JsonValueKind.Null)
+        {
+            issues.Add($"{context} point_id {pointId} {propertyName} must be null");
+        }
     }
 
     private static ulong GetRequiredUInt64(JsonElement element, string propertyName, List<string> issues, string context)

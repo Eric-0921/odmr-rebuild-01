@@ -98,12 +98,17 @@ def choice_code(value: object) -> int:
     return int(str(value).split("-", 1)[0].strip())
 
 
+TOKEN_BY_LABEL: dict[str, str] = {}
+
+
 def token_choice(token: str, label: str) -> str:
-    return f"{token} - {label}"
+    TOKEN_BY_LABEL[label] = token
+    return label
 
 
 def choice_token(value: object) -> str:
-    return str(value).split(" - ", 1)[0].strip()
+    text = str(value).strip()
+    return TOKEN_BY_LABEL.get(text, text.split(" - ", 1)[0].strip())
 
 
 def find_choice_by_code(key: str, value: object) -> str:
@@ -223,8 +228,13 @@ MAG_AXIS_MODE_CHOICES = [
     token_choice("list", "显式列表"),
 ]
 MAG_TRAVERSAL_CHOICES = [
-    token_choice("raster", "光栅顺序展开"),
+    token_choice("raster", "单向顺序扫描"),
     token_choice("bounce_1d_x", "X 轴往返扫描"),
+]
+PLAN_KIND_CHOICES = [
+    token_choice("no_magnetic_control", "无磁场控制"),
+    token_choice("constant_field", "零场 / 恒定磁场"),
+    token_choice("magnetic_scan", "磁场扫描"),
 ]
 
 
@@ -339,13 +349,13 @@ class PathSelector(QWidget):
             self.combo.addItem(str(path))
         self.combo.currentTextChanged.connect(lambda _text: self.changed.emit())
         layout.addWidget(self.combo, 0, 1)
-        browse = QPushButton("Browse...")
+        browse = QPushButton("浏览...")
         browse.clicked.connect(self._browse)
         layout.addWidget(browse, 0, 2)
-        open_dir = QPushButton("Open Dir")
+        open_dir = QPushButton("打开目录")
         open_dir.clicked.connect(self._open_dir)
         layout.addWidget(open_dir, 0, 3)
-        self.status = QLabel("not checked")
+        self.status = QLabel("未检查")
         self.status.setMinimumWidth(112)
         layout.addWidget(self.status, 0, 4)
 
@@ -394,35 +404,35 @@ class RunBundlePage(QWidget):
         self.default = default_bundle()
         root = QVBoxLayout(self)
         root.setSpacing(12)
-        root.addWidget(section_label("Run Bundle"))
+        root.addWidget(section_label("本次实验配置"))
         root.addWidget(note_label("一次 run 只组合现有 C# runtime 可读的六个 JSON 和输出目录；这里不创建新的 bundle schema。"))
 
-        selectors = QGroupBox("Config inputs")
+        selectors = QGroupBox("配置文件输入")
         selectors_layout = QVBoxLayout(selectors)
-        self.station = self._selector("Hardware station", "stations", self.default.station_path)
-        self.calibration = self._selector("Field calibration", "calibrations", self.default.calibration_path)
-        self.plan = self._selector("Magnetic plan", "plans", self.default.plan_path)
-        self.smb = self._selector("SMB100A profile", "profiles", self.default.smb_profile_path)
-        self.oe = self._selector("OE1022D profile", "profiles", self.default.oe_profile_path)
-        self.laser = self._selector("Laser profile", "profiles", self.default.laser_profile_path)
+        self.station = self._selector("硬件站配置", "stations", self.default.station_path)
+        self.calibration = self._selector("磁场校准", "calibrations", self.default.calibration_path)
+        self.plan = self._selector("实验计划", "plans", self.default.plan_path)
+        self.smb = self._selector("SMB100A 配置", "profiles", self.default.smb_profile_path)
+        self.oe = self._selector("OE1022D 配置", "profiles", self.default.oe_profile_path)
+        self.laser = self._selector("Laser 配置", "profiles", self.default.laser_profile_path)
         for selector in [self.station, self.calibration, self.plan, self.smb, self.oe, self.laser]:
             selector.changed.connect(self.bundle_changed.emit)
             selectors_layout.addWidget(selector)
         root.addWidget(selectors)
 
-        output = QGroupBox("Output")
+        output = QGroupBox("数据输出")
         output_layout = QGridLayout(output)
         output_layout.setColumnStretch(1, 1)
-        output_layout.addWidget(QLabel("Output root"), 0, 0)
+        output_layout.addWidget(QLabel("数据保存根目录"), 0, 0)
         self.output_root = QLineEdit(str(REPO_ROOT / "runs"))
         output_layout.addWidget(self.output_root, 0, 1)
-        browse_root = QPushButton("Browse...")
+        browse_root = QPushButton("浏览...")
         browse_root.clicked.connect(self._browse_output_root)
         output_layout.addWidget(browse_root, 0, 2)
-        output_layout.addWidget(QLabel("Run out-dir"), 1, 0)
+        output_layout.addWidget(QLabel("本次运行目录"), 1, 0)
         self.out_dir = QLineEdit(str(REPO_ROOT / "runs" / f"pyside6_run_{timestamp_id()}"))
         output_layout.addWidget(self.out_dir, 1, 1)
-        new_dir = QPushButton("New")
+        new_dir = QPushButton("新建")
         new_dir.clicked.connect(self.make_new_out_dir)
         output_layout.addWidget(new_dir, 1, 2)
         self.output_root.textChanged.connect(lambda _text: self.bundle_changed.emit())
@@ -430,13 +440,13 @@ class RunBundlePage(QWidget):
         root.addWidget(output)
 
         actions = QHBoxLayout()
-        validate = QPushButton("Validate Bundle")
+        validate = QPushButton("检查配置")
         validate.clicked.connect(self.validate_local)
         actions.addWidget(validate)
         actions.addStretch(1)
         root.addLayout(actions)
 
-        summary_group = QGroupBox("Run Bundle Summary")
+        summary_group = QGroupBox("本次实验配置摘要")
         summary_layout = QVBoxLayout(summary_group)
         self.summary = QPlainTextEdit()
         self.summary.setReadOnly(True)
@@ -531,7 +541,7 @@ class ConfigGeneratorPage(QWidget):
         self.blocks: list[ScanBlock] = [self.default_block("x_line", "x")]
         self._building_block = False
         root = QVBoxLayout(self)
-        root.addWidget(section_label("Config Generator"))
+        root.addWidget(section_label("配置生成"))
         root.addWidget(note_label("生成器输出现有 C# runtime 的 plan/profile JSON。生成后自动绑定到 Run Bundle。"))
         self.tabs = QTabWidget()
         root.addWidget(self.tabs, 1)
@@ -544,13 +554,13 @@ class ConfigGeneratorPage(QWidget):
         self.laser_page = QWidget()
         self.generate_page = QWidget()
         for title, page in [
-            ("Templates / Output", self.template_page),
-            ("Magnetic Plan", self.mag_page),
-            ("Plan Policy", self.policy_page),
+            ("模板 / 输出", self.template_page),
+            ("实验计划", self.mag_page),
+            ("计划策略", self.policy_page),
             ("SMB100A", self.smb_page),
             ("OE1022D", self.oe_page),
             ("CNI Laser", self.laser_page),
-            ("Generate", self.generate_page),
+            ("生成", self.generate_page),
         ]:
             self.tabs.addTab(scroll_page(page), title)
 
@@ -567,15 +577,15 @@ class ConfigGeneratorPage(QWidget):
 
     def _build_templates(self) -> None:
         layout = QVBoxLayout(self.template_page)
-        layout.addWidget(section_label("Templates and output paths"))
-        self.plan_template = PathSelector("Plan template", sorted((REPO_ROOT / "configs" / "plans").glob("*.json")))
-        self.smb_template = PathSelector("SMB profile template", sorted((REPO_ROOT / "configs" / "profiles").glob("smb*.json")))
-        self.oe_template = PathSelector("OE profile template", sorted((REPO_ROOT / "configs" / "profiles").glob("oe*.json")))
-        self.laser_template = PathSelector("Laser profile template", sorted((REPO_ROOT / "configs" / "profiles").glob("cni*.json")))
-        self.output_dir = PathSelector("Generated config dir", [REPO_ROOT / "configs" / "generated"], is_dir=True)
+        layout.addWidget(section_label("模板和生成目录"))
+        self.plan_template = PathSelector("Plan 模板", sorted((REPO_ROOT / "configs" / "plans").glob("*.json")))
+        self.smb_template = PathSelector("SMB 模板", sorted((REPO_ROOT / "configs" / "profiles").glob("smb*.json")))
+        self.oe_template = PathSelector("OE 模板", sorted((REPO_ROOT / "configs" / "profiles").glob("oe*.json")))
+        self.laser_template = PathSelector("Laser 模板", sorted((REPO_ROOT / "configs" / "profiles").glob("cni*.json")))
+        self.output_dir = PathSelector("生成文件目录", [REPO_ROOT / "configs" / "generated"], is_dir=True)
         for widget in [self.plan_template, self.smb_template, self.oe_template, self.laser_template, self.output_dir]:
             layout.addWidget(widget)
-        load = QPushButton("Load template values into forms")
+        load = QPushButton("读取模板默认值")
         load.clicked.connect(self._load_templates)
         layout.addWidget(load, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(note_label("模板只提供默认值；最终写出的仍然是独立 plan/profile JSON。"))
@@ -583,22 +593,38 @@ class ConfigGeneratorPage(QWidget):
 
     def _build_magnetic(self) -> None:
         layout = QVBoxLayout(self.mag_page)
-        identity = QGroupBox("Run identity")
+        identity = QGroupBox("实验身份")
         form = QGridLayout(identity)
         self.run_id = QLineEdit("generated_plan")
         self.operator = QLineEdit("local")
         self.acquisition_window = NumberUnitInput(0, TIME_UNITS, "ms")
         self.point_settle = NumberUnitInput(500, TIME_UNITS, "ms")
-        add_form_row(form, 0, 0, "Run ID", self.run_id)
-        add_form_row(form, 1, 0, "Operator", self.operator)
-        add_form_row(form, 0, 1, "Acquisition window", self.acquisition_window)
-        add_form_row(form, 1, 1, "Point settle", self.point_settle)
+        add_form_row(form, 0, 0, "运行 ID", self.run_id)
+        add_form_row(form, 1, 0, "操作人", self.operator)
+        add_form_row(form, 0, 1, "采集窗口", self.acquisition_window)
+        add_form_row(form, 1, 1, "点位稳定等待", self.point_settle)
         layout.addWidget(identity)
+
+        mode_group = QGroupBox("实验步骤类型")
+        mode_grid = QGridLayout(mode_group)
+        self.plan_kind = QComboBox()
+        self.plan_kind.addItems(PLAN_KIND_CHOICES)
+        self.plan_kind.setCurrentText(find_choice_by_token("no_magnetic_control", PLAN_KIND_CHOICES))
+        self.acquisition_step_count = QLineEdit("1")
+        self.fixed_x = NumberUnitInput(0, FIELD_UNITS, "nT")
+        self.fixed_y = NumberUnitInput(0, FIELD_UNITS, "nT")
+        self.fixed_z = NumberUnitInput(0, FIELD_UNITS, "nT")
+        add_form_row(mode_grid, 0, 0, "计划类型", self.plan_kind)
+        add_form_row(mode_grid, 0, 1, "无磁场采集步数", self.acquisition_step_count)
+        add_form_row(mode_grid, 1, 0, "恒定 X 磁场", self.fixed_x)
+        add_form_row(mode_grid, 1, 1, "恒定 Y 磁场", self.fixed_y)
+        add_form_row(mode_grid, 2, 0, "恒定 Z 磁场", self.fixed_z)
+        layout.addWidget(mode_group)
         layout.addWidget(note_label(
-            "本页只定义目标磁场点 target_b_nt。run 时 C# 会读取 M8812 零场偏置，再由 calibration 自动叠加目标电流；配置器不会覆盖 run 内的零场回读事实。"
+            "point 表示一次采集 step。无磁场控制不会伪装成 0,0,0，也不会指挥 M8812；零场/恒定磁场和磁场扫描才会生成 target_b_nt 并走 M8812 baseline/readback。"
         ))
 
-        blocks_group = QGroupBox("Magnetic scan blocks")
+        blocks_group = QGroupBox("磁场扫描块")
         blocks_layout = QGridLayout(blocks_group)
         blocks_layout.setColumnStretch(1, 1)
         self.block_list = QListWidget()
@@ -609,15 +635,15 @@ class ConfigGeneratorPage(QWidget):
         self.block_traversal = QComboBox()
         self.block_traversal.addItems(MAG_TRAVERSAL_CHOICES)
         self.block_total_points = QLineEdit("0")
-        add_form_row(blocks_layout, 0, 1, "Block prefix", self.block_prefix)
-        add_form_row(blocks_layout, 1, 1, "Traversal", self.block_traversal)
-        add_form_row(blocks_layout, 2, 1, "Total points (0=grid once)", self.block_total_points)
+        add_form_row(blocks_layout, 0, 1, "扫描块前缀", self.block_prefix)
+        add_form_row(blocks_layout, 1, 1, "扫描方向", self.block_traversal)
+        add_form_row(blocks_layout, 2, 1, "总点数（0=按网格一次）", self.block_total_points)
         action_row = QHBoxLayout()
-        update = QPushButton("Add / Update block")
+        update = QPushButton("添加 / 更新扫描块")
         update.clicked.connect(self._add_or_update_block)
-        delete = QPushButton("Delete selected")
+        delete = QPushButton("删除选中")
         delete.clicked.connect(self._remove_block)
-        xyz = QPushButton("Add X/Y/Z single-axis blocks")
+        xyz = QPushButton("添加 X/Y/Z 三个单轴扫描")
         xyz.clicked.connect(self._add_xyz_blocks)
         action_row.addWidget(update)
         action_row.addWidget(delete)
@@ -626,7 +652,7 @@ class ConfigGeneratorPage(QWidget):
         blocks_layout.addLayout(action_row, 3, 1, 1, 2)
         layout.addWidget(blocks_group)
 
-        axes = QGroupBox("Axis definitions")
+        axes = QGroupBox("坐标轴定义")
         axes_layout = QHBoxLayout(axes)
         self.axis_widgets: dict[str, dict[str, Any]] = {}
         for axis in ["x", "y", "z"]:
@@ -635,9 +661,9 @@ class ConfigGeneratorPage(QWidget):
         layout.addStretch(1)
 
     def _axis_group(self, axis: str) -> QGroupBox:
-        group = QGroupBox(f"{axis.upper()} axis")
+        group = QGroupBox(f"{axis.upper()} 轴")
         form = QFormLayout(group)
-        enabled = QCheckBox("active")
+        enabled = QCheckBox("启用")
         mode = QComboBox()
         mode.addItems(MAG_AXIS_MODE_CHOICES)
         fixed = NumberUnitInput(0, FIELD_UNITS, "nT")
@@ -675,7 +701,7 @@ class ConfigGeneratorPage(QWidget):
 
     def _build_policy(self) -> None:
         layout = QVBoxLayout(self.policy_page)
-        baseline = QGroupBox("Maynuo baseline / output policy")
+        baseline = QGroupBox("Maynuo 零场偏置 / 输出策略")
         grid = QGridLayout(baseline)
         self.baseline_x = NumberUnitInput(0, CURRENT_UNITS, "A")
         self.baseline_y = NumberUnitInput(0, CURRENT_UNITS, "A")
@@ -688,31 +714,31 @@ class ConfigGeneratorPage(QWidget):
         self.output_enabled = QCheckBox("enabled")
         self.output_enabled.setChecked(True)
         rows = [
-            ("Baseline X current", self.baseline_x),
-            ("Baseline Y current", self.baseline_y),
-            ("Baseline Z current", self.baseline_z),
-            ("Settle", self.baseline_settle),
-            ("Readback samples", self.readback_samples),
-            ("Settle tolerance", self.settle_tolerance),
-            ("Voltage", self.voltage),
-            ("Voltage protection", self.voltage_protection),
-            ("Output", self.output_enabled),
+            ("X 轴零场电流", self.baseline_x),
+            ("Y 轴零场电流", self.baseline_y),
+            ("Z 轴零场电流", self.baseline_z),
+            ("零场稳定等待", self.baseline_settle),
+            ("回读采样次数", self.readback_samples),
+            ("电流容差", self.settle_tolerance),
+            ("输出电压", self.voltage),
+            ("电压保护", self.voltage_protection),
+            ("输出使能", self.output_enabled),
         ]
         for index, (label, widget) in enumerate(rows):
             add_form_row(grid, index // 2, index % 2, label, widget)
         layout.addWidget(baseline)
 
-        quality = QGroupBox("Point quality thresholds")
+        quality = QGroupBox("采集质量标记阈值")
         qgrid = QGridLayout(quality)
         self.min_frames = QLineEdit("20")
         self.max_timeout = QLineEdit("2")
         self.max_duplicate = QLineEdit("0.3")
         self.max_last_age = NumberUnitInput(500, TIME_UNITS, "ms")
         for index, (label, widget) in enumerate([
-            ("Min frames", self.min_frames),
-            ("Max timeout count", self.max_timeout),
-            ("Max duplicate ratio", self.max_duplicate),
-            ("Max last frame age", self.max_last_age),
+            ("最少帧数", self.min_frames),
+            ("最大 timeout 数", self.max_timeout),
+            ("最大重复比例", self.max_duplicate),
+            ("最后一帧最大延迟", self.max_last_age),
         ]):
             add_form_row(qgrid, index // 2, index % 2, label, widget)
         layout.addWidget(quality)
@@ -902,6 +928,18 @@ class ConfigGeneratorPage(QWidget):
         self.operator.setText(plan.get("operator", "local"))
         self.acquisition_window.set_canonical(plan.get("acquisition_window_ms", 0), "time_ms")
         self.point_settle.set_canonical(plan.get("point_settle_ms", 500), "time_ms")
+        points = plan.get("points") if isinstance(plan.get("points"), list) else []
+        if points and all(point.get("magnetic_mode") == "none" for point in points if isinstance(point, dict)):
+            self.plan_kind.setCurrentText(find_choice_by_token("no_magnetic_control", PLAN_KIND_CHOICES))
+            self.acquisition_step_count.setText(str(len(points)))
+        elif len(points) == 1 and isinstance(points[0], dict) and points[0].get("target_b_nt") is not None:
+            self.plan_kind.setCurrentText(find_choice_by_token("constant_field", PLAN_KIND_CHOICES))
+            target = points[0].get("target_b_nt", [0, 0, 0])
+            self.fixed_x.set_canonical(target[0] if len(target) > 0 else 0, "field")
+            self.fixed_y.set_canonical(target[1] if len(target) > 1 else 0, "field")
+            self.fixed_z.set_canonical(target[2] if len(target) > 2 else 0, "field")
+        else:
+            self.plan_kind.setCurrentText(find_choice_by_token("magnetic_scan", PLAN_KIND_CHOICES))
         baseline = plan.get("mag_baseline_policy", {})
         currents = baseline.get("baseline_current_a", [0, 0, 0])
         self.baseline_x.set_canonical(currents[0] if len(currents) > 0 else 0, "current_a")
@@ -1063,14 +1101,22 @@ class ConfigGeneratorPage(QWidget):
         self._refresh_block_list()
 
     def _request(self) -> GeneratorRequest:
-        if not self._add_or_update_block(show_error=False):
+        plan_kind = choice_token(self.plan_kind.currentText())
+        if plan_kind == "magnetic_scan" and not self._add_or_update_block(show_error=False):
             raise ValueError("current magnetic scan block is invalid; fix it before generating JSON")
         return GeneratorRequest(
             run_id=self.run_id.text().strip(),
             operator=self.operator.text().strip(),
             acquisition_window_ms=int(round(self.acquisition_window.canonical("time_ms"))),
             point_settle_ms=int(round(self.point_settle.canonical("time_ms"))),
-            blocks=self.blocks,
+            blocks=self.blocks if plan_kind == "magnetic_scan" else [],
+            plan_kind=plan_kind,
+            acquisition_step_count=int(self.acquisition_step_count.text() or "1"),
+            fixed_b_nt=[
+                self.fixed_x.canonical("field"),
+                self.fixed_y.canonical("field"),
+                self.fixed_z.canonical("field"),
+            ],
             mag_baseline_policy={
                 "baseline_x_a": self.baseline_x.canonical("current_a"),
                 "baseline_y_a": self.baseline_y.canonical("current_a"),
@@ -1143,13 +1189,20 @@ class ConfigGeneratorPage(QWidget):
                 oe_template_path=self.oe_template.path(),
                 laser_template_path=self.laser_template.path(),
             )
-            output = ["Generated JSON files and bound them to Run Bundle:", ""]
+            output = ["已生成 JSON 并绑定到本次实验配置：", ""]
             output.extend(f"{key}: {value}" for key, value in asdict(bundle).items())
+            if request.plan_kind == "no_magnetic_control":
+                preview_points = max(1, request.acquisition_step_count)
+            elif request.plan_kind == "constant_field":
+                preview_points = 1
+            else:
+                preview_points = sum(len(expand_block(block)) for block in request.blocks)
             output.extend([
                 "",
+                f"plan_kind={request.plan_kind}",
                 f"scan_blocks={len(request.blocks)}",
-                f"resolved_preview_points={sum(len(expand_block(block)) for block in request.blocks)}",
-                "Next: open Resolve / Estimate, then run from Run Monitor.",
+                f"resolved_preview_points={preview_points}",
+                "下一步：打开“预检查 / 预计用时”，通过后到“运行监控”启动。",
             ])
             self.generate_output.setPlainText("\n".join(output))
             self.bundle_generated.emit(bundle)
@@ -1160,7 +1213,7 @@ class ConfigGeneratorPage(QWidget):
     def default_block(prefix: str, active_axis: str) -> ScanBlock:
         return ScanBlock(
             prefix=prefix,
-            traversal="bounce_1d_x" if active_axis == "x" else "raster",
+            traversal="raster",
             axes={
                 "x": AxisSpec(enabled=active_axis == "x", start=0, stop=40 if active_axis == "x" else 0, step=10, fixed=0, values_text="0, 10, 20, 30, 40"),
                 "y": AxisSpec(enabled=active_axis == "y", start=0, stop=40 if active_axis == "y" else 0, step=10, fixed=0, values_text="0, 10, 20, 30, 40"),
@@ -1175,10 +1228,10 @@ class ResolvePage(QWidget):
         self.bundle_provider = bundle_provider
         self.worker: WorkerThread | None = None
         layout = QVBoxLayout(self)
-        layout.addWidget(section_label("Resolve / Estimate"))
+        layout.addWidget(section_label("预检查 / 预计用时"))
         layout.addWidget(note_label("调用 C# run-resolve 验证当前六个 JSON，UI 不自己推断 runtime 行为。"))
         button_row = QHBoxLayout()
-        self.resolve_button = QPushButton("Resolve Bundle")
+        self.resolve_button = QPushButton("执行预检查")
         self.resolve_button.clicked.connect(self.resolve)
         button_row.addWidget(self.resolve_button)
         button_row.addStretch(1)
@@ -1237,12 +1290,12 @@ class RunMonitorPage(QWidget):
         self.progress_offset = 0
         self.latest_progress: dict[str, Any] | None = None
         layout = QVBoxLayout(self)
-        layout.addWidget(section_label("Run Monitor"))
+        layout.addWidget(section_label("运行监控"))
         layout.addWidget(note_label("启动 C# run-execute。进度来自 progress JSONL，stdout/stderr 只写入 control 日志，避免 pipe 阻塞。"))
         actions = QHBoxLayout()
-        self.start_button = QPushButton("Start Run")
+        self.start_button = QPushButton("启动运行")
         self.start_button.clicked.connect(self.start_run)
-        self.stop_button = QPushButton("Stop After Current Point")
+        self.stop_button = QPushButton("当前点结束后停止")
         self.stop_button.clicked.connect(self.stop_after_point)
         self.stop_button.setEnabled(False)
         actions.addWidget(self.start_button)
@@ -1275,7 +1328,7 @@ class RunMonitorPage(QWidget):
     def start_run(self) -> None:
         bundle = self.bundle_provider()
         out_dir = self.out_dir_provider()
-        self.log.setPlainText(f"Starting run in {out_dir}...")
+        self.log.setPlainText(f"正在启动运行：{out_dir}...")
         self.start_button.setEnabled(False)
         self.worker = WorkerThread(lambda: start_run(bundle, out_dir))
         self.worker.completed.connect(self._started)
@@ -1367,7 +1420,7 @@ class ArtifactReviewPage(QWidget):
         self.worker: WorkerThread | None = None
         self.review_buttons: list[QPushButton] = []
         layout = QVBoxLayout(self)
-        layout.addWidget(section_label("Artifact Review"))
+        layout.addWidget(section_label("数据审查"))
         layout.addWidget(note_label("只读 run artifact。artifact-check 和 audit-continuity 都由 C# CLI 执行，不碰设备。"))
         input_row = QHBoxLayout()
         input_row.addWidget(QLabel("Run dir"))
@@ -1381,9 +1434,9 @@ class ArtifactReviewPage(QWidget):
         input_row.addWidget(browse)
         layout.addLayout(input_row)
         actions = QHBoxLayout()
-        self.check_button = QPushButton("artifact-check")
+        self.check_button = QPushButton("检查 artifact")
         self.check_button.clicked.connect(self.artifact_check)
-        self.audit_button = QPushButton("audit-continuity")
+        self.audit_button = QPushButton("连续性审计")
         self.audit_button.clicked.connect(self.audit)
         self.review_buttons = [self.check_button, self.audit_button]
         actions.addWidget(self.check_button)
@@ -1466,7 +1519,7 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 12, 12, 12)
         self.nav = QListWidget()
         self.nav.setFixedWidth(210)
-        self.nav.addItems(["Run Bundle", "Config Generator", "Resolve / Estimate", "Run Monitor", "Artifact Review"])
+        self.nav.addItems(["本次实验配置", "配置生成", "预检查 / 预计用时", "运行监控", "数据审查"])
         self.nav.setCurrentRow(0)
         layout.addWidget(self.nav)
         self.stack = QStackedWidget()

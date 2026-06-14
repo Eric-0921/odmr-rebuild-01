@@ -136,17 +136,20 @@ public sealed record SettleRecord(
     [property: JsonPropertyName("started_at")] string StartedAt,
     [property: JsonPropertyName("settled_at")] string SettledAt,
     [property: JsonPropertyName("status")] string Status,
-    [property: JsonPropertyName("measured_current_a")] IReadOnlyList<double> MeasuredCurrentA);
+    [property: JsonPropertyName("measured_current_a")] IReadOnlyList<double>? MeasuredCurrentA);
 
 public sealed record PointRecord(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
     [property: JsonPropertyName("run_id")] string RunId,
     [property: JsonPropertyName("point_id")] string PointId,
     [property: JsonPropertyName("index")] int Index,
-    [property: JsonPropertyName("target_b_nt")] IReadOnlyList<double> TargetBNt,
-    [property: JsonPropertyName("baseline_current_a")] IReadOnlyList<double> BaselineCurrentA,
-    [property: JsonPropertyName("calibrated_delta_current_a")] IReadOnlyList<double> CalibratedDeltaCurrentA,
-    [property: JsonPropertyName("target_current_a")] IReadOnlyList<double> TargetCurrentA,
+    [property: JsonPropertyName("point_kind")] string PointKind,
+    [property: JsonPropertyName("magnetic_mode")] string MagneticMode,
+    [property: JsonPropertyName("m8812_commanded")] bool M8812Commanded,
+    [property: JsonPropertyName("target_b_nt")] IReadOnlyList<double>? TargetBNt,
+    [property: JsonPropertyName("baseline_current_a")] IReadOnlyList<double>? BaselineCurrentA,
+    [property: JsonPropertyName("calibrated_delta_current_a")] IReadOnlyList<double>? CalibratedDeltaCurrentA,
+    [property: JsonPropertyName("target_current_a")] IReadOnlyList<double>? TargetCurrentA,
     [property: JsonPropertyName("rf")] SmbSweepRecord Rf,
     [property: JsonPropertyName("settle")] SettleRecord Settle);
 
@@ -176,9 +179,12 @@ public sealed record DeviceStateRecord(
     [property: JsonPropertyName("run_id")] string RunId,
     [property: JsonPropertyName("point_id")] string PointId,
     [property: JsonPropertyName("point_index")] int PointIndex,
-    [property: JsonPropertyName("target_b_nt")] IReadOnlyList<double> TargetBNt,
-    [property: JsonPropertyName("target_current_a")] IReadOnlyList<double> TargetCurrentA,
-    [property: JsonPropertyName("measured_current_a")] IReadOnlyList<double> MeasuredCurrentA,
+    [property: JsonPropertyName("point_kind")] string PointKind,
+    [property: JsonPropertyName("magnetic_mode")] string MagneticMode,
+    [property: JsonPropertyName("m8812_commanded")] bool M8812Commanded,
+    [property: JsonPropertyName("target_b_nt")] IReadOnlyList<double>? TargetBNt,
+    [property: JsonPropertyName("target_current_a")] IReadOnlyList<double>? TargetCurrentA,
+    [property: JsonPropertyName("measured_current_a")] IReadOnlyList<double>? MeasuredCurrentA,
     [property: JsonPropertyName("smb_profile_id")] string SmbProfileId,
     [property: JsonPropertyName("smb_sweep")] SmbSweepRecord SmbSweep,
     [property: JsonPropertyName("smb_configure_error")] string SmbConfigureError,

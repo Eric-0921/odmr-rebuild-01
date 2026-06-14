@@ -12,10 +12,12 @@ from odmr_config_core import (  # noqa: E402
     AxisSpec,
     GeneratorRequest,
     ScanBlock,
+    acquisition_only_points,
     build_laser_profile,
     build_oe_profile,
     build_plan,
     build_smb_profile,
+    constant_field_points,
     expand_block,
     from_canonical_unit,
     load_json,
@@ -119,6 +121,16 @@ class ConfigCoreTests(unittest.TestCase):
         points = expand_block(self.request().blocks[0])
         self.assertEqual(len(points), 9)
         self.assertEqual([point["target_b_nt"][0] for point in points], [0, 10, 20, 30, 40, 30, 20, 10, 0])
+        self.assertTrue(all(point["magnetic_mode"] == "controlled" for point in points))
+
+    def test_acquisition_only_points_are_not_fake_zero_field(self) -> None:
+        points = acquisition_only_points(1)
+        self.assertEqual(points, [{"point_id": "acq_p000001", "magnetic_mode": "none"}])
+
+    def test_constant_field_point_is_controlled(self) -> None:
+        points = constant_field_points([0, 10, 20])
+        self.assertEqual(points[0]["target_b_nt"], [0.0, 10.0, 20.0])
+        self.assertEqual(points[0]["magnetic_mode"], "controlled")
 
     def test_plan_uses_explicit_points(self) -> None:
         template = load_json(ROOT / "configs" / "plans" / "x_axis_1d_bounce_15min.json")
@@ -126,8 +138,26 @@ class ConfigCoreTests(unittest.TestCase):
         self.assertEqual(plan["run_id"], "test_generated")
         self.assertNotIn("point_source", plan)
         self.assertEqual(len(plan["points"]), 9)
+        self.assertEqual(plan["points"][0]["magnetic_mode"], "controlled")
         self.assertEqual(plan["mag_baseline_policy"]["baseline_current_a"], [0.0, 0.0, 0.0])
         self.assertEqual(plan["quality_thresholds"]["min_frames"], 20)
+
+    def test_plan_can_be_no_magnetic_control(self) -> None:
+        template = load_json(ROOT / "configs" / "plans" / "minimal_3point_runtime.json")
+        request = self.request()
+        request.plan_kind = "no_magnetic_control"
+        request.acquisition_step_count = 1
+        plan = build_plan(template, request)
+        self.assertEqual(plan["points"], [{"point_id": "acq_p000001", "magnetic_mode": "none"}])
+
+    def test_plan_can_be_constant_field(self) -> None:
+        template = load_json(ROOT / "configs" / "plans" / "minimal_3point_runtime.json")
+        request = self.request()
+        request.plan_kind = "constant_field"
+        request.fixed_b_nt = [0, 0, 0]
+        plan = build_plan(template, request)
+        self.assertEqual(plan["points"][0]["target_b_nt"], [0.0, 0.0, 0.0])
+        self.assertEqual(plan["points"][0]["magnetic_mode"], "controlled")
 
     def test_profile_overrides_preserve_schema(self) -> None:
         request = self.request()

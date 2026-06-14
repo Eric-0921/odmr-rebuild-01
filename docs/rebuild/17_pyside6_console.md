@@ -9,6 +9,7 @@
 - 不新增 runtime schema；一次 run 仍由 station、calibration、plan、SMB profile、OE profile、laser profile 六个 JSON 组成。
 - 配置生成复用 `tools/config-generator/odmr_config_core.py`，不复制 JSON 生成逻辑。
 - 不做常驻 RALL live collector，不解析 RALL raw，不触碰 OE `RALL?` collector 热路径。
+- `point` 的运行语义是一次采集 step；磁场只是 point 的可选上下文。
 
 ## UI 结构
 
@@ -20,11 +21,17 @@ python3 tools/odmr-console-python/odmr_console_qt.py
 
 页面：
 
-- `Run Bundle`：选择六个 JSON 和 run 输出目录，显示本地 JSON 摘要。
-- `Config Generator`：生成 plan、SMB profile、OE profile、Laser profile，并自动绑定到 Run Bundle。
-- `Resolve / Estimate`：调用 C# `run-resolve`。
-- `Run Monitor`：调用 C# `run-execute --progress-jsonl --stop-request-file`，只 tail progress JSONL。
-- `Artifact Review`：调用 C# `artifact-check` 和 `audit-continuity`。
+- `本次实验配置`：选择六个 JSON 和 run 输出目录，显示本地 JSON 摘要。
+- `配置生成`：生成 plan、SMB profile、OE profile、Laser profile，并自动绑定到本次实验配置。
+- `预检查 / 预计用时`：调用 C# `run-resolve`。
+- `运行监控`：调用 C# `run-execute --progress-jsonl --stop-request-file`，只 tail progress JSONL。
+- `数据审查`：调用 C# `artifact-check` 和 `audit-continuity`。
+
+Plan 类型：
+
+- `无磁场控制`：生成 `magnetic_mode=none` acquisition step，不指挥 M8812，不做 baseline lock，也不把它伪装成 `[0,0,0]`。
+- `零场 / 恒定磁场`：生成一个 `magnetic_mode=controlled` point，默认 `[0,0,0]`，按现有 baseline/current/readback 链路执行。
+- `磁场扫描`：生成多个 `magnetic_mode=controlled` point；默认扫描方向为单向 `raster`，往返仅作为 X 轴 1D 可选模式。
 
 ## 边界
 
@@ -143,10 +150,11 @@ python -m pip install -r tools\odmr-console-python\requirements-pyside6.txt
 
 GUI 里完整实验路径：
 
-1. 在 `Run Bundle` 页选择 `station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`。
-2. 如需新点表或 profile，在 `Config Generator` / `Magnetic Plan` / `SMB100A` / `OE1022D` / `Laser` 页生成并保存 JSON。
-3. 在 `Run Monitor` 页选择输出目录，点击启动；该入口实际调用 C# `Odmr.WinProbe run-execute`。
-4. 实验结束后，在 `Artifact Review` 页运行 `artifact-check` 和 `audit-continuity`。
+1. 在 `本次实验配置` 页选择 `station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`。
+2. 如需新点表或 profile，在 `配置生成` 页生成并保存 JSON。
+3. 在 `预检查 / 预计用时` 页调用 `run-resolve`。
+4. 在 `运行监控` 页选择输出目录并启动；该入口实际调用 C# `Odmr.WinProbe run-execute`。
+5. 实验结束后，在 `数据审查` 页运行 `artifact-check` 和 `audit-continuity`。
 
 不走 GUI 时，等价的最小 CLI 启动链路是：
 

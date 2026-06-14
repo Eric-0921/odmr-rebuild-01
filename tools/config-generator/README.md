@@ -33,7 +33,7 @@ python3 tools/config-generator/tests/test_config_core.py
 - 生成器负责配置编辑和 JSON 输出。
 - PySide6 console 负责选择 JSON、校验 bundle、启动 run 和查看 artifact 审查入口。
 - SMB/OE/Laser 参数继续写在 profile JSON 中。
-- 磁场扫描点写在 C# runtime 已支持的 `points[]` plan 中。
+- 实验 step 写在 C# runtime 已支持的 `points[]` plan 中；磁场只是 point 的可选上下文。
 - Python GUI 是单线程 Tkinter 工具：只做离线表单编辑和本地 JSON 文件写入，不连接设备，不启动采集，不引入后台 worker。
 - 页面切换使用单内容区 frame stack，不使用隐藏 Notebook tab；快速切换只切换已构建页面，不重新加载配置文件。
 
@@ -42,14 +42,26 @@ python3 tools/config-generator/tests/test_config_core.py
 配置器按实验配置顺序分页：
 
 1. Templates / Output：选择源 JSON 模板和生成目录。
-2. 磁场扫描计划（Magnetic Plan）：定义磁场扫描 block。
-3. Plan Policy：定义 Maynuo baseline/output 和 point quality 阈值。
+2. 实验计划：定义无磁场控制、零场/恒定磁场，或磁场扫描 block。
+3. 计划策略：定义 Maynuo baseline/output 和 point quality 阈值。
 4. SMB100A：定义固定调制 profile 和默认 RF sweep。
 5. OE1022D：定义 fixed profile；collector `12288B / 30ms` 只校验不编辑。
 6. CNI Laser：定义 run 级背景模式和功率。
 7. Generate：生成 JSON，交给 PySide6 console 的 Run Bundle 页面选择运行。
 
 界面使用分页和滚动表单，避免把不同设备的大量字段挤在同一页。
+
+## Plan / Point Semantics
+
+当前 runtime 里 `point` 表示一次采集 step，而不再等同于“磁场点”。
+
+- `magnetic_mode=none`：无磁场控制；不指挥 M8812，不做 baseline lock，`target_b_nt` 不存在。
+- `magnetic_mode=controlled`：受控磁场；必须有 `target_b_nt`，运行时按 calibration 计算电流并执行 M8812 readback。
+- 零场是 controlled single-point `[0,0,0]`，不是无磁场控制。
+- 恒定磁场是 controlled single-point `[x,y,z]`。
+- 1D/2D/3D 扫描是 controlled multi-point。
+
+生成器不新增 run bundle schema，也不引入 `field_space.groups`；最终仍写现有 C# runtime 可读的 `plan.json` 和三个 profile JSON。
 
 ## Magnetic Field Flow
 
@@ -70,7 +82,7 @@ python3 tools/config-generator/tests/test_config_core.py
 
 这些值在 rebuild 里的对应位置：
 
-- 目标磁场点：生成到 plan JSON 的 `points[].target_b_nt`，单位固定为 `nT`。
+- 目标磁场点：controlled point 生成到 plan JSON 的 `points[].target_b_nt`，单位固定为 `nT`。
 - 磁场到电流的换算：`configs/calibrations/main.json` 的 `current_offset_a` 和 `current_per_nt`。
 - 零偏电流策略：plan JSON 的 `mag_baseline_policy.baseline_current_a`、`settle_ms`、`readback_samples`、`settle_tolerance_a`。
 - 运行时换算代码：`tools/win-csharp/Odmr.Runtime/RunConfig.cs` 的 `CalibrationProfile.TargetCurrentA(...)`。
@@ -81,7 +93,7 @@ python3 tools/config-generator/tests/test_config_core.py
 
 ```text
 UI 扫描块
-  -> 展开为 plan.points[].target_b_nt
+  -> 展开为 plan.points[].target_b_nt + magnetic_mode=controlled
   -> C# run-execute 读取 station + calibration + plan + profiles
   -> LockBaseline 读取/锁定零偏电流
   -> target_b_nt 通过 calibration 计算 delta/target current
@@ -90,6 +102,8 @@ UI 扫描块
 ```
 
 这条链路表达的是“目标磁场设定通过校准换算成电流并被设备回读确认”，不是“物理零磁场已经闭环证明”。
+
+无磁场控制模式会跳过上述 M8812 链路，但仍保留 point/segment/quality/device_state artifact，用于绑定 RF sweep 和 OE RALL 采集窗口。
 
 ## Device Options
 

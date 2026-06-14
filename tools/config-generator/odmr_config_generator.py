@@ -50,12 +50,17 @@ def choice_code(value: object) -> int:
     return int(text.split("-", 1)[0].strip())
 
 
+TOKEN_BY_LABEL: dict[str, str] = {}
+
+
 def token_choice(token: str, label: str) -> str:
-    return f"{token} - {label}"
+    TOKEN_BY_LABEL[label] = token
+    return label
 
 
 def choice_token(value: object) -> str:
-    return str(value).split(" - ", 1)[0].strip()
+    text = str(value).strip()
+    return TOKEN_BY_LABEL.get(text, text.split(" - ", 1)[0].strip())
 
 
 def token_choice_for(token: str, choices: list[str]) -> str:
@@ -92,7 +97,7 @@ MAG_AXIS_MODE_CHOICES = [
     token_choice("list", "显式列表"),
 ]
 MAG_TRAVERSAL_CHOICES = [
-    token_choice("raster", "光栅顺序展开"),
+    token_choice("raster", "单向顺序扫描"),
     token_choice("bounce_1d_x", "X 轴往返扫描"),
 ]
 
@@ -273,7 +278,7 @@ class ConfigGeneratorApp(tk.Tk):
         ttk.Label(side, text="Configuration Order", font=("", 11, "bold")).pack(anchor="w")
         ttk.Label(
             side,
-            text="先选模板和输出目录，再定义磁场扫描；随后确认 Plan policy、SMB、OE、Laser，最后生成 JSON 给 C# Run Bundle 使用。",
+            text="先选模板和输出目录，再定义实验步骤计划；随后确认计划策略、SMB、OE、Laser，最后生成 JSON 给 PySide6 本次实验配置使用。",
             wraplength=205,
             justify=tk.LEFT,
         ).pack(anchor="w", pady=(6, 10))
@@ -338,8 +343,8 @@ class ConfigGeneratorApp(tk.Tk):
         ttk.Label(
             parent,
             text=(
-                "本页只定义目标磁场扫描点，生成 plan.points[].target_b_nt。"
-                "原厂反编译得到的线圈/电流语义不在这里手填，而由 calibration JSON 与 Plan Policy 共同决定："
+                "point 表示一次采集 step；此 fallback 页面仍主要生成 controlled 磁场点。"
+                "原厂反编译得到的线圈/电流语义不在这里手填，而由 calibration JSON 与计划策略共同决定："
                 "target_b_nt -> current_per_nt/current_offset_a -> target_current_a -> M8812 MEAS:CURR? 回读。"
                 "这仍是零偏电流锁定链路，不是物理磁场闭环。"
             ),
@@ -1046,10 +1051,10 @@ class ConfigGeneratorApp(tk.Tk):
                 self.template_vars["output"].get(),
             )
             self.summary.delete("1.0", tk.END)
-            self.summary.insert(tk.END, "Generated JSON files for C# Run Bundle:\n\n")
+            self.summary.insert(tk.END, "Generated JSON files for PySide6 本次实验配置:\n\n")
             for key, path in paths.items():
                 self.summary.insert(tk.END, f"{key}: {path}\n")
-            self.summary.insert(tk.END, "\nNext step:\nOpen the PySide6 console, select these generated JSON files in Run Bundle, validate, then run.\n")
+            self.summary.insert(tk.END, "\nNext step:\nOpen the PySide6 console, select these generated JSON files in 本次实验配置, validate, then run.\n")
             self._show_step(6)
         except Exception as exc:
             messagebox.showerror("Generate failed", str(exc), parent=self)
@@ -1083,7 +1088,7 @@ class ConfigGeneratorApp(tk.Tk):
     def default_block(prefix: str, active_axis: str) -> ScanBlock:
         return ScanBlock(
             prefix=prefix,
-            traversal="bounce_1d_x" if active_axis == "x" else "raster",
+            traversal="raster",
             axes={
                 "x": AxisSpec(enabled=active_axis == "x", start=0.0, stop=40.0 if active_axis == "x" else 0.0, step=10.0, fixed=0.0, values_text="0, 10, 20, 30, 40"),
                 "y": AxisSpec(enabled=active_axis == "y", start=0.0, stop=40.0 if active_axis == "y" else 0.0, step=10.0, fixed=0.0, values_text="0, 10, 20, 30, 40"),

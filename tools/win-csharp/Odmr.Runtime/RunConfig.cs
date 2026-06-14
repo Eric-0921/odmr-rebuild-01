@@ -36,9 +36,9 @@ public sealed record StationConnectionFacts(
     int SmbPort,
     string OeResource,
     int OeBaudRate,
-    string XPort,
-    string YPort,
-    string ZPort,
+    string? XPort,
+    string? YPort,
+    string? ZPort,
     string? LaserPort);
 
 public sealed record CalibrationProfile(
@@ -227,8 +227,22 @@ public sealed record AcquisitionRunPlan(
 
 public sealed record RunPointPlan(
     [property: JsonPropertyName("point_id")] string PointId,
-    [property: JsonPropertyName("target_b_nt")] double[] TargetBNt,
-    [property: JsonPropertyName("smb_override")] SmbSweepOverride? SmbOverride);
+    [property: JsonPropertyName("target_b_nt")] double[]? TargetBNt,
+    [property: JsonPropertyName("smb_override")] SmbSweepOverride? SmbOverride,
+    [property: JsonPropertyName("magnetic_mode")] string? MagneticMode = null)
+{
+    public const string Controlled = "controlled";
+    public const string None = "none";
+
+    [JsonIgnore]
+    public string EffectiveMagneticMode => NormalizeMagneticMode(MagneticMode);
+
+    [JsonIgnore]
+    public bool UsesMagneticControl => EffectiveMagneticMode == Controlled;
+
+    public static string NormalizeMagneticMode(string? mode) =>
+        string.IsNullOrWhiteSpace(mode) ? Controlled : mode.Trim().ToLowerInvariant();
+}
 
 public sealed record PointSourceConfig(
     [property: JsonPropertyName("kind")] string Kind,
@@ -261,7 +275,11 @@ public sealed record ResolvedRunPlan(
     [property: JsonPropertyName("estimated_sweep")] SweepEstimate? EstimatedSweep,
     [property: JsonPropertyName("estimated_point_duration_ms")] long? EstimatedPointDurationMs,
     [property: JsonPropertyName("estimated_run_duration_ms")] long? EstimatedRunDurationMs,
-    [property: JsonPropertyName("points")] IReadOnlyList<RunPointPlan> Points);
+    [property: JsonPropertyName("points")] IReadOnlyList<RunPointPlan> Points)
+{
+    [JsonIgnore]
+    public bool RequiresMagneticControl => Points.Any(point => point.UsesMagneticControl);
+}
 
 public sealed record PlanSnapshot(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
@@ -354,9 +372,9 @@ public static class RunConfigLoader
         var oeProfile = ReadJson<Oe1022dRunProfile>(oeProfilePath);
         var laserProfile = ReadJson<LaserRunProfile>(laserProfilePath);
 
-        ValidateOeCollector(oeProfile);
-        var connections = ResolveConnections(station);
         var resolvedPlan = ResolvePlan(plan, smbProfile);
+        ValidateOeCollector(oeProfile);
+        var connections = ResolveConnections(station, resolvedPlan.RequiresMagneticControl);
         return new RunConfigBundle(station, calibration, plan, smbProfile, oeProfile, laserProfile, connections, resolvedPlan);
     }
 
@@ -421,9 +439,10 @@ public static class RunConfigLoader
             throw new InvalidOperationException("plan has no executable points");
         }
 
+        var normalizedExplicitPoints = new List<RunPointPlan>(explicitPoints.Count);
         foreach (var point in explicitPoints)
         {
-            ValidateTargetTriplet(point);
+            normalizedExplicitPoints.Add(NormalizeAndValidatePoint(point));
         }
 
         return new ResolvedRunPlan(
@@ -431,22 +450,22 @@ public static class RunConfigLoader
             plan.RunId,
             "explicit_points",
             explicitPoints.Count,
-            explicitPoints.Count,
+            normalizedExplicitPoints.Count,
             null,
             null,
             null,
             null,
             null,
-            explicitPoints);
+            normalizedExplicitPoints);
     }
 
-    public static StationConnectionFacts ResolveConnections(StationSpec station)
+    public static StationConnectionFacts ResolveConnections(StationSpec station, bool requireMagAxes)
     {
         var smb = RequiredDevice(station, "smb100a", "smb100a_main");
         var oe = RequiredDevice(station, "oe1022d", "oe1022d_main");
-        var x = RequiredDevice(station, "m8812", "mag_x");
-        var y = RequiredDevice(station, "m8812", "mag_y");
-        var z = RequiredDevice(station, "m8812", "mag_z");
+        var x = requireMagAxes ? RequiredDevice(station, "m8812", "mag_x") : OptionalDevice(station, "m8812", "mag_x");
+        var y = requireMagAxes ? RequiredDevice(station, "m8812", "mag_y") : OptionalDevice(station, "m8812", "mag_y");
+        var z = requireMagAxes ? RequiredDevice(station, "m8812", "mag_z") : OptionalDevice(station, "m8812", "mag_z");
         var laser = station.Devices.FirstOrDefault(device => device.Kind == "cni_laser");
 
         return new StationConnectionFacts(
@@ -455,9 +474,9 @@ public static class RunConfigLoader
             smb.TransportHint.Port ?? throw new InvalidOperationException("SMB port missing"),
             Required(oe.TransportHint.Resource, "OE resource"),
             oe.TransportHint.BaudRate ?? Oe1022dDefaults.BaudRate,
-            Required(x.TransportHint.PortPath, "mag_x port"),
-            Required(y.TransportHint.PortPath, "mag_y port"),
-            Required(z.TransportHint.PortPath, "mag_z port"),
+            x is null ? null : Required(x.TransportHint.PortPath, "mag_x port"),
+            y is null ? null : Required(y.TransportHint.PortPath, "mag_y port"),
+            z is null ? null : Required(z.TransportHint.PortPath, "mag_z port"),
             laser?.TransportHint.PortPath);
     }
 
@@ -479,6 +498,9 @@ public static class RunConfigLoader
         return station.Devices.FirstOrDefault(device => device.DeviceId == deviceId && device.Kind == kind) ??
             throw new InvalidOperationException($"station missing required {kind} device `{deviceId}`");
     }
+
+    private static StationDeviceSpec? OptionalDevice(StationSpec station, string kind, string deviceId) =>
+        station.Devices.FirstOrDefault(device => device.DeviceId == deviceId && device.Kind == kind);
 
     private static string Required(string? value, string name) =>
         string.IsNullOrWhiteSpace(value) ? throw new InvalidOperationException($"{name} missing") : value;
@@ -518,7 +540,7 @@ public static class RunConfigLoader
             {
                 foreach (var x in axes.X)
                 {
-                    points.Add(new RunPointPlan($"p{next:000000}", [x, y, z], null));
+                    points.Add(new RunPointPlan($"p{next:000000}", [x, y, z], null, RunPointPlan.Controlled));
                     next++;
                 }
             }
@@ -543,7 +565,7 @@ public static class RunConfigLoader
             }
         }
 
-        return xValues.Select((x, index) => new RunPointPlan($"p{index + 1:000000}", [x, axes.Y[0], axes.Z[0]], null)).ToList();
+        return xValues.Select((x, index) => new RunPointPlan($"p{index + 1:000000}", [x, axes.Y[0], axes.Z[0]], null, RunPointPlan.Controlled)).ToList();
     }
 
     private static List<RunPointPlan> RepeatPointsToTotal(IReadOnlyList<RunPointPlan> basePoints, int totalPoints)
@@ -558,11 +580,29 @@ public static class RunConfigLoader
         return resolved;
     }
 
-    private static void ValidateTargetTriplet(RunPointPlan point)
+    private static RunPointPlan NormalizeAndValidatePoint(RunPointPlan point)
     {
-        if (point.TargetBNt.Length != 3)
+        var mode = RunPointPlan.NormalizeMagneticMode(point.MagneticMode);
+        if (mode is not RunPointPlan.Controlled and not RunPointPlan.None)
+        {
+            throw new InvalidOperationException($"point {point.PointId} unsupported magnetic_mode: {point.MagneticMode}");
+        }
+
+        if (mode == RunPointPlan.None)
+        {
+            if (point.TargetBNt is not null)
+            {
+                throw new InvalidOperationException($"point {point.PointId} magnetic_mode=none must not define target_b_nt");
+            }
+
+            return point with { MagneticMode = RunPointPlan.None };
+        }
+
+        if (point.TargetBNt is null || point.TargetBNt.Length != 3)
         {
             throw new InvalidOperationException($"point {point.PointId} target_b_nt must contain exactly 3 values");
         }
+
+        return point with { MagneticMode = RunPointPlan.Controlled };
     }
 }

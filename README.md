@@ -116,7 +116,8 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 当前 UI 边界：
 
 - PySide6 console 是当前主 UI，负责组合一次 run 所需的六个 JSON：`station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`，并显示解析摘要、启动 run、tail progress、触发 artifact 审查。
-- 日常配置编辑优先使用 PySide6 console 内置的 Config Generator；Tk 版 `tools/config-generator/odmr_config_generator.py` 保留为 fallback。二者都生成磁场 `plan.json`、SMB sweep profile、OE fixed profile 和 Laser profile。
+- 日常配置编辑优先使用 PySide6 console 内置的 Config Generator；Tk 版 `tools/config-generator/odmr_config_generator.py` 保留为 fallback。生成器输出实验 `plan.json`、SMB sweep profile、OE fixed profile 和 Laser profile。
+- plan 中的 `point` 表示一次采集 step：`magnetic_mode=none` 是无磁场控制，`magnetic_mode=controlled` 才使用 `target_b_nt` 走 M8812 baseline/current/readback 链路。
 - Python/PySide6 控制台只调用 C# `Odmr.WinProbe`，不直接操作 VISA/串口/TCP；PySide6 UI 复用 console core，不重新实现设备控制。
 - Python 配置生成器是单线程离线 GUI；UI 可选择输入单位，但写入 JSON 时统一回到现有 C# runtime units：磁场 `nT`、频率 `Hz`、时间 `ms`、电流 `A`、laser `mW`。
 - 配置生成器中的设备枚举来自仓库说明书/命令真值，SMB/OE 的可选 token 和 OE `j` 编码使用下拉框；只有连续数值和实验身份字段允许手动输入。
@@ -137,6 +138,13 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 - `configs/plans/minimal_3point_runtime.json`
   - 零偏锁定策略
   - 3 个显式 `target_b_nt` point 的最小运行样例
+- `configs/plans/no_magnetic_control_single_step.json`
+  - 1 个无磁场控制采集 step
+  - 不指挥 M8812，不把无磁场伪装成 `[0,0,0]`
+- `configs/plans/zero_baseline_single_point.json`
+  - 1 个 controlled 零场 point `[0,0,0]`
+- `configs/plans/constant_field_single_point.json`
+  - 1 个 controlled 恒定磁场 point
 - `configs/plans/mag_zero_lock_verify.json`
   - 三轴磁场单独验证样例
 - `configs/plans/grid_2d_raster_small.json`

@@ -97,7 +97,7 @@ public static class ConfigDrivenRun
             indexPath,
             processStart);
         using var smb = Smb100aTcp.Open(bundle.Connections.SmbHost, bundle.Connections.SmbPort);
-        var magAxes = OpenMagAxes(bundle);
+        var magAxes = bundle.ResolvedPlan.RequiresMagneticControl ? OpenMagAxes(bundle) : [];
         CniLaserSession? laser = null;
         var pointsPassed = 0;
         var pointsFailed = 0;
@@ -129,10 +129,21 @@ public static class ConfigDrivenRun
                 null);
 
             laser = ApplyLaserProfile(bundle, eventsPath, processStart);
-            var baseline = LockBaseline(bundle, magAxes, baselinePath);
-            var baselineCurrentA = baseline.Axes
-                .Select(axis => axis.LockedZeroOffsetCurrentA ?? axis.ZeroOffsetSetpointA)
-                .ToArray();
+            double[]? baselineCurrentA = null;
+            if (bundle.ResolvedPlan.RequiresMagneticControl)
+            {
+                var baseline = LockBaseline(bundle, magAxes, baselinePath);
+                baselineCurrentA = baseline.Axes
+                    .Select(axis => axis.LockedZeroOffsetCurrentA ?? axis.ZeroOffsetSetpointA)
+                    .ToArray();
+            }
+            else
+            {
+                AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "magnetic_control_skipped", "magnetic", null, null, new
+                {
+                    reason = "all_points_magnetic_mode_none"
+                });
+            }
 
             ApplySmbFixedProfile(smb, bundle.SmbProfile);
             ApplySmbRunRfOutput(smb, bundle, eventsPath, processStart);
@@ -167,6 +178,8 @@ public static class ConfigDrivenRun
                 AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "point_prepare_started", "point", point.PointId, null, new
                 {
                     index,
+                    point_kind = "acquisition_step",
+                    magnetic_mode = point.EffectiveMagneticMode,
                     target_b_nt = point.TargetBNt
                 });
                 ReportProgress(
@@ -435,9 +448,9 @@ public static class ConfigDrivenRun
     {
         var axes = new List<ConfigMagAxis>
         {
-            OpenMagAxis(bundle, "mag_x", bundle.Connections.XPort),
-            OpenMagAxis(bundle, "mag_y", bundle.Connections.YPort),
-            OpenMagAxis(bundle, "mag_z", bundle.Connections.ZPort)
+            OpenMagAxis(bundle, "mag_x", bundle.Connections.XPort ?? throw new InvalidOperationException("mag_x port missing")),
+            OpenMagAxis(bundle, "mag_y", bundle.Connections.YPort ?? throw new InvalidOperationException("mag_y port missing")),
+            OpenMagAxis(bundle, "mag_z", bundle.Connections.ZPort ?? throw new InvalidOperationException("mag_z port missing"))
         };
 
         foreach (var axis in axes)
@@ -590,7 +603,7 @@ public static class ConfigDrivenRun
         RunConfigBundle bundle,
         int index,
         RunPointPlan point,
-        IReadOnlyList<double> baselineCurrentA,
+        IReadOnlyList<double>? baselineCurrentA,
         IReadOnlyList<ConfigMagAxis> magAxes,
         Smb100aSession smb,
         OeRallCollector collector,
@@ -601,23 +614,39 @@ public static class ConfigDrivenRun
         string eventsPath,
         long processStart)
     {
-        var deltaCurrentA = bundle.Calibration.DeltaCurrentA(point.TargetBNt);
-        var targetCurrentA = bundle.Calibration.TargetCurrentA(baselineCurrentA, point.TargetBNt);
-        EnsureNonnegativeTargetCurrents(point.PointId, targetCurrentA);
-
-        for (var axisIndex = 0; axisIndex < magAxes.Count; axisIndex++)
-        {
-            magAxes[axisIndex].Session.SetCurrent(targetCurrentA[axisIndex]);
-            magAxes[axisIndex].Session.SetOutput(true);
-        }
-
         var settleStarted = UtcNowString();
-        Thread.Sleep(bundle.Plan.PointSettleMs);
-        var measuredCurrentA = magAxes.Select(axis => axis.Session.MeasureCurrent()).ToArray();
+        double[]? deltaCurrentA = null;
+        double[]? targetCurrentA = null;
+        double[]? measuredCurrentA = null;
+        var m8812Commanded = false;
+        if (point.UsesMagneticControl)
+        {
+            if (baselineCurrentA is null)
+            {
+                throw new InvalidOperationException($"point {point.PointId} requires magnetic control but baseline was not locked");
+            }
+
+            deltaCurrentA = bundle.Calibration.DeltaCurrentA(point.TargetBNt!);
+            targetCurrentA = bundle.Calibration.TargetCurrentA(baselineCurrentA, point.TargetBNt!);
+            EnsureNonnegativeTargetCurrents(point.PointId, targetCurrentA);
+
+            for (var axisIndex = 0; axisIndex < magAxes.Count; axisIndex++)
+            {
+                magAxes[axisIndex].Session.SetCurrent(targetCurrentA[axisIndex]);
+                magAxes[axisIndex].Session.SetOutput(true);
+            }
+
+            m8812Commanded = true;
+            Thread.Sleep(bundle.Plan.PointSettleMs);
+            measuredCurrentA = magAxes.Select(axis => axis.Session.MeasureCurrent()).ToArray();
+        }
         var settleEnded = UtcNowString();
 
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "point_stable", "settle", point.PointId, null, new
         {
+            point_kind = "acquisition_step",
+            magnetic_mode = point.EffectiveMagneticMode,
+            m8812_commanded = m8812Commanded,
             target_current_a = targetCurrentA,
             measured_current_a = measuredCurrentA
         });
@@ -720,12 +749,20 @@ public static class ConfigDrivenRun
                 bundle.Plan.RunId,
                 point.PointId,
                 index,
+                "acquisition_step",
+                point.EffectiveMagneticMode,
+                m8812Commanded,
                 point.TargetBNt,
-                baselineCurrentA.ToArray(),
+                baselineCurrentA?.ToArray(),
                 deltaCurrentA,
                 targetCurrentA,
                 sweepRecord,
-                new SettleRecord("fixed_delay_with_readback", settleStarted, settleEnded, "passed", measuredCurrentA)));
+                new SettleRecord(
+                    point.UsesMagneticControl ? "fixed_delay_with_readback" : "no_magnetic_control",
+                    settleStarted,
+                    settleEnded,
+                    "passed",
+                    measuredCurrentA)));
 
         RallArtifactWriter.AppendJsonl(
             deviceStatePath,
@@ -734,6 +771,9 @@ public static class ConfigDrivenRun
                 bundle.Plan.RunId,
                 point.PointId,
                 index,
+                "acquisition_step",
+                point.EffectiveMagneticMode,
+                m8812Commanded,
                 point.TargetBNt,
                 targetCurrentA,
                 measuredCurrentA,
