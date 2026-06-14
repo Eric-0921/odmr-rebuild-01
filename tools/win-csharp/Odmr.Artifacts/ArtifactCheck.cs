@@ -104,6 +104,8 @@ public static class ArtifactCheck
         var qualityStatusCounts = File.Exists(qualityPath)
             ? CountJsonlStringProperty(qualityPath, "quality_status")
             : new Dictionary<string, long>(StringComparer.Ordinal);
+        var aborted = string.Equals(summaryStatus, "aborted", StringComparison.Ordinal) ||
+            string.Equals(manifestStatus, "aborted", StringComparison.Ordinal);
         var deviceStateIssues = ValidateDeviceState(pointsPath, segmentsPath, deviceStatePath);
         var deviceStateConsistent = deviceStateIssues.Count == 0;
         var rfExposureWindowsCovered = !deviceStateIssues.Any(issue =>
@@ -113,19 +115,34 @@ public static class ArtifactCheck
             ? DistinctJsonlStringProperty(eventsPath, "event")
             : [];
         var eventSet = eventsPresent.ToHashSet(StringComparer.Ordinal);
-        var missingEvents = RequiredEventNames
+        var requiredEvents = aborted
+            ? RequiredEventNames
+                .Where(eventName => eventName is
+                    "run_opened" or
+                    "collector_started" or
+                    "oe_profile_applied" or
+                    "laser_profile_applied" or
+                    "collector_stopped" or
+                    "cleanup_completed")
+                .ToArray()
+            : RequiredEventNames;
+        var missingEvents = requiredEvents
             .Where(eventName => !eventSet.Contains(eventName))
             .ToList();
-        if (!eventSet.Contains("run_completed") && !eventSet.Contains("run_failed"))
+        if (!eventSet.Contains("run_completed") && !eventSet.Contains("run_failed") && !eventSet.Contains("run_aborted"))
         {
-            missingEvents.Add("run_completed|run_failed");
+            missingEvents.Add("run_completed|run_failed|run_aborted");
         }
 
         var rawSizeMatchesFrames = rawBytes == framesTotal * 12288;
         var idxLinesMatchFrames = idxLines == framesTotal;
-        var recordCountsConsistent = segmentsCount == pointsCount &&
-            pointsCount == qualityCount &&
-            qualityCount == deviceStateCount;
+        var recordCountsConsistent = aborted
+            ? segmentsCount == pointsCount &&
+                pointsCount == qualityCount &&
+                qualityCount == deviceStateCount
+            : segmentsCount == pointsCount &&
+                pointsCount == qualityCount &&
+                qualityCount == deviceStateCount;
         var manifestStatusMatchesSummary = summaryStatus is not null &&
             manifestStatus is not null &&
             string.Equals(summaryStatus, manifestStatus, StringComparison.Ordinal);

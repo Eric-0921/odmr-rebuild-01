@@ -20,20 +20,23 @@
 
 ## RF Sweep Window 规则
 
-SMB100A 的 RF output 和 frequency sweep state 分开管理：
+SMB100A 的 RF output 和 frequency sweep state 分开管理。当前策略以 `91c757e` 后的修正为准：
 
-- `OUTP ON` 是 run 级状态，run 开始后打开，point 之间不反复开关。
-- point 间隙保持 `FREQ:MODE CW`。
-- point 间隙频率设为当前 point 的 `start_hz`。
+- run 开始后下发 SMB fixed profile，然后强制 `OUTP OFF`。
+- point 配置阶段保持 RF OFF。
+- point 间隙保持 `FREQ:MODE CW`，频率设为当前 point 的 `start_hz`。
 - 每个 point 先完成 M8812 target current 和 measured current 记录。
-- SMB sweep 参数在 CW 状态下配置。
+- SMB sweep 参数在 `OUTP OFF + CW start_hz` 状态下配置。
 - 一批 SMB 配置命令之后只做一次 `SYST:ERR?`。
-- `segment_start` 之后才切 `FREQ:MODE SWE` 并执行 `SWE:FREQ:EXEC`。
+- segment/sweep 窗口前执行 `OUTP ON` + `FREQ:MODE SWE`，并确认 `OUTP?=1`、`FREQ:MODE?=SWE`。
+- `segment_started` / `sweep_started` / `rf_exposure_started` 只标记 `SWE:FREQ:EXEC` 的有效采集窗口。
 - `*OPC?` 用于观察 sweep 完成；如果设备过早返回，runtime 使用 sweep duration 估算 fallback。
-- sweep 完成后切回 `FREQ:MODE CW` 并设置 `FREQ start_hz`。
+- sweep 完成后先 `OUTP OFF`，再切回 `FREQ:MODE CW` 并设置 `FREQ start_hz`，然后记录 `rf_exposure_ended`。
 - 然后才写 `segment_end`。
 
 因此 artifact 里的 segment 覆盖的是实际 RF exposure 窗口，而不是“先把 sweep 打开，再开始采集”的错位窗口。
+
+这个策略的目的不是频繁操作设备，而是避免 RF output 已经打开时 point 初始频率跳变被 OE segment 记录成噪声。Laser 仍然是 run 级开/关，不随 point 反复切换。
 
 ## Point Device Context Contract
 

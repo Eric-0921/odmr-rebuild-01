@@ -279,11 +279,13 @@ public sealed class Smb100aSession : IDisposable
         return ExecuteSweep(SmbSweepSpec.Default);
     }
 
-    public SmbSweepObservation ExecuteSweep(SmbSweepSpec spec)
+    public SmbSweepObservation ExecuteSweep(SmbSweepSpec spec, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var started = Stopwatch.GetTimestamp();
         Send(Smb100aCommands.ExecuteFrequencySweep);
         var response = Query(Smb100aCommands.QueryOperationComplete);
+        cancellationToken.ThrowIfCancellationRequested();
         if (response.Trim() != "1")
         {
             throw new IOException($"SMB100A *OPC? returned unexpected value: {response}");
@@ -294,11 +296,25 @@ public sealed class Smb100aSession : IDisposable
         if (fallbackUsed)
         {
             var remainingMs = spec.EstimatedSweepDurationMs - opcWaitMs + SmbSweepObservation.SweepCompletionGuardMs;
-            Thread.Sleep((int)Math.Max(0, remainingMs));
+            SleepInterruptibly((int)Math.Max(0, remainingMs), cancellationToken);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         EnsureNoError();
         return new SmbSweepObservation(spec.EstimatedSweepDurationMs, opcWaitMs, fallbackUsed);
+    }
+
+    private static void SleepInterruptibly(int milliseconds, CancellationToken cancellationToken)
+    {
+        if (milliseconds <= 0)
+        {
+            return;
+        }
+
+        if (cancellationToken.WaitHandle.WaitOne(milliseconds))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
     }
 
     public void Cleanup()

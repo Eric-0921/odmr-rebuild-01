@@ -14,12 +14,21 @@ public sealed record ConfigDrivenRunOptions(
     string LaserProfilePath,
     string OutDir,
     IProgress<RunProgressEvent>? Progress = null,
-    CancellationToken CancellationToken = default);
+    CancellationToken CancellationToken = default,
+    CancellationToken EmergencyStopToken = default);
 
 internal sealed record ConfigMagAxis(
     string AxisId,
     StationDeviceSpec Device,
     M8812AxisSession Session);
+
+internal sealed class EmergencyStopException : OperationCanceledException
+{
+    public EmergencyStopException()
+        : base("emergency stop requested")
+    {
+    }
+}
 
 public static class ConfigDrivenRun
 {
@@ -86,6 +95,14 @@ public static class ConfigDrivenRun
             null,
             null,
             null,
+            null,
+            bundle.ResolvedPlan.EstimatedRunDurationMs,
+            bundle.ResolvedPlan.EstimatedPointDurationMs,
+            bundle.ResolvedPlan.EstimatedSweep?.SweepDurationMs,
+            bundle.ResolvedPlan.EstimatedSweep?.SweepPoints,
+            null,
+            null,
+            null,
             null);
 
         ApplyOeFixedProfile(bundle, eventsPath, processStart);
@@ -102,6 +119,8 @@ public static class ConfigDrivenRun
         var pointsPassed = 0;
         var pointsFailed = 0;
         string? failure = null;
+        var aborted = false;
+        var emergencyEventRecorded = false;
 
         try
         {
@@ -150,6 +169,7 @@ public static class ConfigDrivenRun
 
             for (var index = 0; index < bundle.ResolvedPlan.Points.Count; index++)
             {
+                ThrowIfEmergencyRequested(options);
                 if (options.CancellationToken.IsCancellationRequested)
                 {
                     var stoppingSnapshot = collector.Snapshot();
@@ -209,7 +229,8 @@ public static class ConfigDrivenRun
                     qualityPath,
                     deviceStatePath,
                     eventsPath,
-                    processStart);
+                    processStart,
+                    options);
                 if (quality.QualityStatus == "passed")
                 {
                     pointsPassed++;
@@ -239,6 +260,52 @@ public static class ConfigDrivenRun
                     quality.QualityStatus);
             }
         }
+        catch (EmergencyStopException ex)
+        {
+            aborted = true;
+            failure = ex.Message;
+            emergencyEventRecorded = true;
+            AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "emergency_stop_requested", "run", null, null, new
+            {
+                reason = ex.Message
+            });
+            ReportProgress(
+                options,
+                RuntimeState.Aborted,
+                "emergency_stop_requested",
+                ex.Message,
+                null,
+                null,
+                bundle.ResolvedPlan.ResolvedPointCount,
+                null,
+                null,
+                null,
+                null,
+                null);
+        }
+        catch (OperationCanceledException ex) when (options.EmergencyStopToken.IsCancellationRequested)
+        {
+            aborted = true;
+            failure = "emergency stop requested";
+            emergencyEventRecorded = true;
+            AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "emergency_stop_requested", "run", null, null, new
+            {
+                reason = ex.Message
+            });
+            ReportProgress(
+                options,
+                RuntimeState.Aborted,
+                "emergency_stop_requested",
+                "emergency stop requested",
+                null,
+                null,
+                bundle.ResolvedPlan.ResolvedPointCount,
+                null,
+                null,
+                null,
+                null,
+                null);
+        }
         catch (Exception ex)
         {
             failure = ex.Message;
@@ -260,6 +327,26 @@ public static class ConfigDrivenRun
         finally
         {
             Exception? cleanupFailure = null;
+            if (options.EmergencyStopToken.IsCancellationRequested && !emergencyEventRecorded)
+            {
+                aborted = true;
+                emergencyEventRecorded = true;
+                failure ??= "emergency stop requested";
+                AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "emergency_stop_requested", "run", null, null, new
+                {
+                    reason = "emergency stop requested"
+                });
+            }
+
+            try
+            {
+                smb.Cleanup();
+            }
+            catch (Exception ex)
+            {
+                cleanupFailure ??= ex;
+            }
+
             if (laser is not null)
             {
                 try
@@ -308,15 +395,6 @@ public static class ConfigDrivenRun
 
             try
             {
-                smb.Cleanup();
-            }
-            catch (Exception ex)
-            {
-                cleanupFailure ??= ex;
-            }
-
-            try
-            {
                 collector.Stop();
             }
             catch (Exception ex)
@@ -358,11 +436,19 @@ public static class ConfigDrivenRun
         var finalSnapshot = collector.Snapshot();
         var endedAt = UtcNowString();
         var rawBytesWritten = File.Exists(rawPath) ? new FileInfo(rawPath).Length : 0;
-        var status = failure is not null
+        var status = aborted
+            ? "aborted"
+            : failure is not null
             ? "failed"
             : pointsFailed > 0 ? "completed_with_failed_points" : "completed";
 
-        AppendEvent(eventsPath, processStart, bundle.Plan.RunId, status == "failed" ? "run_failed" : "run_completed", "run", null, null, new
+        var terminalEvent = status switch
+        {
+            "aborted" => "run_aborted",
+            "failed" => "run_failed",
+            _ => "run_completed"
+        };
+        AppendEvent(eventsPath, processStart, bundle.Plan.RunId, terminalEvent, "run", null, null, new
         {
             status,
             points_passed = pointsPassed,
@@ -371,8 +457,8 @@ public static class ConfigDrivenRun
         });
         ReportProgress(
             options,
-            status == "failed" ? RuntimeState.Failed : RuntimeState.Completed,
-            status == "failed" ? "run_failed" : "run_completed",
+            status == "aborted" ? RuntimeState.Aborted : status == "failed" ? RuntimeState.Failed : RuntimeState.Completed,
+            terminalEvent,
             $"Run {status}: {bundle.Plan.RunId}",
             null,
             null,
@@ -612,8 +698,10 @@ public static class ConfigDrivenRun
         string qualityPath,
         string deviceStatePath,
         string eventsPath,
-        long processStart)
+        long processStart,
+        ConfigDrivenRunOptions options)
     {
+        ThrowIfEmergencyRequested(options);
         var settleStarted = UtcNowString();
         double[]? deltaCurrentA = null;
         double[]? targetCurrentA = null;
@@ -637,7 +725,8 @@ public static class ConfigDrivenRun
             }
 
             m8812Commanded = true;
-            Thread.Sleep(bundle.Plan.PointSettleMs);
+            SleepInterruptibly(bundle.Plan.PointSettleMs, options.EmergencyStopToken);
+            ThrowIfEmergencyRequested(options);
             measuredCurrentA = magAxes.Select(axis => axis.Session.MeasureCurrent()).ToArray();
         }
         var settleEnded = UtcNowString();
@@ -652,16 +741,18 @@ public static class ConfigDrivenRun
         });
 
         var sweep = bundle.SmbProfile.DefaultSweep.ApplyOverride(point.SmbOverride);
-        var smbConfigureError = ConfigureSmbSweepForPointPreparation(smb, bundle.SmbProfile, sweep);
+        var smbConfigureError = ConfigureSmbSweepForPointPreparation(smb, bundle.SmbProfile, sweep, options.EmergencyStopToken);
+        ThrowIfEmergencyRequested(options);
 
         var segmentId = $"seg_{point.PointId}_0000";
         var timeoutsBefore = collector.Snapshot().Stats.TimeoutCount;
 
-        var rfExposureStartedTs = UtcNowString();
-        var rfExposureStartedMonotonicNs = MonotonicNsSince(processStart);
-        PrepareSmbRfForSegment(smb, bundle.SmbProfile, sweep);
+        PrepareSmbRfForSegment(smb, bundle.SmbProfile, sweep, options.EmergencyStopToken);
+        ThrowIfEmergencyRequested(options);
         var segmentStartTs = UtcNowString();
         var segmentStartMonotonicNs = MonotonicNsSince(processStart);
+        var rfExposureStartedTs = segmentStartTs;
+        var rfExposureStartedMonotonicNs = segmentStartMonotonicNs;
         var segmentStart = collector.Cursor();
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "segment_started", "segment", point.PointId, null, new
         {
@@ -672,17 +763,43 @@ public static class ConfigDrivenRun
             segment_id = segmentId,
             resolved_point_count = bundle.ResolvedPlan.ResolvedPointCount,
             estimated_sweep_duration_ms = sweep.EstimatedSweepDurationMs,
-            rf_output_policy = "point_on_after_sweep_config",
+            sweep_points = sweep.SweepPoints,
+            start_hz = sweep.StartHz,
+            stop_hz = sweep.StopHz,
+            step_hz = sweep.StepHz,
+            dwell_ms = sweep.DwellMs,
+            rf_output_policy = "point_output_on_after_sweep_config_segment_scoped_execute",
             sweep_window_policy = "segment_scoped_execute_only"
         });
+        ReportProgress(
+            options,
+            RuntimeState.PointRunning,
+            "sweep_started",
+            $"Sweep started: {point.PointId}",
+            point.PointId,
+            index,
+            bundle.ResolvedPlan.ResolvedPointCount,
+            collector.Snapshot().Stats.FramesOk,
+            null,
+            null,
+            null,
+            null,
+            bundle.ResolvedPlan.EstimatedRunDurationMs,
+            sweep.EstimatedSweepDurationMs + bundle.Plan.PointSettleMs + bundle.SmbProfile.EstimatedPointConfigurationMs,
+            sweep.EstimatedSweepDurationMs,
+            sweep.SweepPoints,
+            sweep.StartHz,
+            sweep.StopHz,
+            sweep.StepHz,
+            sweep.DwellMs);
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_exposure_started", "rf", point.PointId, "smb100a_main", new
         {
             segment_id = segmentId,
-            output_state = "point_on_after_sweep_config",
+            output_state = "point_output_on_after_sweep_config_segment_scoped_execute",
             frequency_mode = "SWE",
             start_hz = sweep.StartHz
         });
-        var sweepObservation = ExecuteSmbSweepInsideSegment(smb, bundle.SmbProfile, sweep);
+        var sweepObservation = ExecuteSmbSweepInsideSegment(smb, bundle.SmbProfile, sweep, options.EmergencyStopToken);
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_sweep_executed", "rf", point.PointId, "smb100a_main", new
         {
             segment_id = segmentId,
@@ -694,6 +811,7 @@ public static class ConfigDrivenRun
         var segmentEndMonotonicNs = MonotonicNsSince(processStart);
         var segmentEnd = collector.Cursor();
         StopSmbRfAfterSegment(smb, bundle.SmbProfile, sweep);
+        ThrowIfEmergencyRequested(options);
         var rfExposureEndedTs = UtcNowString();
         var rfExposureEndedMonotonicNs = MonotonicNsSince(processStart);
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_exposure_ended", "rf", point.PointId, "smb100a_main", new
@@ -710,6 +828,11 @@ public static class ConfigDrivenRun
         {
             segment_id = segmentId,
             estimated_sweep_duration_ms = sweepObservation.EstimatedSweepDurationMs,
+            sweep_points = sweep.SweepPoints,
+            start_hz = sweep.StartHz,
+            stop_hz = sweep.StopHz,
+            step_hz = sweep.StepHz,
+            dwell_ms = sweep.DwellMs,
             opc_wait_ms = sweepObservation.OpcWaitMs,
             fallback_used = sweepObservation.FallbackUsed,
             smb_configure_error = smbConfigureError,
@@ -718,6 +841,27 @@ public static class ConfigDrivenRun
             rf_exposure_started_monotonic_ns = rfExposureStartedMonotonicNs,
             rf_exposure_ended_monotonic_ns = rfExposureEndedMonotonicNs
         });
+        ReportProgress(
+            options,
+            RuntimeState.PointRunning,
+            "sweep_completed",
+            $"Sweep completed: {point.PointId}",
+            point.PointId,
+            index,
+            bundle.ResolvedPlan.ResolvedPointCount,
+            collector.Snapshot().Stats.FramesOk,
+            null,
+            null,
+            null,
+            null,
+            bundle.ResolvedPlan.EstimatedRunDurationMs,
+            sweep.EstimatedSweepDurationMs + bundle.Plan.PointSettleMs + bundle.SmbProfile.EstimatedPointConfigurationMs,
+            sweepObservation.EstimatedSweepDurationMs,
+            sweep.SweepPoints,
+            sweep.StartHz,
+            sweep.StopHz,
+            sweep.StepHz,
+            sweep.DwellMs);
 
         var segment = new SegmentRecord(
             1,
@@ -837,20 +981,22 @@ public static class ConfigDrivenRun
         });
     }
 
-    private static string ConfigureSmbSweepForPointPreparation(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep)
+    private static string ConfigureSmbSweepForPointPreparation(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
     {
         if (!sweep.RfOutputEnabled)
         {
             throw new InvalidOperationException("config-driven runtime requires smb sweep rf_output_enabled=true for run-level RF output policy");
         }
 
-        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeCw);
-        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.SetFrequencyHz(sweep.StartHz));
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.OutputOff, emergencyToken);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeCw, emergencyToken);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.SetFrequencyHz(sweep.StartHz), emergencyToken);
         foreach (var command in sweep.ToCommands())
         {
-            SendSmbProfileCommandWithoutErrorCheck(smb, profile, command);
+            SendSmbProfileCommandWithoutErrorCheck(smb, profile, command, emergencyToken);
         }
 
+        emergencyToken.ThrowIfCancellationRequested();
         var error = smb.Query(Smb100aCommands.QuerySystemError);
         if (!Smb100aTcp.ErrorIsClean(error))
         {
@@ -872,31 +1018,35 @@ public static class ConfigDrivenRun
         return error;
     }
 
-    private static void SendSmbProfileCommand(Smb100aSession smb, Smb100aRunProfile profile, string command)
+    private static void SendSmbProfileCommand(Smb100aSession smb, Smb100aRunProfile profile, string command, CancellationToken emergencyToken = default)
     {
+        emergencyToken.ThrowIfCancellationRequested();
         smb.Send(command);
-        Thread.Sleep(profile.CommandSettleMs);
+        SleepInterruptibly(profile.CommandSettleMs, emergencyToken);
         if (profile.ErrorCheckAfterWrite)
         {
+            emergencyToken.ThrowIfCancellationRequested();
             smb.EnsureNoError();
         }
     }
 
-    private static void SendSmbProfileCommandWithoutErrorCheck(Smb100aSession smb, Smb100aRunProfile profile, string command)
+    private static void SendSmbProfileCommandWithoutErrorCheck(Smb100aSession smb, Smb100aRunProfile profile, string command, CancellationToken emergencyToken = default)
     {
+        emergencyToken.ThrowIfCancellationRequested();
         smb.Send(command);
-        Thread.Sleep(profile.CommandSettleMs);
+        SleepInterruptibly(profile.CommandSettleMs, emergencyToken);
     }
 
-    private static SmbSweepObservation ExecuteSmbSweepInsideSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep)
+    private static SmbSweepObservation ExecuteSmbSweepInsideSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
     {
-        return smb.ExecuteSweep(sweep);
+        return smb.ExecuteSweep(sweep, emergencyToken);
     }
 
-    private static void PrepareSmbRfForSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep)
+    private static void PrepareSmbRfForSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
     {
-        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.OutputOn);
-        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeSweep);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.OutputOn, emergencyToken);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeSweep, emergencyToken);
+        emergencyToken.ThrowIfCancellationRequested();
         var error = smb.Query(Smb100aCommands.QuerySystemError);
         if (!Smb100aTcp.ErrorIsClean(error))
         {
@@ -916,17 +1066,17 @@ public static class ConfigDrivenRun
         }
     }
 
-    private static void StopSmbRfAfterSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep)
+    private static void StopSmbRfAfterSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken = default)
     {
-        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.OutputOff);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.OutputOff, emergencyToken);
         var output = smb.Query(Smb100aCommands.QueryOutput);
         if (output.Trim() != "0")
         {
             throw new IOException($"SMB100A output state mismatch after sweep execute: expected 0, observed {output}");
         }
 
-        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeCw);
-        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.SetFrequencyHz(sweep.StartHz));
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeCw, emergencyToken);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.SetFrequencyHz(sweep.StartHz), emergencyToken);
         var error = smb.Query(Smb100aCommands.QuerySystemError);
         if (!Smb100aTcp.ErrorIsClean(error))
         {
@@ -1087,7 +1237,15 @@ public static class ConfigDrivenRun
         long? timeoutCount,
         long? rawLenBadCount,
         long? deltaGt1Count,
-        string? qualityStatus)
+        string? qualityStatus,
+        long? estimatedRunDurationMs = null,
+        long? estimatedPointDurationMs = null,
+        long? estimatedSweepDurationMs = null,
+        long? sweepPoints = null,
+        long? startHz = null,
+        long? stopHz = null,
+        long? stepHz = null,
+        int? dwellMs = null)
     {
         options.Progress?.Report(new RunProgressEvent(
             state,
@@ -1100,7 +1258,36 @@ public static class ConfigDrivenRun
             timeoutCount,
             rawLenBadCount,
             deltaGt1Count,
-            qualityStatus));
+            qualityStatus,
+            estimatedRunDurationMs,
+            estimatedPointDurationMs,
+            estimatedSweepDurationMs,
+            sweepPoints,
+            startHz,
+            stopHz,
+            stepHz,
+            dwellMs));
+    }
+
+    private static void ThrowIfEmergencyRequested(ConfigDrivenRunOptions options)
+    {
+        if (options.EmergencyStopToken.IsCancellationRequested)
+        {
+            throw new EmergencyStopException();
+        }
+    }
+
+    private static void SleepInterruptibly(int milliseconds, CancellationToken cancellationToken)
+    {
+        if (milliseconds <= 0)
+        {
+            return;
+        }
+
+        if (cancellationToken.WaitHandle.WaitOne(milliseconds))
+        {
+            throw new EmergencyStopException();
+        }
     }
 
     private static string UtcNowString() =>

@@ -15,6 +15,7 @@
 ```text
 --progress-jsonl <path>
 --stop-request-file <path>
+--emergency-stop-file <path>
 ```
 
 `progress-jsonl` 每行一个 JSON record，来自现有 `RunProgressEvent`：
@@ -31,10 +32,20 @@
 - `raw_len_bad_count`
 - `delta_gt1_count`
 - `quality_status`
+- `estimated_run_duration_ms`
+- `estimated_point_duration_ms`
+- `estimated_sweep_duration_ms`
+- `sweep_points`
+- `start_hz`
+- `stop_hz`
+- `step_hz`
+- `dwell_ms`
 
 这些 progress record 只在 run、collector、point、cleanup 边界写出，不写逐帧数据。
 
 `stop-request-file` 出现后触发现有 cancellation token。runtime 只在 point 边界停止，不做强杀。
+
+`emergency-stop-file` 出现后触发独立急停 token。runtime 会尽快中断当前 point/sweep，并进入安全停机路径：SMB RF OFF、Laser OFF、M8812 cleanup、collector stop。急停不是强杀进程；terminal status 写为 `aborted`，artifact 默认保留。
 
 ## Python Core
 
@@ -44,9 +55,11 @@
 - 生成当前 C# runtime 可读的 plan/profile JSON
 - 生成后直接返回 `RunBundle`
 - 调用 C# `run-resolve`
-- 调用 C# `run-execute --progress-jsonl --stop-request-file`
+- 调用 C# `run-execute --progress-jsonl --stop-request-file --emergency-stop-file`
 - 写 `control/launch_metadata.json`
 - tail `control/progress.jsonl`
+- 写 `control/stop.request` 做 point 边界停止
+- 写 `control/emergency_stop.request` 做立即安全停机
 
 控制文件默认放在：
 

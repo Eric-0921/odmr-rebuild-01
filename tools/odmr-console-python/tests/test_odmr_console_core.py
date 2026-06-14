@@ -18,6 +18,7 @@ from odmr_console_core import (  # noqa: E402
     read_progress,
     read_progress_since,
     read_text_tail,
+    request_emergency_stop,
     request_stop,
     run_execute_command,
 )
@@ -45,12 +46,17 @@ class OdmrConsoleCoreTests(unittest.TestCase):
             self.assertIn(control.progress_jsonl, command)
             self.assertIn("--stop-request-file", command)
             self.assertIn(control.stop_request_file, command)
+            self.assertIn("--emergency-stop-file", command)
+            self.assertIn(control.emergency_stop_file, command)
 
     def test_stop_request_and_progress_reading(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             stop_path = Path(tmp) / "control" / "stop.request"
             request_stop(stop_path)
             self.assertTrue(stop_path.exists())
+            emergency_path = Path(tmp) / "control" / "emergency_stop.request"
+            request_emergency_stop(emergency_path)
+            self.assertTrue(emergency_path.exists())
             progress = Path(tmp) / "control" / "progress.jsonl"
             progress.parent.mkdir(parents=True, exist_ok=True)
             progress.write_text('{"event_name":"run_opened"}\n{"event_name":"collector_started"}\n', encoding="utf-8")

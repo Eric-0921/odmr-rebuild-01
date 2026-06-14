@@ -116,6 +116,8 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 当前 UI 边界：
 
 - PySide6 console 是当前主 UI，负责组合一次 run 所需的六个 JSON：`station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`，并显示解析摘要、启动 run、tail progress、触发 artifact 审查。
+- PySide6 Run Monitor 支持两种停止：普通停止是当前 point 后停止；急停会请求 C# runtime 尽快关闭 SMB RF、Laser，并执行 M8812 cleanup 与 collector stop，run 状态写为 `aborted`。
+- PySide6 的预计进度只基于 C# `run-resolve` 的 sweep/run 估算和 progress JSONL 低频事件，本地 500ms 插值显示；它不读取 RALL raw、不按 frame 推进、不参与 quality/audit。
 - 日常配置编辑优先使用 PySide6 console 内置的 Config Generator；Tk 版 `tools/config-generator/odmr_config_generator.py` 保留为 fallback。生成器输出实验 `plan.json`、SMB sweep profile、OE fixed profile 和 Laser profile。
 - plan 中的 `point` 表示一次采集 step：`magnetic_mode=none` 是无磁场控制，`magnetic_mode=controlled` 才使用 `target_b_nt` 走 M8812 baseline/current/readback 链路。
 - Python/PySide6 控制台只调用 C# `Odmr.WinProbe`，不直接操作 VISA/串口/TCP；PySide6 UI 复用 console core，不重新实现设备控制。

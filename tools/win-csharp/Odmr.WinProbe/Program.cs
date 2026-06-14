@@ -197,9 +197,11 @@ static int RunExecuteCommand(IReadOnlyDictionary<string, string> options)
     using var progress = string.IsNullOrWhiteSpace(progressPath)
         ? null
         : new ProgressJsonlWriter(progressPath, plan.RunId);
-    using var cancellation = new CancellationTokenSource();
+    using var stopAfterPointCancellation = new CancellationTokenSource();
+    using var emergencyCancellation = new CancellationTokenSource();
     using var watcherCancellation = new CancellationTokenSource();
-    var watcher = StartStopRequestWatcher(GetOptionalOption(options, "stop-request-file"), cancellation, watcherCancellation.Token);
+    var stopWatcher = StartRequestFileWatcher(GetOptionalOption(options, "stop-request-file"), stopAfterPointCancellation, watcherCancellation.Token);
+    var emergencyWatcher = StartRequestFileWatcher(GetOptionalOption(options, "emergency-stop-file"), emergencyCancellation, watcherCancellation.Token);
 
     RunSummaryRecord summary;
     try
@@ -213,12 +215,14 @@ static int RunExecuteCommand(IReadOnlyDictionary<string, string> options)
             GetRequiredOption(options, "laser-profile"),
             outDir,
             progress,
-            cancellation.Token));
+            stopAfterPointCancellation.Token,
+            emergencyCancellation.Token));
     }
     finally
     {
         watcherCancellation.Cancel();
-        WaitForWatcher(watcher);
+        WaitForWatcher(stopWatcher);
+        WaitForWatcher(emergencyWatcher);
     }
 
     Console.WriteLine($"run-execute done: run_id={summary.RunId}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
@@ -228,20 +232,20 @@ static int RunExecuteCommand(IReadOnlyDictionary<string, string> options)
         summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
 }
 
-static Task? StartStopRequestWatcher(string? stopRequestPath, CancellationTokenSource runCancellation, CancellationToken cancellationToken)
+static Task? StartRequestFileWatcher(string? requestPath, CancellationTokenSource requestCancellation, CancellationToken cancellationToken)
 {
-    if (string.IsNullOrWhiteSpace(stopRequestPath))
+    if (string.IsNullOrWhiteSpace(requestPath))
     {
         return null;
     }
 
     return Task.Run(async () =>
     {
-        while (!cancellationToken.IsCancellationRequested && !runCancellation.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested && !requestCancellation.IsCancellationRequested)
         {
-            if (File.Exists(stopRequestPath))
+            if (File.Exists(requestPath))
             {
-                runCancellation.Cancel();
+                requestCancellation.Cancel();
                 return;
             }
 
@@ -529,7 +533,7 @@ static void PrintUsage()
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
       Odmr.WinProbe run-resolve --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json>
-      Odmr.WinProbe run-execute --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json> --out-dir <dir> [--progress-jsonl <path>] [--stop-request-file <path>]
+      Odmr.WinProbe run-execute --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json> --out-dir <dir> [--progress-jsonl <path>] [--stop-request-file <path>] [--emergency-stop-file <path>]
       Odmr.WinProbe artifact-check --run <run-dir>
       Odmr.WinProbe audit-continuity --run <run-dir> --out <json>
       Odmr.WinProbe device-command-check
@@ -587,7 +591,15 @@ sealed class ProgressJsonlWriter : IProgress<RunProgressEvent>, IDisposable
                 timeout_count = value.TimeoutCount,
                 raw_len_bad_count = value.RawLenBadCount,
                 delta_gt1_count = value.DeltaGt1Count,
-                quality_status = value.QualityStatus
+                quality_status = value.QualityStatus,
+                estimated_run_duration_ms = value.EstimatedRunDurationMs,
+                estimated_point_duration_ms = value.EstimatedPointDurationMs,
+                estimated_sweep_duration_ms = value.EstimatedSweepDurationMs,
+                sweep_points = value.SweepPoints,
+                start_hz = value.StartHz,
+                stop_hz = value.StopHz,
+                step_hz = value.StepHz,
+                dwell_ms = value.DwellMs
             };
 
             lock (gate)

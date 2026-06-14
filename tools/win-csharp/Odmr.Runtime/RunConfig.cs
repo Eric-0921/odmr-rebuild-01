@@ -303,6 +303,9 @@ public sealed record ConfigResolutionSummary(
     [property: JsonPropertyName("resolved_point_count")] int ResolvedPointCount,
     [property: JsonPropertyName("fixed_total_points")] int? FixedTotalPoints,
     [property: JsonPropertyName("cycle_mode")] string? CycleMode,
+    [property: JsonPropertyName("estimated_sweep")] SweepEstimate? EstimatedSweep,
+    [property: JsonPropertyName("estimated_point_duration_ms")] long? EstimatedPointDurationMs,
+    [property: JsonPropertyName("estimated_run_duration_ms")] long? EstimatedRunDurationMs,
     [property: JsonPropertyName("first_point")] RunPointPlan? FirstPoint,
     [property: JsonPropertyName("last_point")] RunPointPlan? LastPoint,
     [property: JsonPropertyName("smb_profile_id")] string SmbProfileId,
@@ -343,6 +346,9 @@ public sealed record RunConfigBundle(
             ResolvedPlan.ResolvedPointCount,
             ResolvedPlan.FixedTotalPoints,
             ResolvedPlan.CycleMode,
+            ResolvedPlan.EstimatedSweep,
+            ResolvedPlan.EstimatedPointDurationMs,
+            ResolvedPlan.EstimatedRunDurationMs,
             ResolvedPlan.Points.FirstOrDefault(),
             ResolvedPlan.Points.LastOrDefault(),
             SmbProfile.ProfileId,
@@ -445,6 +451,12 @@ public static class RunConfigLoader
             normalizedExplicitPoints.Add(NormalizeAndValidatePoint(point));
         }
 
+        var defaultExplicitSweep = smbProfile.DefaultSweep.ApplyOverride(null);
+        var defaultExplicitEstimate = new SweepEstimate(defaultExplicitSweep.SweepPoints, defaultExplicitSweep.EstimatedSweepDurationMs);
+        var explicitPointEstimates = normalizedExplicitPoints
+            .Select(point => EstimatePointDurationMs(plan, smbProfile, point))
+            .ToArray();
+
         return new ResolvedRunPlan(
             1,
             plan.RunId,
@@ -453,10 +465,16 @@ public static class RunConfigLoader
             normalizedExplicitPoints.Count,
             null,
             null,
-            null,
-            null,
-            null,
+            defaultExplicitEstimate,
+            explicitPointEstimates.Length == 0 ? null : explicitPointEstimates.Max(),
+            explicitPointEstimates.Sum(),
             normalizedExplicitPoints);
+    }
+
+    private static long EstimatePointDurationMs(AcquisitionRunPlan plan, Smb100aRunProfile smbProfile, RunPointPlan point)
+    {
+        var sweep = smbProfile.DefaultSweep.ApplyOverride(point.SmbOverride);
+        return sweep.EstimatedSweepDurationMs + plan.PointSettleMs + smbProfile.EstimatedPointConfigurationMs;
     }
 
     public static StationConnectionFacts ResolveConnections(StationSpec station, bool requireMagAxes)

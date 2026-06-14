@@ -42,6 +42,7 @@ class ControlPaths:
     control_dir: str
     progress_jsonl: str
     stop_request_file: str
+    emergency_stop_file: str
     launch_metadata: str
     stdout_log: str
     stderr_log: str
@@ -146,6 +147,7 @@ def control_paths_for_out_dir(out_dir: str | Path) -> ControlPaths:
         control_dir=str(control_dir),
         progress_jsonl=str(control_dir / "progress.jsonl"),
         stop_request_file=str(control_dir / "stop.request"),
+        emergency_stop_file=str(control_dir / "emergency_stop.request"),
         launch_metadata=str(control_dir / "launch_metadata.json"),
         stdout_log=str(control_dir / "stdout.log"),
         stderr_log=str(control_dir / "stderr.log"),
@@ -196,6 +198,8 @@ def run_execute_command(
         control_paths.progress_jsonl,
         "--stop-request-file",
         control_paths.stop_request_file,
+        "--emergency-stop-file",
+        control_paths.emergency_stop_file,
     ])
     return command
 
@@ -224,6 +228,9 @@ def start_run(
     stop_path = Path(control_paths.stop_request_file)
     if stop_path.exists():
         stop_path.unlink()
+    emergency_path = Path(control_paths.emergency_stop_file)
+    if emergency_path.exists():
+        emergency_path.unlink()
 
     command = run_execute_command(bundle, out_path, control_paths, repo, dotnet)
     stdout = open(control_paths.stdout_log, "w", encoding="utf-8", newline="\n")
@@ -261,6 +268,22 @@ def start_run(
 def request_stop(stop_request_file: str | Path) -> None:
     Path(stop_request_file).parent.mkdir(parents=True, exist_ok=True)
     Path(stop_request_file).write_text(f"stop requested at {utc_now()}\n", encoding="utf-8")
+
+
+def request_emergency_stop(emergency_stop_file: str | Path) -> None:
+    Path(emergency_stop_file).parent.mkdir(parents=True, exist_ok=True)
+    Path(emergency_stop_file).write_text(f"emergency stop requested at {utc_now()}\n", encoding="utf-8")
+
+
+def discard_run_dir(run_dir: str | Path) -> Path:
+    source = Path(run_dir)
+    if not source.exists():
+        raise FileNotFoundError(str(source))
+    discarded_root = source.parent / "_discarded"
+    discarded_root.mkdir(parents=True, exist_ok=True)
+    target = discarded_root / f"{source.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    source.replace(target)
+    return target
 
 
 def read_progress(path: str | Path) -> list[dict[str, Any]]:

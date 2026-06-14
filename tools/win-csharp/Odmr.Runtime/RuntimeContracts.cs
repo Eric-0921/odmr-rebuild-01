@@ -9,6 +9,7 @@ public enum RuntimeState
     CollectorRunning,
     PointRunning,
     Stopping,
+    Aborted,
     Completed,
     Failed,
     CleanupFailed
@@ -31,4 +32,12 @@ public sealed record RunProgressEvent(
     long? TimeoutCount,
     long? RawLenBadCount,
     long? DeltaGt1Count,
-    string? QualityStatus);
+    string? QualityStatus,
+    long? EstimatedRunDurationMs = null,
+    long? EstimatedPointDurationMs = null,
+    long? EstimatedSweepDurationMs = null,
+    long? SweepPoints = null,
+    long? StartHz = null,
+    long? StopHz = null,
+    long? StepHz = null,
+    int? DwellMs = null);

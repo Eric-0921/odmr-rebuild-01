@@ -24,7 +24,7 @@ python3 tools/odmr-console-python/odmr_console_qt.py
 - `本次实验配置`：选择六个 JSON 和 run 输出目录，显示本地 JSON 摘要。
 - `配置生成`：生成 plan、SMB profile、OE profile、Laser profile，并自动绑定到本次实验配置。
 - `预检查 / 预计用时`：调用 C# `run-resolve`。
-- `运行监控`：调用 C# `run-execute --progress-jsonl --stop-request-file`，只 tail progress JSONL。
+- `运行监控`：调用 C# `run-execute --progress-jsonl --stop-request-file --emergency-stop-file`，只 tail progress JSONL。
 - `数据审查`：调用 C# `artifact-check` 和 `audit-continuity`。
 
 Plan 类型：
@@ -35,7 +35,11 @@ Plan 类型：
 
 ## 边界
 
-PySide6 不直接操作 VISA、Serial、TCP，也不发 SMB/OE/M8812/Laser 命令。Stop 语义仍是 stop-after-current-point，只通过 stop request file 触发 C# runtime 现有 cancellation。
+PySide6 不直接操作 VISA、Serial、TCP，也不发 SMB/OE/M8812/Laser 命令。普通 Stop 语义仍是 stop-after-current-point，只通过 stop request file 触发 C# runtime 在 point 边界退出。
+
+急停按钮只创建 `control/emergency_stop.request`。C# runtime 收到后尽快中断当前 point/sweep，执行 SMB RF OFF、Laser OFF、M8812 cleanup、collector stop，并把 summary/manifest 写为 `aborted`。UI 收到 `run_aborted` 后询问是否保留本次数据；选择丢弃时移动到同级 `_discarded`，不直接删除。
+
+预计进度是 UI 本地估算，不是实验真值。`run-resolve` 输出 `estimated_sweep`、`estimated_point_duration_ms`、`estimated_run_duration_ms`；运行中 progress JSONL 低频输出 `sweep_started/sweep_completed` 和 sweep 参数。PySide6 用 500 ms timer 插值显示当前 sweep 和总进度，超过预计时停在 99% 等待设备完成或 cleanup。这个机制不读取 RALL raw，不按 frame 推进，也不进入 collector。
 
 配置生成器中的单位选择只影响输入显示；写入 JSON 前统一转换到 C# runtime 使用的 canonical unit。
 
@@ -118,6 +122,8 @@ Windows 真机：
 
 - Run Monitor 只按文件 offset 增量 tail `progress.jsonl`，不读 RALL raw，不进入 collector。
 - stdout/stderr 继续写入 `<out-dir>/control/stdout.log` 和 `stderr.log`，避免 pipe 阻塞。
+- 预计进度只依赖 SMB sweep 参数和 UI 本地时钟，不作为 artifact、quality 或审计依据。
+- 急停路径由 C# runtime 做安全停机；Python/PySide6 不直接向设备发命令。
 - 如果 C# `dotnet run` 进程在 terminal progress event 前退出，Run Monitor 会停止计时器并显示 stdout/stderr 尾部，避免 UI 一直停留在 running。
 - Config Generator 当前扫描块校验失败时会阻止 Generate，避免用户界面显示的新扫描参数未写入 JSON 而实际运行旧 block。
 - Artifact Review 运行 `artifact-check` / `audit-continuity` 时会禁用审查按钮，避免重复点击造成输出混乱。

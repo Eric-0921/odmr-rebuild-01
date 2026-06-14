@@ -13,6 +13,7 @@ from odmr_console_core import (
     generate_config_bundle,
     load_json,
     read_progress,
+    request_emergency_stop,
     request_stop,
     resolve_bundle,
     start_run,
@@ -39,6 +40,10 @@ def main(argv: list[str] | None = None) -> int:
     stop = subparsers.add_parser("stop", help="request stop-after-current-point")
     stop.add_argument("--metadata")
     stop.add_argument("--stop-request-file")
+
+    emergency = subparsers.add_parser("emergency-stop", help="request immediate safe stop")
+    emergency.add_argument("--metadata")
+    emergency.add_argument("--emergency-stop-file")
 
     progress = subparsers.add_parser("read-progress", help="print existing progress JSONL records as a JSON array")
     progress.add_argument("--progress-jsonl", required=True)
@@ -71,6 +76,17 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("stop requires --metadata or --stop-request-file")
         request_stop(stop_path)
         print(f"stop requested: {stop_path}")
+        return 0
+
+    if args.command == "emergency-stop":
+        emergency_path = args.emergency_stop_file
+        if args.metadata:
+            metadata = load_json(args.metadata)
+            emergency_path = metadata["control_paths"]["emergency_stop_file"]
+        if not emergency_path:
+            parser.error("emergency-stop requires --metadata or --emergency-stop-file")
+        request_emergency_stop(emergency_path)
+        print(f"emergency stop requested: {emergency_path}")
         return 0
 
     if args.command == "read-progress":
