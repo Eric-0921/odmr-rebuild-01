@@ -96,6 +96,45 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run <r
 - `delta_gt1_count = 0`
 - `audit-continuity verdict = continuous`
 
+## Gate 24 实测结果
+
+2026-06-14 Windows 真机验证：
+
+- Python console core 生成 3-point demo bundle，C# `run-resolve` 解析为 `explicit_points`，`resolved_point_count = 3`。
+- Python console core 启动 demo 3-point run：
+  - run dir: `runs/python_console_gate24_demo_20260614_072440`
+  - `points=3/3`
+  - `timeout=0`
+  - `raw_len_bad=0`
+  - `delta_gt1=0`
+  - `artifact-check passed`
+  - `audit-continuity verdict=continuous`
+- `stop-request-file` 验证：
+  - run dir: `runs/python_console_gate24_stop_20260614_072800`
+  - 第 1 个 point 完成后停止
+  - `stop_after_current_point_requested` 出现在 progress/events
+  - cleanup 完整
+  - `artifact-check passed`
+- 15min laser background 第一次：
+  - run dir: `runs/python_console_gate24_15min_20260614_072943`
+  - `points=21/21`
+  - `timeout=0`
+  - `raw_len_bad=0`
+  - `artifact-check passed`
+  - `delta_gt1=1`
+  - `audit-continuity verdict=device_counter_missing_windows`
+  - audit 定位为 `prev_frame_seq=2007 -> next_frame_seq=2008`，`delta=2`，`gap_ms=33.8729`
+- 15min laser background repeat：
+  - run dir: `runs/python_console_gate24_15min_20260614_074757`
+  - `points=21/21`
+  - `timeout=0`
+  - `raw_len_bad=0`
+  - `delta_gt1=0`
+  - `artifact-check passed`
+  - `audit-continuity verdict=continuous`
+
+结论：progress JSONL / stop-request 协议没有进入 collector 热路径；repeat 15min 满足连续性验收。第一次 15min 的单个 device counter gap 作为偶发采集异常保留记录，不在本 gate 内通过改 collector 处理。
+
 ## RALL 约束
 
 本 gate 不修改 `OeRallCollector`。
