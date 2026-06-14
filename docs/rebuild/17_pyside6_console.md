@@ -114,3 +114,52 @@ Windows 真机：
 - 如果 C# `dotnet run` 进程在 terminal progress event 前退出，Run Monitor 会停止计时器并显示 stdout/stderr 尾部，避免 UI 一直停留在 running。
 - Config Generator 当前扫描块校验失败时会阻止 Generate，避免用户界面显示的新扫描参数未写入 JSON 而实际运行旧 block。
 - Artifact Review 运行 `artifact-check` / `audit-continuity` 时会禁用审查按钮，避免重复点击造成输出混乱。
+## 完整程序启动（Windows 日常入口）
+
+Windows 实验机的日常工作区固定使用：
+
+```powershell
+cd D:\git-zbw\odmr-rebuild-01
+```
+
+每次从 Mac 侧同步新 commit 后，Windows 侧先更新仓库：
+
+```powershell
+git fetch origin
+git reset --hard origin/main
+```
+
+启动完整程序的推荐入口是 PySide6 console。它负责配置组合、生成 plan/profile、调用 C# `run-execute`、tail progress JSONL、发 stop-after-current-point request，并提供 artifact 审查入口：
+
+```powershell
+python tools\odmr-console-python\odmr_console_qt.py
+```
+
+如果 Python 环境缺少 PySide6，先安装 UI 依赖：
+
+```powershell
+python -m pip install -r tools\odmr-console-python\requirements-pyside6.txt
+```
+
+GUI 里完整实验路径：
+
+1. 在 `Run Bundle` 页选择 `station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`。
+2. 如需新点表或 profile，在 `Config Generator` / `Magnetic Plan` / `SMB100A` / `OE1022D` / `Laser` 页生成并保存 JSON。
+3. 在 `Run Monitor` 页选择输出目录，点击启动；该入口实际调用 C# `Odmr.WinProbe run-execute`。
+4. 实验结束后，在 `Artifact Review` 页运行 `artifact-check` 和 `audit-continuity`。
+
+不走 GUI 时，等价的最小 CLI 启动链路是：
+
+```powershell
+dotnet build tools\win-csharp\Odmr.Win.sln
+dotnet run --project tools\win-csharp\Odmr.WinProbe -- run-resolve --station configs\stations\lab_a.json --calibration configs\calibrations\main.json --plan configs\plans\minimal_3point_runtime.json --smb-profile configs\profiles\smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs\profiles\oe1022d_run_ch_b_observed.json --laser-profile configs\profiles\cni_laser_run_off_background.json
+dotnet run --project tools\win-csharp\Odmr.WinProbe -- run-execute --station configs\stations\lab_a.json --calibration configs\calibrations\main.json --plan configs\plans\minimal_3point_runtime.json --smb-profile configs\profiles\smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs\profiles\oe1022d_run_ch_b_observed.json --laser-profile configs\profiles\cni_laser_run_off_background.json --out-dir runs\win_csharp_manual_minimal
+dotnet run --project tools\win-csharp\Odmr.WinProbe -- artifact-check --run runs\win_csharp_manual_minimal
+dotnet run --project tools\win-csharp\Odmr.WinProbe -- audit-continuity --run runs\win_csharp_manual_minimal --out runs\win_csharp_manual_minimal\continuity_audit.json
+```
+
+边界：
+
+- Python/PySide6 console 是当前完整程序入口，但不直接控制设备。
+- 设备控制仍只由 Windows C# `Odmr.WinProbe` 执行。
+- `artifact-check` 和 `audit-continuity` 是只读审查，不碰设备。
