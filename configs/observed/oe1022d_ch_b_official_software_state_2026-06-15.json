@@ -1,0 +1,94 @@
+{
+  "device_id": "oe1022d_main",
+  "station_id": "lab_a",
+  "captured_at_local": "2026-06-15T01:17:51.5707710+08:00",
+  "capture_kind": "read_only_snapshot_after_official_oe1022d_software_save",
+  "transport": {
+    "port": "COM8",
+    "baud": 921600
+  },
+  "identity": "SSI LIA-OE1022D,SN:D6522078,Version:Ver6.3200831",
+  "oe1022d_channel_b_observed": {
+    "reference_source": {
+      "command": "FMODD? 2",
+      "observed": "0",
+      "meaning": "external_reference"
+    },
+    "reference_trigger": {
+      "command": "RSLPD? 2",
+      "observed": "2",
+      "meaning": "hardware_observed_locked_state"
+    },
+    "reference_phase_deg": {
+      "command": "PHASD? 2",
+      "observed": "0.00"
+    },
+    "reference_frequency_hz": {
+      "command": "FREQD? 2",
+      "observed": "4.99999e+02"
+    },
+    "pll_locked": {
+      "command": "*PLLD? 2",
+      "observed": "1"
+    },
+    "input_overload": {
+      "command": "INOVD ? 2",
+      "observed": "0"
+    },
+    "gain_overload": {
+      "command": "GNOVD ? 2",
+      "observed": "0"
+    },
+    "input_source": {
+      "command": "ISRCD? 2",
+      "observed": "0",
+      "meaning": "single_ended_voltage_a"
+    },
+    "input_grounding": {
+      "command": "IGNDD? 2",
+      "observed": "0",
+      "meaning": "float"
+    },
+    "input_coupling": {
+      "command": "ICPLD? 2",
+      "observed": "0",
+      "meaning": "ac_coupling"
+    },
+    "line_notch_filter": {
+      "command": "ILIND? 2",
+      "observed": "0",
+      "meaning": "off"
+    },
+    "dynamic_reserve": {
+      "command": "RMODD? 2",
+      "observed": "1",
+      "meaning": "normal"
+    },
+    "sensitivity_index": {
+      "command": "SENSD? 2",
+      "observed": "24",
+      "meaning": "100 mV/nA"
+    },
+    "time_constant_index": {
+      "command": "OFLTD? 2",
+      "observed": "7",
+      "meaning": "30 ms"
+    },
+    "filter_slope": {
+      "command": "OFSLD? 2",
+      "observed": "1",
+      "meaning": "12 dB/oct"
+    },
+    "sync_filter": {
+      "command": "SYNCD? 2",
+      "observed": "0",
+      "meaning": "off"
+    }
+  },
+  "implementation_update": {
+    "oe_profile": "configs/profiles/oe1022d_run_ch_b_observed.json",
+    "input_coupling": 0,
+    "time_constant_index": 7,
+    "reason": "Match official OE1022D software state that produced visible ODMR signal and no overload."
+  }
+}

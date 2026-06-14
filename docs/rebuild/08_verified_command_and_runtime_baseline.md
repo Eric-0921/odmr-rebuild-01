@@ -79,6 +79,26 @@
 - rebuild 中凡是把 `RSLPD` 固定写成 `0/1` 的地方，都只能视为旧假设，不能再当成真值
 - 下一阶段实现必须允许“手册原文”与“真机观测”并存，直到完成受控 write-back 试验
 
+## 官方软件有效状态读回（2026-06-15）
+
+在官方 OE1022D 采集软件保存出可见 ODMR 谱线之后，rebuild 侧通过 SSH 到 Windows 主机，只读查询 Channel-B 状态。关键差异是：
+
+- `ICPLD? 2 = 0`：Channel-B 当前为 AC coupling。
+- `OFLTD? 2 = 7`：Channel-B 当前时间常数为 30 ms。
+- `INOVD ? 2 = 0`、`GNOVD ? 2 = 0`：官方有效状态下没有输入/增益过载。
+- `*PLLD? 2 = 1`、`FREQD? 2 = 4.99999e+02`：外部参考锁定在约 500 Hz。
+
+对应产物：
+
+- `configs/observed/oe1022d_ch_b_official_software_state_2026-06-15.json`
+
+因此 C# 主 profile 更新为：
+
+- `input_coupling = 0`
+- `time_constant_index = 7`
+
+这两个值是当前实验有效谱线的真机事实；后续如果要改回 DC 或更长时间常数，必须作为独立实验参数变更记录。
+
 ## 验证状态规则
 
 本文与命令规格文档统一使用以下状态：
