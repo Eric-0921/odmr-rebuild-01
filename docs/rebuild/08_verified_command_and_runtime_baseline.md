@@ -361,7 +361,7 @@ run 结束后额外只读核验：
   - 因为 `raw / frames.idx / frames.parsed` 已保持条数对齐
 - 坏点根因已收敛到真实 collector / transport 抖动
 
-## 3D `0/50/100 uT` 单轮验证结果（2026-06-12）
+## 3D `0/50/100 nT` 单轮验证结果（2026-06-12）
 
 真机运行命令：
 
@@ -387,7 +387,7 @@ run 结束后额外只读核验：
 
 这说明当前 runtime 已经真机证明：
 
-- 3D `x/y/z = [0, 50, 100] uT` 的 27 点笛卡尔积能正确展开并单轮执行
+- 3D `x/y/z = [0, 50, 100] nT` 的 27 点笛卡尔积能正确展开并单轮执行
 - `target_b_nt -> calibration -> target_current_a -> measured_current_a` 三轴电流链已在真实 run 中完整落盘
 - 3D 快配 profile 下，run 级 collector 可在 27 点单轮中保持 `0-byte timeout = 0`
 - 默认轻量 artifact 策略不会破坏 replay / continuity audit / point 级字段 sidecar

@@ -189,5 +189,5 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 - 当前零场锁定语义是“零偏电流锁定 + 复现电流叠加”，不是物理零磁场已证明
 - 当前磁场电源第一版只支持非负目标电流；默认 1D/2D/3D 示例网格已全部改成非负值
 - 当前 `point_fields.jsonl` 已改成轻量 metadata；完整 20 字段数组和必要状态数组进入每个 point 的 `NPZ` sidecar
-- 当前 `runs/grid_3d_raster_0_50_100ut_validation_live` 已完成 `3D 0/50/100 uT` 单轮真机验证：`27/27 points passed`、`collector_timeout_total=0`
+- 当前 `runs/grid_3d_raster_0_50_100ut_validation_live` 已完成 `3D 0/50/100 nT` 单轮真机验证：`27/27 points passed`、`collector_timeout_total=0`
 - continuity audit 现在即使没有 `frames.parsed`，也能直接从 `raw + frames.idx` 重建逐帧结构化数据做审计

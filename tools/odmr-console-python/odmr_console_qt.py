@@ -75,7 +75,6 @@ from odmr_config_core import (  # noqa: E402
 )
 
 
-FIELD_UNITS = ["nT", "uT", "mT"]
 CURRENT_UNITS = ["A", "mA"]
 VOLTAGE_UNITS = ["V", "mV"]
 TIME_UNITS = ["ms", "s"]
@@ -629,9 +628,9 @@ class ConfigGeneratorPage(QWidget):
         self.plan_kind.addItems(PLAN_KIND_CHOICES)
         self.plan_kind.setCurrentText(find_choice_by_token("no_magnetic_control", PLAN_KIND_CHOICES))
         self.acquisition_step_count = QLineEdit("1")
-        self.fixed_x = NumberUnitInput(0, FIELD_UNITS, "nT")
-        self.fixed_y = NumberUnitInput(0, FIELD_UNITS, "nT")
-        self.fixed_z = NumberUnitInput(0, FIELD_UNITS, "nT")
+        self.fixed_x = NumberUnitInput(0, unit="nT")
+        self.fixed_y = NumberUnitInput(0, unit="nT")
+        self.fixed_z = NumberUnitInput(0, unit="nT")
         add_form_row(mode_grid, 0, 0, "计划类型", self.plan_kind)
         add_form_row(mode_grid, 0, 1, "无磁场采集步数", self.acquisition_step_count)
         add_form_row(mode_grid, 1, 0, "恒定 X 磁场", self.fixed_x)
@@ -684,20 +683,17 @@ class ConfigGeneratorPage(QWidget):
         enabled = QCheckBox("启用")
         mode = QComboBox()
         mode.addItems(MAG_AXIS_MODE_CHOICES)
-        fixed = NumberUnitInput(0, FIELD_UNITS, "nT")
-        start = NumberUnitInput(0, FIELD_UNITS, "nT")
-        stop = NumberUnitInput(40 if axis == "x" else 0, FIELD_UNITS, "nT")
-        step = NumberUnitInput(10, FIELD_UNITS, "nT")
+        fixed = NumberUnitInput(0, unit="nT")
+        start = NumberUnitInput(0, unit="nT")
+        stop = NumberUnitInput(40 if axis == "x" else 0, unit="nT")
+        step = NumberUnitInput(10, unit="nT")
         values_text = QLineEdit("0, 10, 20, 30, 40")
-        values_unit = QComboBox()
-        values_unit.addItems(FIELD_UNITS)
-        values_unit.setCurrentText("nT")
         values_row = QWidget()
         values_layout = QHBoxLayout(values_row)
         values_layout.setContentsMargins(0, 0, 0, 0)
         values_layout.setSpacing(6)
         values_layout.addWidget(values_text, 1)
-        values_layout.addWidget(values_unit, 0)
+        values_layout.addWidget(QLabel("nT"), 0)
         form.addRow("启用扫描", enabled)
         form.addRow("输入方式", mode)
         form.addRow("固定磁场", fixed)
@@ -713,7 +709,6 @@ class ConfigGeneratorPage(QWidget):
             "stop": stop,
             "step": step,
             "values_text": values_text,
-            "values_unit": values_unit,
         }
         return group
 
@@ -1058,24 +1053,22 @@ class ConfigGeneratorPage(QWidget):
             widgets["stop"].set_text(spec.stop)
             widgets["step"].set_text(spec.step)
             widgets["values_text"].setText(spec.values_text)
-            widgets["values_unit"].setCurrentText("nT")
 
     def _read_axis(self, axis: str) -> AxisSpec:
         widgets = self.axis_widgets[axis]
-        field_unit_kind = "field"
         values_text = widgets["values_text"].text().strip()
         if choice_token(widgets["mode"].currentText()) == "list":
             values_text = ", ".join(
-                format_number(to_canonical_unit(value, field_unit_kind, widgets["values_unit"].currentText()))
+                format_number(to_canonical_unit(value, "field", "nT"))
                 for value in parse_values(values_text)
             )
         return AxisSpec(
             enabled=widgets["enabled"].isChecked(),
             mode=choice_token(widgets["mode"].currentText()),
-            fixed=widgets["fixed"].canonical(field_unit_kind),
-            start=widgets["start"].canonical(field_unit_kind),
-            stop=widgets["stop"].canonical(field_unit_kind),
-            step=widgets["step"].canonical(field_unit_kind),
+            fixed=widgets["fixed"].canonical("field"),
+            start=widgets["start"].canonical("field"),
+            stop=widgets["stop"].canonical("field"),
+            step=widgets["step"].canonical("field"),
             values_text=values_text,
         )
 

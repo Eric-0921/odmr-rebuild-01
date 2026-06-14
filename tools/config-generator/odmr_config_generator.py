@@ -84,7 +84,6 @@ SMB_SWEEP_MODE_CHOICES = ["AUTO", "MAN", "STEP"]
 SMB_SWEEP_SPACING_CHOICES = ["LIN", "LOG"]
 SMB_SWEEP_SHAPE_CHOICES = ["SAWT", "TRI"]
 SMB_TRIGGER_SOURCE_CHOICES = ["AUTO", "SING", "EXT"]
-FIELD_UNIT_CHOICES = ["nT", "uT", "mT"]
 CURRENT_UNIT_CHOICES = ["A", "mA"]
 VOLTAGE_UNIT_CHOICES = ["V", "mV"]
 TIME_UNIT_CHOICES = ["ms", "s"]
@@ -243,7 +242,6 @@ class ConfigGeneratorApp(tk.Tk):
         self.oe_vars: dict[str, tk.Variable] = {}
         self.laser_vars: dict[str, tk.Variable] = {}
         self.unit_vars: dict[str, tk.StringVar] = {
-            "field": tk.StringVar(value="nT"),
             "baseline_current": tk.StringVar(value="A"),
             "voltage": tk.StringVar(value="V"),
             "time": tk.StringVar(value="ms"),
@@ -657,12 +655,11 @@ class ConfigGeneratorApp(tk.Tk):
         self.axis_vars[axis] = vars_for_axis
         self._form_field(group, "启用扫描", vars_for_axis["enabled"], 0, 0)
         self._form_field(group, "输入方式", vars_for_axis["mode"], 1, 0, choices=MAG_AXIS_MODE_CHOICES)
-        field_unit = (self.unit_vars["field"], FIELD_UNIT_CHOICES)
-        self._form_field(group, "固定磁场", vars_for_axis["fixed"], 2, 0, unit=field_unit)
-        self._form_field(group, "起始磁场", vars_for_axis["start"], 3, 0, unit=field_unit)
-        self._form_field(group, "结束磁场", vars_for_axis["stop"], 4, 0, unit=field_unit)
-        self._form_field(group, "步进磁场", vars_for_axis["step"], 5, 0, unit=field_unit)
-        self._form_field(group, "显式点列表", vars_for_axis["values_text"], 6, 0, unit=field_unit)
+        self._form_field(group, "固定磁场", vars_for_axis["fixed"], 2, 0, unit="nT")
+        self._form_field(group, "起始磁场", vars_for_axis["start"], 3, 0, unit="nT")
+        self._form_field(group, "结束磁场", vars_for_axis["stop"], 4, 0, unit="nT")
+        self._form_field(group, "步进磁场", vars_for_axis["step"], 5, 0, unit="nT")
+        self._form_field(group, "显式点列表", vars_for_axis["values_text"], 6, 0, unit="nT")
 
     def _load_default_paths(self) -> None:
         self.template_vars["plan"].set(str(self.repo_root / "configs" / "plans" / "x_axis_1d_bounce_15min.json"))
@@ -695,9 +692,7 @@ class ConfigGeneratorApp(tk.Tk):
         if not old_unit or old_unit == new_unit:
             return
         try:
-            if key == "field":
-                self._convert_field_unit(old_unit, new_unit)
-            elif key == "baseline_current":
+            if key == "baseline_current":
                 self._convert_variables([
                     self.baseline_vars["baseline_x_a"],
                     self.baseline_vars["baseline_y_a"],
@@ -741,29 +736,6 @@ class ConfigGeneratorApp(tk.Tk):
                 variable.set(from_canonical_unit(to_canonical_unit(variable.get(), unit_kind, old_unit), unit_kind, new_unit))
             except Exception:
                 continue
-
-    def _convert_field_unit(self, old_unit: str, new_unit: str) -> None:
-        selected = self._selected_block_index()
-        if selected is not None:
-            try:
-                self.blocks[selected] = self._read_block()
-            except Exception:
-                selected = None
-        for block in self.blocks:
-            for spec in block.axes.values():
-                spec.fixed = self._convert_number(spec.fixed, "field", old_unit, new_unit)
-                spec.start = self._convert_number(spec.start, "field", old_unit, new_unit)
-                spec.stop = self._convert_number(spec.stop, "field", old_unit, new_unit)
-                spec.step = self._convert_number(spec.step, "field", old_unit, new_unit)
-                try:
-                    spec.values_text = ", ".join(
-                        format_number(self._convert_number(value, "field", old_unit, new_unit))
-                        for value in parse_values(spec.values_text)
-                    )
-                except Exception:
-                    pass
-        if selected is not None:
-            self._load_block(selected)
 
     def _convert_number(self, value: object, unit_kind: str, old_unit: str, new_unit: str) -> float:
         return from_canonical_unit(to_canonical_unit(value, unit_kind, old_unit), unit_kind, new_unit)
@@ -902,28 +874,27 @@ class ConfigGeneratorApp(tk.Tk):
         )
 
     def _canonical_blocks(self) -> list[ScanBlock]:
-        field_unit = self.unit_vars["field"].get()
         blocks: list[ScanBlock] = []
         for block in self.blocks:
             blocks.append(ScanBlock(
                 prefix=block.prefix,
                 traversal=block.traversal,
                 total_points=block.total_points,
-                axes={axis: self._canonical_axis(spec, field_unit) for axis, spec in block.axes.items()},
+                axes={axis: self._canonical_axis(spec) for axis, spec in block.axes.items()},
             ))
         return blocks
 
-    def _canonical_axis(self, spec: AxisSpec, field_unit: str) -> AxisSpec:
+    def _canonical_axis(self, spec: AxisSpec) -> AxisSpec:
         values_text = spec.values_text
         if spec.mode == "list":
-            values_text = ", ".join(format_number(to_canonical_unit(value, "field", field_unit)) for value in parse_values(spec.values_text))
+            values_text = ", ".join(format_number(to_canonical_unit(value, "field", "nT")) for value in parse_values(spec.values_text))
         return AxisSpec(
             enabled=spec.enabled,
             mode=spec.mode,
-            fixed=to_canonical_unit(spec.fixed, "field", field_unit),
-            start=to_canonical_unit(spec.start, "field", field_unit),
-            stop=to_canonical_unit(spec.stop, "field", field_unit),
-            step=to_canonical_unit(spec.step, "field", field_unit),
+            fixed=to_canonical_unit(spec.fixed, "field", "nT"),
+            start=to_canonical_unit(spec.start, "field", "nT"),
+            stop=to_canonical_unit(spec.stop, "field", "nT"),
+            step=to_canonical_unit(spec.step, "field", "nT"),
             values_text=values_text,
         )
 

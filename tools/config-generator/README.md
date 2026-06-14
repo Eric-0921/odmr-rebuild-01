@@ -128,7 +128,7 @@ UI 扫描块
 
 界面把单位选择放在对应数值输入框右侧，不再集中放在页面开头。改变单位时，当前数值会按物理量自动换算，例如 `2.83 GHz` 切到 `MHz` 会显示为 `2830`。写入 JSON 时仍统一回到 C# runtime 的 canonical units：
 
-- Magnetic field: UI 可选 `nT/uT/mT`，JSON 写 `target_b_nt`，单位固定为 `nT`。
+- Magnetic field: UI 统一使用 `nT`，JSON 写 `target_b_nt`，单位固定为 `nT`。
 - M8812 current: UI 可选 `A/mA`，JSON 写 `baseline_current_a` 和 `settle_tolerance_a`，单位固定为 `A`。
 - Voltage: UI 可选 `V/mV`，plan JSON 写 `voltage_v` / `voltage_protection_v`，单位固定为 `V`。
 - Time: UI 可选 `ms/s`，plan/profile JSON 中的 settle、dwell、quality age 等字段固定写 `ms`。
