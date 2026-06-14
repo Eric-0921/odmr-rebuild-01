@@ -64,3 +64,43 @@ python tools/odmr-console-python/odmr_console_qt.py
 - `raw_len_bad=0`
 - `delta_gt1=0`
 - `audit-continuity verdict=continuous`
+
+## 2026-06-14 验证记录
+
+Mac 本机：
+
+- 已安装 `PySide6 6.11.1`。
+- `py_compile` 通过。
+- `tools/odmr-console-python/tests/test_odmr_console_core.py` 通过。
+- `tools/config-generator/tests/test_config_core.py` 通过。
+- PySide6 界面已实际启动并截图检查：Run Bundle、Config Generator、Magnetic Plan、SMB100A、OE1022D、Run Monitor、Artifact Review 页面没有明显文字挤压；单位控件位于数值输入右侧。
+
+Windows 真机：
+
+- 仓库同步到 `dadb4f1 Add PySide6 ODMR console`。
+- 已安装 `PySide6 6.11.1`。
+- `py_compile` 通过。
+- Python console core 测试通过。
+- config generator core 测试通过。
+- `dotnet build tools/win-csharp/Odmr.Win.sln` 通过，`0 warnings / 0 errors`。
+- PySide6 headless smoke 通过：UI 类生成临时 JSON、绑定 Run Bundle，并调用 C# `run-resolve`，`resolved_point_count = 8`。
+- PySide6 Run Monitor 路径启动 minimal 3-point：
+  - run dir: `runs/pyside6_ui_minimal_20260614_084932`
+  - `points = 3/3`
+  - `frames_total = 4733`
+  - `timeout = 0`
+  - `raw_len_bad = 0`
+  - `delta_gt1 = 0`
+  - `artifact-check passed`
+  - `audit-continuity verdict = continuous`
+- PySide6 Run Monitor 路径启动 15min laser background：
+  - run dir: `runs/pyside6_ui_15min_laser_20260614_085303`
+  - elapsed: `973.7s`
+  - `points = 21/21`
+  - `frames_total = 30482`
+  - `timeout = 0`
+  - `raw_len_bad = 0`
+  - `delta_gt1 = 0`
+  - `artifact-check passed`
+  - `quality_status_counts.passed = 21`
+  - `audit-continuity verdict = continuous`
