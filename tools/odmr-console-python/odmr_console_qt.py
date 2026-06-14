@@ -48,6 +48,7 @@ from odmr_console_core import (
     load_json,
     process_is_running,
     read_progress,
+    read_progress_since,
     read_text_tail,
     request_stop,
     resolve_bundle,
@@ -1233,7 +1234,8 @@ class RunMonitorPage(QWidget):
         self.out_dir_provider = out_dir_provider
         self.worker: WorkerThread | None = None
         self.handle: Any | None = None
-        self.progress_rows = 0
+        self.progress_offset = 0
+        self.latest_progress: dict[str, Any] | None = None
         layout = QVBoxLayout(self)
         layout.addWidget(section_label("Run Monitor"))
         layout.addWidget(note_label("启动 C# run-execute。进度来自 progress JSONL，stdout/stderr 只写入 control 日志，避免 pipe 阻塞。"))
@@ -1282,7 +1284,8 @@ class RunMonitorPage(QWidget):
 
     def _started(self, handle: Any) -> None:
         self.handle = handle
-        self.progress_rows = 0
+        self.progress_offset = 0
+        self.latest_progress = None
         self.table.setRowCount(0)
         self.stop_button.setEnabled(True)
         self.log.setPlainText(json.dumps(asdict(handle), indent=2, ensure_ascii=False))
@@ -1303,12 +1306,16 @@ class RunMonitorPage(QWidget):
     def refresh_progress(self) -> None:
         if not self.handle:
             return
-        records = read_progress(self.handle.control_paths.progress_jsonl)
-        for record in records[self.progress_rows:]:
+        records, self.progress_offset = read_progress_since(
+            self.handle.control_paths.progress_jsonl,
+            self.progress_offset,
+        )
+        for record in records:
             self._append_record(record)
-        self.progress_rows = len(records)
         if records:
-            latest = records[-1]
+            self.latest_progress = records[-1]
+        if self.latest_progress:
+            latest = self.latest_progress
             self.state.setText(str(latest.get("state", "-")))
             self.point.setText(f"{latest.get('point_id') or '-'}  {latest.get('point_index') or '-'} / {latest.get('points_total') or '-'}")
             self.frames.setText(str(latest.get("frames_total") or "-"))
@@ -1358,6 +1365,7 @@ class ArtifactReviewPage(QWidget):
         super().__init__()
         self.out_dir_provider = out_dir_provider
         self.worker: WorkerThread | None = None
+        self.review_buttons: list[QPushButton] = []
         layout = QVBoxLayout(self)
         layout.addWidget(section_label("Artifact Review"))
         layout.addWidget(note_label("只读 run artifact。artifact-check 和 audit-continuity 都由 C# CLI 执行，不碰设备。"))
@@ -1373,12 +1381,13 @@ class ArtifactReviewPage(QWidget):
         input_row.addWidget(browse)
         layout.addLayout(input_row)
         actions = QHBoxLayout()
-        check = QPushButton("artifact-check")
-        check.clicked.connect(self.artifact_check)
-        audit = QPushButton("audit-continuity")
-        audit.clicked.connect(self.audit)
-        actions.addWidget(check)
-        actions.addWidget(audit)
+        self.check_button = QPushButton("artifact-check")
+        self.check_button.clicked.connect(self.artifact_check)
+        self.audit_button = QPushButton("audit-continuity")
+        self.audit_button.clicked.connect(self.audit)
+        self.review_buttons = [self.check_button, self.audit_button]
+        actions.addWidget(self.check_button)
+        actions.addWidget(self.audit_button)
         actions.addStretch(1)
         layout.addLayout(actions)
         self.output = QPlainTextEdit()
@@ -1408,12 +1417,14 @@ class ArtifactReviewPage(QWidget):
 
     def _run_command(self, command: list[str], json_out: Path | None = None) -> None:
         self.output.setPlainText(command_to_text(command))
+        self._set_running(True)
         self.worker = WorkerThread(lambda: subprocess.run(command, cwd=REPO_ROOT, text=True, capture_output=True, check=False))
         self.worker.completed.connect(lambda result: self._done(result, json_out))
-        self.worker.failed.connect(lambda message: self.output.setPlainText(message))
+        self.worker.failed.connect(self._failed)
         self.worker.start()
 
     def _done(self, result: subprocess.CompletedProcess[str], json_out: Path | None) -> None:
+        self._set_running(False)
         text = [f"returncode={result.returncode}"]
         if result.stdout:
             text.append("\nSTDOUT:\n" + result.stdout)
@@ -1433,6 +1444,14 @@ class ArtifactReviewPage(QWidget):
             except Exception:
                 pass
         self.output.setPlainText("\n".join(text))
+
+    def _failed(self, message: str) -> None:
+        self._set_running(False)
+        self.output.setPlainText(message)
+
+    def _set_running(self, running: bool) -> None:
+        for button in self.review_buttons:
+            button.setEnabled(not running)
 
 
 class MainWindow(QMainWindow):

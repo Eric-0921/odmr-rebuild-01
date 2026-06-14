@@ -109,7 +109,8 @@ Windows 真机：
 
 ## 长时间运行 UI 外壳校对
 
-- Run Monitor 只 tail `progress.jsonl`，不读 RALL raw，不进入 collector。
+- Run Monitor 只按文件 offset 增量 tail `progress.jsonl`，不读 RALL raw，不进入 collector。
 - stdout/stderr 继续写入 `<out-dir>/control/stdout.log` 和 `stderr.log`，避免 pipe 阻塞。
 - 如果 C# `dotnet run` 进程在 terminal progress event 前退出，Run Monitor 会停止计时器并显示 stdout/stderr 尾部，避免 UI 一直停留在 running。
 - Config Generator 当前扫描块校验失败时会阻止 Generate，避免用户界面显示的新扫描参数未写入 JSON 而实际运行旧 block。
+- Artifact Review 运行 `artifact-check` / `audit-continuity` 时会禁用审查按钮，避免重复点击造成输出混乱。

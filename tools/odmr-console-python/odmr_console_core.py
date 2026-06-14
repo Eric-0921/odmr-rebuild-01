@@ -276,6 +276,20 @@ def read_progress(path: str | Path) -> list[dict[str, Any]]:
     return records
 
 
+def read_progress_since(path: str | Path, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
+    progress_path = Path(path)
+    if not progress_path.exists():
+        return [], offset
+    records = []
+    with progress_path.open("r", encoding="utf-8") as handle:
+        handle.seek(offset)
+        for line in handle:
+            stripped = line.strip()
+            if stripped:
+                records.append(json.loads(stripped))
+        return records, handle.tell()
+
+
 def process_is_running(pid: int) -> bool:
     if pid <= 0:
         return False

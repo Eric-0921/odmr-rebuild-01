@@ -16,6 +16,7 @@ from odmr_console_core import (  # noqa: E402
     generate_config_bundle,
     process_is_running,
     read_progress,
+    read_progress_since,
     read_text_tail,
     request_stop,
     run_execute_command,
@@ -54,6 +55,13 @@ class OdmrConsoleCoreTests(unittest.TestCase):
             progress.parent.mkdir(parents=True, exist_ok=True)
             progress.write_text('{"event_name":"run_opened"}\n{"event_name":"collector_started"}\n', encoding="utf-8")
             self.assertEqual([record["event_name"] for record in read_progress(progress)], ["run_opened", "collector_started"])
+            first_records, offset = read_progress_since(progress)
+            self.assertEqual([record["event_name"] for record in first_records], ["run_opened", "collector_started"])
+            with progress.open("a", encoding="utf-8") as handle:
+                handle.write('{"event_name":"point_completed"}\n')
+            next_records, next_offset = read_progress_since(progress, offset)
+            self.assertEqual([record["event_name"] for record in next_records], ["point_completed"])
+            self.assertGreater(next_offset, offset)
 
     def test_process_status_and_text_tail_helpers(self) -> None:
         self.assertTrue(process_is_running(os.getpid()))
