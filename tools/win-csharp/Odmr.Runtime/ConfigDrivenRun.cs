@@ -925,11 +925,10 @@ public static class ConfigDrivenRun
             throw new IOException($"SMB100A output state mismatch after sweep execute: expected 0, observed {output}");
         }
 
-        {
-            SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeCw);
-            SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.SetFrequencyHz(sweep.StartHz));
-            var error = smb.Query(Smb100aCommands.QuerySystemError);
-            if (!Smb100aTcp.ErrorIsClean(error))
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeCw);
+        SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.SetFrequencyHz(sweep.StartHz));
+        var error = smb.Query(Smb100aCommands.QuerySystemError);
+        if (!Smb100aTcp.ErrorIsClean(error))
         {
             throw new IOException($"SMB100A return-to-CW error: {error}");
         }
