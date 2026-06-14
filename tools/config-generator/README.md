@@ -84,6 +84,7 @@ python3 tools/config-generator/tests/test_config_core.py
 
 - 目标磁场点：controlled point 生成到 plan JSON 的 `points[].target_b_nt`，单位固定为 `nT`。
 - 磁场到电流的换算：`configs/calibrations/main.json` 的 `current_offset_a` 和 `current_per_nt`。
+  默认主 calibration 应与 `reverse_application/reverse_output/para.xml` 的三轴 `CoilConstant(nT/mA)` 一致，即使用其倒数并换成 `A/nT`。
 - 零偏电流策略：plan JSON 的 `mag_baseline_policy.baseline_current_a`、`settle_ms`、`readback_samples`、`settle_tolerance_a`。
 - 运行时换算代码：`tools/win-csharp/Odmr.Runtime/RunConfig.cs` 的 `CalibrationProfile.TargetCurrentA(...)`。
 - 运行时执行链：`tools/win-csharp/Odmr.Runtime/ConfigDrivenRun.cs` 中 point loop 的 `target_b_nt -> target_current_a -> M8812 SetCurrent -> MEAS:CURR?`。

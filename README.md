@@ -136,7 +136,8 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
   - collector 参数和 ring buffer 容量一并固化
 - `configs/calibrations/main.json`
   - 第一版最小磁场映射样例
-  - 当前示例是对角线 `1 mA / nT`
+  - 当前默认值按 `reverse_application/reverse_output/para.xml` 的三轴线圈常数反推
+  - 对角线近似为 `X=6.980315e-6`、`Y=7.053679e-6`、`Z=6.404099e-6 A/nT`
 - `configs/plans/minimal_3point_runtime.json`
   - 零偏锁定策略
   - 3 个显式 `target_b_nt` point 的最小运行样例

@@ -346,6 +346,7 @@ class ConfigGeneratorApp(tk.Tk):
                 "point 表示一次采集 step；此 fallback 页面仍主要生成 controlled 磁场点。"
                 "原厂反编译得到的线圈/电流语义不在这里手填，而由 calibration JSON 与计划策略共同决定："
                 "target_b_nt -> current_per_nt/current_offset_a -> target_current_a -> M8812 MEAS:CURR? 回读。"
+                "current_per_nt 应来自 para.xml 线圈常数的倒数并换成 A/nT，不应手填成 mA/nT 量级。"
                 "这仍是零偏电流锁定链路，不是物理磁场闭环。"
             ),
             wraplength=980,

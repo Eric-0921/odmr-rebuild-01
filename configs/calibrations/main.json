@@ -1,9 +1,9 @@
 {
-  "calibration_id": "lab_a_diag_1ma_per_nt",
+  "calibration_id": "lab_a_para_xml_inverse_coil_constant",
   "current_offset_a": [0.0, 0.0, 0.0],
   "current_per_nt": [
-    [0.001, 0.0, 0.0],
-    [0.0, 0.001, 0.0],
-    [0.0, 0.0, 0.001]
+    [0.000006980315, 0.0, 0.0],
+    [0.0, 0.000007053679, 0.0],
+    [0.0, 0.0, 0.000006404099]
   ]
 }
