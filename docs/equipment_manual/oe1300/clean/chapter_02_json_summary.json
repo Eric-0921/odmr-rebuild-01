@@ -1,0 +1,147 @@
+[
+  {
+    "pdf_page": 8,
+    "label": "paragraph_title",
+    "content": "## 2. 安全性和使用准备"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "详细阅读下列安全性预防措施，以避免人身伤害，并防止损坏本产品或与本产品连接的任何产品。为避免可能的危险，请务必按照规定使用本产品。只有合格人员才能执行维修过程。"
+  },
+  {
+    "pdf_page": 8,
+    "label": "paragraph_title",
+    "content": "### 2.1 避免火灾或人身伤害"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "使用合适的电源线。请只使用本产品专用并经所在国家/地区认证的电源线。"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "将产品接地。本产品通过电源线的接地导线接地。为避免电击，必须将接地导线与大地相连。在对本产品的输入端或输出端进行连接之前，请务必将本产品正确接地。"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "遵守所有终端额定值。为避免火灾或电击，请遵守产品上的所有额定值和标记。在对产品进行连接之前，请首先查阅产品手册，了解有关额定值的详细信息。只能将探头基准导线连接到大地。对任何终端（包括公共终端）施加的电压不要超过该终端的最大额定值。"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "断开电源。电源开关可以使产品断开电源。请参阅有关位置的说明。不要挡住电源开关；此电源开关必须能够随时供用户使用。"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "切勿开盖操作。请勿在外盖或面板打开时运行本产品。"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "怀疑产品出现故障时，请勿进行操作。如果怀疑本产品已损坏，请让合格的维修人员进行检查。"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "远离外露电路。电源接通后，请勿接触外露的线路和元件。"
+  },
+  {
+    "pdf_page": 8,
+    "label": "text",
+    "content": "环境条件。温度范围:+10°C~+40°C；相对湿度:<90%不凝结"
+  },
+  {
+    "pdf_page": 9,
+    "label": "paragraph_title",
+    "content": "### 2.2 锁相放大器使用注意事项"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "以下情况可能会对锁相放大器造成损坏："
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "使用 A 或者 A-B 的输入模式时，对 A 或 B 端口输入大于 7V 峰值的电压信号；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "使用 I 输入模式时，对 A 端口输入大于 7uA 峰值的电流信号；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "使用Ⅰ输入模式时，对A端口输入大于7mV峰值的电压信号；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "在使用过程中，Overload 值为 1，或者上位机界面显示 Overload 仍然继续使用；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "对 REF-IN 端口输入大于 5V 峰值的电压信号；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "对 AUX-ADC 的四个端口输入大于 10V 峰值的电压信号；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "对 TRIG-IN 端口输入超出 0-5V 范围的电压信号；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "对各个 output 端口输入电压信号；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "在不使用锁相放大器的状态下，仍然把锁相放大器跟其他仪器连接起来；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "工作电源接口输入市电范围外的电压；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "强行塞入异物使风扇不转动；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "搬运过程中砸到地上/撞到其他仪器/大力扔到桌上等外应力损伤；"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "注：如使用仪器过程中出现异常现象，请与本公司联系"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "联系电话：020-84133345"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "邮箱：support@ssi-instrument.com"
+  },
+  {
+    "pdf_page": 9,
+    "label": "text",
+    "content": "单位：广州赛恩科学仪器有限公司"
+  }
+]

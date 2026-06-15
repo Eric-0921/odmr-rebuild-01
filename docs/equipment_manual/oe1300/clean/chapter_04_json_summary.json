@@ -1,0 +1,247 @@
+[
+  {
+    "pdf_page": 30,
+    "label": "paragraph_title",
+    "content": "## 4. 产品概述"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "OE1311/OE1351 是一款模块化锁放。作为一款模块化的锁放，它仍然具有齐全的功能，包括：电压信号单端输入，电压信号差分输入，电流信号输入；TLL 参考信号，正弦参考信号输入；TTL 参考信号输出，Sine 信号输出，以及 2 路辅助信号输出和 2 路辅助信号输入。"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "得益于其多级程控放大器以及较大的动态储备配置，输入信号幅度可以设置为 1nV 至 5V 或 1fA~5uA。"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "同时，其使用了高端的 Zynq 系列 SOC，应用其强大的运算能力，可以同时实现 1 路基波及 7 路谐波解调通道的测量。且 7 路谐波还可以设置为任意频率解调模式。"
+  },
+  {
+    "pdf_page": 30,
+    "label": "paragraph_title",
+    "content": "### 4.1 接口"
+  },
+  {
+    "pdf_page": 30,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_262_607_928_906.jpg\" alt=\"Image\" width=\"55%\" /></div>\n"
+  },
+  {
+    "pdf_page": 30,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 16. OE1311/OE1351 接口指示</div> </div>\n"
+  },
+  {
+    "pdf_page": 30,
+    "label": "vision_footnote",
+    "content": "信号接口分别是：I，+V,-V Diff，REF IN，AUX In1，AUX In2，OUTPUT1，OUTPUT2，SINE OUT，TTL OUT."
+  },
+  {
+    "pdf_page": 30,
+    "label": "vision_footnote",
+    "content": "通信接口分别是：RJ45隔离网络接口，RS232串口（可选UART TTL串口）。"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "电源接口：12V 电源输入"
+  },
+  {
+    "pdf_page": 30,
+    "label": "paragraph_title",
+    "content": "### 4.2 信号接口"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "电流信号输入，输入阻抗  $ 1\\mathrm{k}\\Omega $，输入电流幅度 $ \\leqslant5\\mathrm{uA} $。"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "+V"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "电压信号输入正端，输入阻抗  $ 10 \\, M\\Omega / 10 \\, pF $，输入电压幅度  $ \\leq 5 \\, V $。"
+  },
+  {
+    "pdf_page": 30,
+    "label": "paragraph_title",
+    "content": "##### -V Diff"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "电压信号输入负端，输入阻抗 10 MΩ//10 pF，输入电压幅度≤5 V，仅在电压信号差分输入模式下有用。"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "REF IN"
+  },
+  {
+    "pdf_page": 30,
+    "label": "text",
+    "content": "参考输入，可以使用正弦波或 TTL 方波驱动。正弦波输入时输入阻抗为  $ 1 \\, M\\Omega $，交流耦合。对于低频应用的情况(<1 Hz)，推荐使用 TTL 方波的参考信号。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "最大输入电压： $ \\leq5\\ V $（TTL 模式）； $ \\leq10\\ V_{pp} $（Sine 模式）"
+  },
+  {
+    "pdf_page": 31,
+    "label": "paragraph_title",
+    "content": "##### AUX In1"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "辅助输入 1，输入 DC 范围±10 V，最小分辨率为 0.1 mV，输入阻抗 1 MΩ AUX In2"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "辅助输入2，输入 DC 范围±10 V，最小分辨率为 0.1 mV，输入阻抗 1 MΩ"
+  },
+  {
+    "pdf_page": 31,
+    "label": "paragraph_title",
+    "content": "##### OUTPUT1"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "辅助输出 1：输出 DC 范围±10 V，最小分辨率为 1.2 mV。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "paragraph_title",
+    "content": "##### OUTPUT2"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "辅助输出2：输出DC范围 $ \\pm10V $，最小分辨率为1.2mV。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "paragraph_title",
+    "content": "##### SINEOUT"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "信号发生器：提供最大 5 Vrms 幅值的可编程正弦波输出，输出阻抗为  $ 50\\ \\Omega $。当外部参考信号使用时，信号发生器通过锁相环与参考信号进行锁相。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "TTL OUT"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "TTL OUT 输出接口提供 5 V TTL/CMOS 兼容的方波信号，输出阻抗为 200 Ω，其频率与 SINE OUT 相同。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "paragraph_title",
+    "content": "### 4.3 通信接口"
+  },
+  {
+    "pdf_page": 31,
+    "label": "paragraph_title",
+    "content": "## 1、RJ45 网络接口"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "隔离式 1000 Mbps"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "2、串口"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "接口端子：RS232 （可选端子 XH2.54-4PIN TTL 电平）"
+  },
+  {
+    "pdf_page": 31,
+    "label": "paragraph_title",
+    "content": "#### 4.3.1 UART 串口通信协议"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "UART 作为异步串口通信协议的一种，工作原理是将传输数据的每个字符一位接一位地传输。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "通信协议说明如下："
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "起始位：先发出一个逻辑 “0” 的信号，表示传输字符的开始。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "资料位：紧接着起始位之后。数据位的个数可以是4、5、6、7、8等，构成一个字符。通常采用ASCII码。从最低位开始传送，靠时钟定位。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "奇偶校验位：资料位加上这一位后，使得“1”的位数应为偶数（偶校验）或奇数（奇校验），以此来校验资料传送的正确性。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "停止位：它是一个字符数据的结束标志。可以是 1 位、1.5 位、2 位的高电平。由于数据是在传输线上定时的，并且每一个设备有其自己的时钟，很可能在通信中两台设备间出现了小小的不同步。因此停止位不仅仅是表示传输的结束，并且提供计算机校正时钟同步的机会。适用于停止位的位数越多，不同时钟同步的容忍程度越大，但是数据传输率同时也越慢。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "空闲位：处于逻辑 “1” 状态，表示当前线路上没有资料传送。"
+  },
+  {
+    "pdf_page": 31,
+    "label": "text",
+    "content": "波特率：是衡量资料传送速率的指标。表示每秒钟传送的二进制位数。例如资料传送速率为120字符/秒，而每一个字符为10位，则其传送的波特率为 $ 10 \\times 120 = 1200 $位/秒=1200波特。"
+  },
+  {
+    "pdf_page": 32,
+    "label": "paragraph_title",
+    "content": "#### 4.3.2 UART 协议配置"
+  },
+  {
+    "pdf_page": 32,
+    "label": "text",
+    "content": "可选波特率：9600，115200（default），921600"
+  },
+  {
+    "pdf_page": 32,
+    "label": "text",
+    "content": "校验位：无"
+  },
+  {
+    "pdf_page": 32,
+    "label": "text",
+    "content": "数据位：8"
+  },
+  {
+    "pdf_page": 32,
+    "label": "text",
+    "content": "停止位：1"
+  }
+]

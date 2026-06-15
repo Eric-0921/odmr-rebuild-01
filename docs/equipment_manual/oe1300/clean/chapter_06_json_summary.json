@@ -1,0 +1,1272 @@
+[
+  {
+    "pdf_page": 47,
+    "label": "paragraph_title",
+    "content": "## 6. PC 软件安装使用说明"
+  },
+  {
+    "pdf_page": 47,
+    "label": "paragraph_title",
+    "content": "### 6.1 软件驱动安装"
+  },
+  {
+    "pdf_page": 47,
+    "label": "text",
+    "content": "我们一般都是以 U 盘的形式把 PC 机软件提供给用户的，均可在 Android,Linux mac Windows 系统上运行。打开 U 盘后有如下文件，如 $ \\underline{图17} $所示："
+  },
+  {
+    "pdf_page": 47,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_285_415_893_604.jpg\" alt=\"Image\" width=\"51%\" /></div>\n"
+  },
+  {
+    "pdf_page": 47,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 17. U 盘内 PC 软件包</div> </div>\n"
+  },
+  {
+    "pdf_page": 47,
+    "label": "text",
+    "content": "首先要安装串口转 USB 驱动，打开 $ \\underline{图17} $中的第3个文件夹\"串口驱动\"，如 $ \\underline{图18} $所示："
+  },
+  {
+    "pdf_page": 47,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_262_775_856_937.jpg\" alt=\"Image\" width=\"49%\" /></div>\n"
+  },
+  {
+    "pdf_page": 47,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 18. “串口驱动”文件夹</div> </div>\n"
+  },
+  {
+    "pdf_page": 47,
+    "label": "text",
+    "content": "选择打开对应系统的文件夹，如 Windows 系统举例，选择打开文件夹进入底层文件下，如 $ \\underline{图19} $所示"
+  },
+  {
+    "pdf_page": 47,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_239_1067_953_1184.jpg\" alt=\"Image\" width=\"59%\" /></div>\n"
+  },
+  {
+    "pdf_page": 47,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 19. 串口驱动-Windows 系统文件的底层文件</div> </div>\n"
+  },
+  {
+    "pdf_page": 47,
+    "label": "text",
+    "content": "右键“以管理员身份运行” $ \\underline{图19} $红色方框内的“PL2300-M_LogoDriver_Setup.exe”文件，等待进度条加载完成后则会弹出如 $ \\underline{图20} $的软件窗口，点击 Next 只需要等待几分钟，见到以下界面 $ \\underline{图21} $时按下 Finish 后完成安装。"
+  },
+  {
+    "pdf_page": 48,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_276_153_914_628.jpg\" alt=\"Image\" width=\"53%\" /></div>\n"
+  },
+  {
+    "pdf_page": 48,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 20. PL2300-M_LogoDriver 安装界面</div> </div>\n"
+  },
+  {
+    "pdf_page": 48,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_276_698_913_1177.jpg\" alt=\"Image\" width=\"53%\" /></div>\n"
+  },
+  {
+    "pdf_page": 48,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 21. PL2300-M_LogoDriver 安装完成提示</div> </div>\n"
+  },
+  {
+    "pdf_page": 48,
+    "label": "text",
+    "content": "此时，使用 USB 线连接 PC 机和锁相放大器，则可自动识别连接成功。"
+  },
+  {
+    "pdf_page": 48,
+    "label": "text",
+    "content": "1. 如果 PC 机已经联网，当插上 USB 连接 PC 与锁相放大器时，会自动联网搜索驱动并进行安装。"
+  },
+  {
+    "pdf_page": 48,
+    "label": "text",
+    "content": "2. 如果 PC 机已安装有串口转 USB 的驱动，则可跳过该步。"
+  },
+  {
+    "pdf_page": 49,
+    "label": "paragraph_title",
+    "content": "### 6.2 软件 Console 安装"
+  },
+  {
+    "pdf_page": 49,
+    "label": "text",
+    "content": "若前面的安装步骤都确定没有问题后，用户则可打开图13中的第1个文件夹\"Console\"，有如下文件，如 $ \\underline{图22} $所示"
+  },
+  {
+    "pdf_page": 49,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_262_292_855_454.jpg\" alt=\"Image\" width=\"49%\" /></div>\n"
+  },
+  {
+    "pdf_page": 49,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 22. Console-Windows 系统文件的底层文件夹</div> </div>\n"
+  },
+  {
+    "pdf_page": 49,
+    "label": "text",
+    "content": "选择打开对应系统的文件夹，如 Windows 系统举例，选择打开文件夹进入底层文件下，如 $ \\underline{图23} $所示："
+  },
+  {
+    "pdf_page": 49,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_211_586_910_671.jpg\" alt=\"Image\" width=\"58%\" /></div>\n"
+  },
+  {
+    "pdf_page": 49,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 23. Consol-Windows 文件夹的底层文件</div> </div>\n"
+  },
+  {
+    "pdf_page": 49,
+    "label": "text",
+    "content": "如 Windows 系统举例，右键“以管理员身份运行” $ \\underline{\\text{图23}} $红色方框内的“LIA_Console_V1.3.12.221025.exe”文件，则会弹出如 $ \\underline{\\text{图24}} $的软件安装窗口，点击“下一步（Next）”按钮。"
+  },
+  {
+    "pdf_page": 49,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_874_1011_1248.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 49,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 24. LIA\\_Console 安装界面</div> </div>\n"
+  },
+  {
+    "pdf_page": 49,
+    "label": "text",
+    "content": "在选择安装 LIA_Console 的目录界面中单击 “下一步（Next）” 按钮。"
+  },
+  {
+    "pdf_page": 50,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_159_1012_527.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 50,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 25. LIA_Console 安装程序界面</div> </div>\n"
+  },
+  {
+    "pdf_page": 50,
+    "label": "text",
+    "content": "在安装组件界面中单击“下一步（Next）”按钮。"
+  },
+  {
+    "pdf_page": 50,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_178_671_1011_1044.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 50,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 26. LIA\\textsubscript{Console} 组件安装界面</div> </div>\n"
+  },
+  {
+    "pdf_page": 51,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_176_204_1013_631.jpg\" alt=\"Image\" width=\"70%\" /></div>\n"
+  },
+  {
+    "pdf_page": 51,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 27. LIA\\_Console 开始菜单快捷方式界面</div> </div>\n"
+  },
+  {
+    "pdf_page": 51,
+    "label": "paragraph_title",
+    "content": "##### 在开始菜单快捷方式界面中单击 “安装（Install）” 按钮"
+  },
+  {
+    "pdf_page": 51,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_180_808_1011_1184.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 51,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 28. 准备安装界面</div> </div>\n"
+  },
+  {
+    "pdf_page": 52,
+    "label": "text",
+    "content": "则会弹出如图 28 所示的软件窗口，见到以下界面时表示正在安装 LIA_Console 上位机软件，只需要等待几分钟即可。"
+  },
+  {
+    "pdf_page": 52,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_178_280_1012_654.jpg\" alt=\"Image\" width=\"70%\" /></div>\n"
+  },
+  {
+    "pdf_page": 52,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 29. 正在安装 LIA_Console</div> </div>\n"
+  },
+  {
+    "pdf_page": 52,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_176_782_1012_1219.jpg\" alt=\"Image\" width=\"70%\" /></div>\n"
+  },
+  {
+    "pdf_page": 52,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 30. 完成安装</div> </div>\n"
+  },
+  {
+    "pdf_page": 53,
+    "label": "text",
+    "content": "安装上位机程序时会在以下路径中创建一个 Windows 开始菜单项：开始菜单 → LIA_Console → LIA_Console。此链接将打开 $ \\underline{\\text{图31}} $中显示的 LIA_Console 上位机程序。"
+  },
+  {
+    "pdf_page": 53,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_180_287_1011_753.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 53,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 31. LIA\\_Console</div> </div>\n"
+  },
+  {
+    "pdf_page": 53,
+    "label": "footer",
+    "content": "SINE SCIENTIFIC INSTRUMENTS"
+  },
+  {
+    "pdf_page": 54,
+    "label": "paragraph_title",
+    "content": "### 6.3 软件使用说明"
+  },
+  {
+    "pdf_page": 54,
+    "label": "text",
+    "content": "打开软件后，进入进入启动界面，如 $ \\underline{\\text{图31}} $，点击左上角菜单栏的 connect，打开连接配置窗口（如 $ \\underline{\\text{图32}} $所示）"
+  },
+  {
+    "pdf_page": 54,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_220_289_969_744.jpg\" alt=\"Image\" width=\"62%\" /></div>\n"
+  },
+  {
+    "pdf_page": 54,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 32. 连接配置</div> </div>\n"
+  },
+  {
+    "pdf_page": 54,
+    "label": "text",
+    "content": "此时可以选择 USB/RS232 或 TCP/IP 方式进行连接。"
+  },
+  {
+    "pdf_page": 54,
+    "label": "text",
+    "content": "USB/RS232方式连接：选择对应测 COM 口后会显示对应连接机型，点击 Connect 连接。"
+  },
+  {
+    "pdf_page": 54,
+    "label": "text",
+    "content": "TCP/IP 方式连接：打开“网络和 Internet 设置”选择“选择更多适配器选项”进入网络连接页面，选择对应以太网右键“属性”双击“Internert 协议版本 4（TCP/IPv4）”选择手动输入填写 IP 地址，如 $ \\underline{图33} $所示，输入好后确定保存，返回 Console，点击 Connect 连接。"
+  },
+  {
+    "pdf_page": 54,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_445_990_787_1415.jpg\" alt=\"Image\" width=\"28%\" /></div>\n"
+  },
+  {
+    "pdf_page": 54,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 33. 手动输入 IP 地址</div> </div>\n"
+  },
+  {
+    "pdf_page": 54,
+    "label": "text",
+    "content": "若连接成功，则进入主界面，如 $ \\underline{图34} $，"
+  },
+  {
+    "pdf_page": 55,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_145_1010_612.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 55,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 34. 上位机主界面</div> </div>\n"
+  },
+  {
+    "pdf_page": 56,
+    "label": "paragraph_title",
+    "content": "#### 6.3.1 主界面功能介绍"
+  },
+  {
+    "pdf_page": 56,
+    "label": "text",
+    "content": "主界面中，主要分为3部分："
+  },
+  {
+    "pdf_page": 56,
+    "label": "paragraph_title",
+    "content": "##### 1) 图形化配置窗口："
+  },
+  {
+    "pdf_page": 56,
+    "label": "text",
+    "content": "以直观的方式配置锁放的参数，包括输入模式，耦合模式，幅度控制，参考模式，以及Sine Out输出的控制开关等；"
+  },
+  {
+    "pdf_page": 56,
+    "label": "paragraph_title",
+    "content": "##### 2) 参数化配置窗口"
+  },
+  {
+    "pdf_page": 56,
+    "label": "text",
+    "content": "以参数列表呈现，以更便捷的方式配置锁放的参数。控制功能与图形化配置窗口一致，但同时还有保存文件等上位机软件的配置选项。"
+  },
+  {
+    "pdf_page": 56,
+    "label": "paragraph_title",
+    "content": "##### 3) 数值显示窗"
+  },
+  {
+    "pdf_page": 56,
+    "label": "text",
+    "content": "用于显示解调结果等数值，可以选择波形方式显示（Scope），也可以选择数值方式显示（Numeric），在数值方式显示情况下，可以选择多个数值同时显示。"
+  },
+  {
+    "pdf_page": 56,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_214_547_1048_829.jpg\" alt=\"Image\" width=\"70%\" /></div>\n"
+  },
+  {
+    "pdf_page": 56,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 35. 波形方式显示</div> </div>\n"
+  },
+  {
+    "pdf_page": 56,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_216_906_1048_1191.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 56,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 36. 数值方式显示</div> </div>\n"
+  },
+  {
+    "pdf_page": 57,
+    "label": "paragraph_title",
+    "content": "#### 6.3.2 输入信号配置"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "输入信号的软件配置区域如 $ \\underline{图37} $.红框内所示："
+  },
+  {
+    "pdf_page": 57,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_180_269_1013_738.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 57,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 37. 输入信号的配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "可供用户配置的选项如下 $ \\underline{\\text{表3}} $："
+  },
+  {
+    "pdf_page": 57,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表3. 输入信号配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 57,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td rowspan=\"3\">Input Source\\n输入信号源设置</td><td style='text-align: center; word-wrap: break-word;'>Single-Ended Voltage\\n单端电压信号(默认设置)</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Differential Voltage\\n差分电压信号</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Current\\n电流信号</td></tr><tr><td rowspan=\"2\">Input Coupling\\n输入耦合设置</td><td style='text-align: center; word-wrap: break-word;'>AC\\n交流耦合(默认设置)</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>DC\\n直流耦合</td></tr></table>"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "<Input Source>输入信号源设置"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "<A>：单端电压信号输入模式。"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "<A-B>：差分电压信号输入模式。选择此模式时，将双信号的一端由接口A输入，另一端由接口B输入。"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "<1>：电流输入模式。"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "☆当使用电压模式时，输入最大不能超过 5 Vrms。"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "☆当使用电流模式时，输入最大不能超过5 uA。"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "<input Coupling>输入耦合设置"
+  },
+  {
+    "pdf_page": 57,
+    "label": "text",
+    "content": "<AC>：交流耦合输入。交流耦合输入用于阻隔输入信号中的直流成分，如果信号频率在 10 Hz 以上建议使用<AC>交流耦合。"
+  },
+  {
+    "pdf_page": 58,
+    "label": "text",
+    "content": "<DC>：直流耦合输入。直流耦合不阻隔任何输入信号，如果信号频率低于10 Hz时建议使用<DC>直流耦合。但要注意输入信号的偏置量而导致的信号溢出。"
+  },
+  {
+    "pdf_page": 59,
+    "label": "paragraph_title",
+    "content": "#### 6.3.3 参考信号及扫频配置"
+  },
+  {
+    "pdf_page": 59,
+    "label": "text",
+    "content": "该项参数的软件配置区域如 $ \\underline{\\text{图38}} $红框内所示："
+  },
+  {
+    "pdf_page": 59,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_253_1010_720.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 59,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 38. 参考信号配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 59,
+    "label": "text",
+    "content": "可供用户配置的选项如下 $ \\underline{\\text{表4}} $："
+  },
+  {
+    "pdf_page": 59,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表4. 参考信号配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 59,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Phase(°)\n参考相位设置</td><td style='text-align: center; word-wrap: break-word;'>设置 PSD 算法两路正交参考信号的相移角度，移相精度为 0.01°，输入范围为-180° 至+180°</td></tr><tr><td rowspan=\"3\">Reference Source\n参考信号源选择设置</td><td style='text-align: center; word-wrap: break-word;'>External\n外部参考信号（默认设置）</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Internal\n内部参考信号</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Self\nADC 自参考模式</td></tr><tr><td rowspan=\"3\">External Ref Trigger\n外部参考信号触发方式设置</td><td style='text-align: center; word-wrap: break-word;'>TTL Rising Edge\nTTL 信号上升沿检测（默认设置）</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>TTL Falling Edge\nTTL 信号下降沿检测</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Sine\n正弦波信号检测</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Int. Frequency\n内部参考频率设置</td><td style='text-align: center; word-wrap: break-word;'>用户手动输入，频率范围为 1 mHz 到 100/500 kHz，频率分辨率最小为 1 mHz，</td></tr></table>"
+  },
+  {
+    "pdf_page": 59,
+    "label": "vision_footnote",
+    "content": "<Reference.Phase>：参考相位设置"
+  },
+  {
+    "pdf_page": 59,
+    "label": "text",
+    "content": "通过 Console 输入可设置 PSD 算法两路正交参考信号的相移角度，移相精度为  $ 0.01^{\\circ} $，输入范围为  $ -180^{\\circ} $ 至  $ +180^{\\circ} $。"
+  },
+  {
+    "pdf_page": 60,
+    "label": "text",
+    "content": "对于相位，必须有一个基准或者参考才有意义，系统中，我们默认以输入参考信号 REF IN 经过高精度锁相环锁定相位后的信号为相位基准，其余相位值都是相对于此而言的。\n\n<Reference.Source>：参考信号源设置"
+  },
+  {
+    "pdf_page": 60,
+    "label": "text",
+    "content": "〈External〉：外部参考信号。OE1300 将与 REF-IN SMB 输入的参考信号进行锁相。"
+  },
+  {
+    "pdf_page": 60,
+    "label": "text",
+    "content": "<Internal>：内部参考信号。此设置下参考信号将根据内部信号发生器产生的信号作为参考信号。REF-IN SMB 输入信号将不起作用。此时可以对<Reference.frequency>输入参数值进行设置。"
+  },
+  {
+    "pdf_page": 60,
+    "label": "text",
+    "content": "<Self>：自参考模式。在此设置下，OE1300将以输入通道（A、A-B）的信号也作为参考信号来进行锁相，此时REF-IN接口无效。要注意的是，当输入信号幅值太小或者信噪比较低时，锁相环有可能不稳定，此时不建议用<Self>模式。"
+  },
+  {
+    "pdf_page": 61,
+    "label": "paragraph_title",
+    "content": "#### 6.3.4 输入范围配置"
+  },
+  {
+    "pdf_page": 61,
+    "label": "text",
+    "content": "该项参数的软件配置区域如图39红框内所示："
+  },
+  {
+    "pdf_page": 61,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_180_255_1008_720.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 61,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 39. 范围配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 61,
+    "label": "text",
+    "content": "可供用户配置的选项如下 $ \\underline{\\text{表5}} $："
+  },
+  {
+    "pdf_page": 61,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表5. 范围配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 61,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td rowspan=\"6\">Range\\n满偏范围\\n设置</td><td style='text-align: center; word-wrap: break-word;'>1 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>100 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>10 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>1 mV/nA</td><td style='text-align: center; word-wrap: break-word;'>100mV/nA</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>2 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>200 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>20 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>2 mV/nA</td><td style='text-align: center; word-wrap: break-word;'>200mV/nA</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>5 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>500 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>50 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>5 mV/nA</td><td style='text-align: center; word-wrap: break-word;'>500mV/nA</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>10 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>1 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>100 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>10 mV/nA</td><td style='text-align: center; word-wrap: break-word;'>1 V/uA(默认设置)</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>20 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>2 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>200 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>20 mV/nA</td><td style='text-align: center; word-wrap: break-word;'>2 V/uA</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>50 nV/fA</td><td style='text-align: center; word-wrap: break-word;'>5 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>500 uV/pA</td><td style='text-align: center; word-wrap: break-word;'>50 mV/nA</td><td style='text-align: center; word-wrap: break-word;'>5 V/uA</td></tr></table>"
+  },
+  {
+    "pdf_page": 61,
+    "label": "text",
+    "content": "改变<Range>会改变系统的动态范围，同时也会影响到对 CH1、CH2 的输出。系统默认为<1V>。"
+  },
+  {
+    "pdf_page": 62,
+    "label": "paragraph_title",
+    "content": "#### 6.3.5 解调器谐波及任意频率配置"
+  },
+  {
+    "pdf_page": 62,
+    "label": "text",
+    "content": "OE1300 除了参考频率的解调器之外，还有 7 个额外的解调器 D1-D7，通过<Demodulator>分别选中每个解调器，可以单独设置每个解调器的功能。"
+  },
+  {
+    "pdf_page": 62,
+    "label": "text",
+    "content": "解调器谐波及任意频率的软件配置区域如图 $ \\underline{40} $红框内所示："
+  },
+  {
+    "pdf_page": 62,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_180_314_1009_779.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 62,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 40. 谐波及任意频率配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 62,
+    "label": "text",
+    "content": "解调器任意频率配置如 $ \\underline{\\text{图41}} $所示："
+  },
+  {
+    "pdf_page": 62,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_416_885_773_1151.jpg\" alt=\"Image\" width=\"29%\" /></div>\n"
+  },
+  {
+    "pdf_page": 62,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 41. 解调器任意频率配置图</div> </div>\n"
+  },
+  {
+    "pdf_page": 62,
+    "label": "text",
+    "content": "可供用户配置的选项如 $ \\underline{表6} $:"
+  },
+  {
+    "pdf_page": 62,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表6. 谐波及任意频率配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 62,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Demodulator Channel\\n解调器通道</td><td style='text-align: center; word-wrap: break-word;'>8 路谐波解调通道选择</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Demodulator Mode\\n解调器模式</td><td style='text-align: center; word-wrap: break-word;'>Harmonic/Arbitrary Frequency\\n谐波/任意频率</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Harmonic\\n谐波</td><td style='text-align: center; word-wrap: break-word;'>谐波阶数: 1~65535\\nDefault: 1、2、3、4、5、6、7、8(对应 8 解调器)</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Arbitrary Frequency</td><td style='text-align: center; word-wrap: break-word;'>0.001 mHz—100/500 kHz</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>任意频率</td><td style='text-align: center; word-wrap: break-word;'>1 kHz（默认设置）</td></tr></table>"
+  },
+  {
+    "pdf_page": 63,
+    "label": "table",
+    "content": "\n\n"
+  },
+  {
+    "pdf_page": 63,
+    "label": "paragraph_title",
+    "content": "##### 谐波解调阶数设置"
+  },
+  {
+    "pdf_page": 63,
+    "label": "text",
+    "content": "当<Demodulator Mode>设置为<Harmonic>时，可以设置此项。其设置范围是 1~65535 的整数。通过数字键盘输入所需测量的谐波阶数，默认显示 1，表示检测 1 阶谐波(即基波)。<Harmonic >谐波阶数设置的限制是（Harmonic*Freq）≤100/500kHz，其中 Freq 表示参考信号频率。一旦超过限制时，系统会把谐波阶数自动往下调整直到满足条件。同时，当设置为 0 时，系统自动变化为 1。"
+  },
+  {
+    "pdf_page": 63,
+    "label": "text",
+    "content": "例如输入信号是频率为 1kHz 的方波时，假定它的峰峰值为 A，设置<Harmonic>值分别为 1、2、3、4、5、6……时，将预期得到 R 值为 0.45A、0、0.15A、0、0.09A、0……，而这个序列正是方波信号傅立叶级数的系数序列的 A 倍。"
+  },
+  {
+    "pdf_page": 63,
+    "label": "text",
+    "content": "☆注：多解调器测量的显示需在<Measure Selection>的<Base>选项卡中选择测量通道。"
+  },
+  {
+    "pdf_page": 63,
+    "label": "text",
+    "content": "解调器的参考频率设置"
+  },
+  {
+    "pdf_page": 63,
+    "label": "text",
+    "content": "当 <<Demodulator Mode> 设置为 <Arbitrary Frequency> 时，可以设置此项。<Arbitrary Frequency> 设置为某个频率时，解调器即以该频率为参考频率来解调信号。"
+  },
+  {
+    "pdf_page": 63,
+    "label": "text",
+    "content": "在输入信号包含多个频率信息，而用户需要分别提取出来的时候，这个模式尤为有用。"
+  },
+  {
+    "pdf_page": 64,
+    "label": "paragraph_title",
+    "content": "#### 6.3.6 滤波器配置"
+  },
+  {
+    "pdf_page": 64,
+    "label": "text",
+    "content": "在同样的测量准确度下，使用更高的滤波器陡降可以降低时间常数，使得测量响应更快。具体的时间常数和滤波器陡降搭配，必须根据实际情况来选择，一个判定的准则是只要对测量结果的稳定度满意，此时的时间常数和滤波器陡降就不需要设置太大，以免等待时间过长。当然，若想结果更加平稳，可以适当增大时间常数和滤波器陡降。"
+  },
+  {
+    "pdf_page": 64,
+    "label": "text",
+    "content": "滤波器参数的软件配置区域如 $ \\underline{\\text{图42}} $红框内所示："
+  },
+  {
+    "pdf_page": 64,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_379_1011_844.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 64,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 42. 滤波器配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 64,
+    "label": "text",
+    "content": "可供用户配置的选项如下表7："
+  },
+  {
+    "pdf_page": 64,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表7. 滤波器配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 64,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Time Constant\\n滤波器时间常数设置</td><td style='text-align: center; word-wrap: break-word;'>1us~3ks\\n100ms(默认设置)</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Filter Slope\\n滤波器陡降设置</td><td style='text-align: center; word-wrap: break-word;'>6 dB/oct\\n12 dB/oct(默认设置)\\n18 dB/oct\\n24 dB/oct\\n30 dB/oct\\n36 dB/oct\\n42 dB/oct\\n48 dB/oct</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Sync Filter\\n同步滤波器设置</td><td style='text-align: center; word-wrap: break-word;'>OFF/ON\\n关闭/开启\\n默认关闭</td></tr></table>"
+  },
+  {
+    "pdf_page": 64,
+    "label": "text",
+    "content": "当信号频率低于  $ 1 \\, kHz $ 时可以开启同步滤波器。低通滤波器在输入信号频率较低时无法或需长时间才能得到稳定的结果，此时可借助于此同步滤波器改善效果。"
+  },
+  {
+    "pdf_page": 65,
+    "label": "text",
+    "content": "同步滤波器可以有效去除参考频率及其倍频的信号，降低对低通滤波器的要求。☆注：同步滤波器开启时，<Filter db/oct> 必须为<18 dB/oct>以上才能真正起作用！"
+  },
+  {
+    "pdf_page": 66,
+    "label": "paragraph_title",
+    "content": "#### 6.3.7 输出通道配置"
+  },
+  {
+    "pdf_page": 66,
+    "label": "text",
+    "content": "该项参数的软件配置区域如 $ \\underline{\\text{图43}} $红框内所示："
+  },
+  {
+    "pdf_page": 66,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_251_1011_718.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 66,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 43. 输出通道的配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 66,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_415_773_813_1073.jpg\" alt=\"Image\" width=\"33%\" /></div>\n"
+  },
+  {
+    "pdf_page": 66,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 44. 辅助输出配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 66,
+    "label": "text",
+    "content": "可供用户配置的选项如下 $ \\underline{表8} $:"
+  },
+  {
+    "pdf_page": 66,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表8. 输出通道配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 66,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Output Channel\\n输出通道选择</td><td style='text-align: center; word-wrap: break-word;'>CH1/CH2</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Output Source\\n输出源</td><td style='text-align: center; word-wrap: break-word;'>可以控制上位机输出通道 CH1/CH2 控制两路辅助 AUX_DAC 输出直流电压，由用户手动输入，电压范围为 -10 V 至 +10 V，默认值输出为 1V，最小分辨率为 1 mV。；\\n也可以输出用户需要的数值，数值类型包括信号的 X/Y/R/ \\theta 值、信号谐波的 X/Y/R/ \\theta 值、频率、噪声值以及辅助输入值；默认设置 AUX_DAC 输出直流电压</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Offset(%)\\n偏置设置</td><td style='text-align: center; word-wrap: break-word;'>可调范围是 -100% -- +100%，其中最小步进为 0.01%，默认 0.00%，只能对 R/X/Y/ \\theta 值进行设置，默认值为 0</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Expand\\n放大设置</td><td style='text-align: center; word-wrap: break-word;'>可调范围是 0.001~10000，默认值为 1</td></tr></table>"
+  },
+  {
+    "pdf_page": 67,
+    "label": "table",
+    "content": "\n\n"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "通过 Console 输入，可调范围是 0.001~10000，默认值为 1。但 Expand 的设置使得计算超出了 ±10V 的时候，输出值将会维持在 ±10 V。"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "输出信号的计算公式如下"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "1、当选择信号为<R>，<X>，<Y>，<谐波的 X>，<谐波的 Y/值>，<谐波的 R 值>，<X-Noise>，<Y-Noise>时："
+  },
+  {
+    "pdf_page": 67,
+    "label": "display_formula",
+    "content": " $$  输出 =\\left(\\frac{Signal( 选择信号 )}{Range}+Offset\\right)\\times Expand\\times10V $$ "
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "2、当选择信号为<0>，<0D1>，<谐波的0值>时："
+  },
+  {
+    "pdf_page": 67,
+    "label": "display_formula",
+    "content": " $$  输出 =\\frac{Signal( 选择信号 )}{180^{\\circ}}\\times10V $$ "
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "3、除了上面两种情况，还有下面选项："
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "a) AUXOUT：按照用户设定的电压值输出。"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "b) ADC1~ADC2 ：输出等于 AUX-IN 的输入电压。"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "c) 频率Freq :"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "频率每个阶梯分5 V-10 V，例如："
+  },
+  {
+    "pdf_page": 67,
+    "label": "algorithm",
+    "content": "1000Hz = 5 V\n1200Hz = 6 V\n1600Hz = 8 V\n1800Hz = 9 V\n1990Hz = 9.95 V\n2000Hz = 5 V（下一阶梯）"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "阶梯定义为："
+  },
+  {
+    "pdf_page": 67,
+    "label": "display_formula",
+    "content": " $$ 62.5~\\mathrm{H z}-125~\\mathrm{H z} $$ "
+  },
+  {
+    "pdf_page": 67,
+    "label": "display_formula",
+    "content": " $$ 125~\\mathrm{H z}-250~\\mathrm{H z} $$ "
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "250 Hz – 500 Hz"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "1 kHz - 2 kHz"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "500 Hz – 1000 Hz"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "4 kHz - 8 kHz"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "8 kHz – 16 kHz"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "☆注：每一个 CH 通道有一个独立的偏置值和放大值。假如设置了 CH1 的 <Offset> 是 50% 和 <Expand> 是 3，那只有 CH1 通道输出会受影响，CH2 的输出不变。"
+  },
+  {
+    "pdf_page": 67,
+    "label": "text",
+    "content": "☆注：<Offset>与<Expand>的设置不会影响动态区域数据框内的数据显示。"
+  },
+  {
+    "pdf_page": 68,
+    "label": "paragraph_title",
+    "content": "#### 6.3.8 正弦信号输出与 TTL 参考信号配置"
+  },
+  {
+    "pdf_page": 68,
+    "label": "text",
+    "content": "该项参数的软件配置区域如 $ \\underline{\\text{图45}} $红框内所示："
+  },
+  {
+    "pdf_page": 68,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_180_283_1010_750.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 68,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 45. 正弦信号输出配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 68,
+    "label": "text",
+    "content": "可供用户配置的选项如下 $ \\underline{\\text{表9}} $:"
+  },
+  {
+    "pdf_page": 68,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表9. 正弦信号输出配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 68,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td rowspan=\"2\">SineOut /TTL Out Type\\n正弦信号与 TTL 参考信号\\n输出模式设置</td><td style='text-align: center; word-wrap: break-word;'>OFF/Fixed\\n关闭/定值正弦信号，默认关闭</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>TTL OUT 输出接口提供 5 V TTL/CMOS 兼容的方波信号，\\n输出阻抗为 200 Ω，其频率与 SINE OUT 相同。</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Sine Out Voltage(Vrms)\\n定值信号幅值设置</td><td style='text-align: center; word-wrap: break-word;'>当正弦信号输出模式选择定值正弦信号时可操作此项，由用户手动输入，电压值范围为 100uVrms 至 5 Vrms，默认值输出为 1 Vrms，最小分辨率为 1 uVrms。</td></tr></table>"
+  },
+  {
+    "pdf_page": 68,
+    "label": "text",
+    "content": "OE1300 可通过前面板的 “Sine Out” SMB 接头输出幅值由 100 uVrms 到 5 Vrms 的正弦波信号."
+  },
+  {
+    "pdf_page": 68,
+    "label": "text",
+    "content": "当使用<External>外部参考时，<Sine Out>提供一个与外部参考锁相的正弦信号；当使用<Internal>内部参考时，将由 OE1300 自身的振荡器产生信号。同时前面板上“TTL OUT”的 SMB 头将输出与<Sine Out>同频的 TTL 信号。"
+  },
+  {
+    "pdf_page": 69,
+    "label": "paragraph_title",
+    "content": "#### 6.3.9 数据保存配置"
+  },
+  {
+    "pdf_page": 69,
+    "label": "text",
+    "content": "该项参数的软件配置区域如 $ \\underline{\\text{图46}} $红框内所示："
+  },
+  {
+    "pdf_page": 69,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_211_255_980_686.jpg\" alt=\"Image\" width=\"64%\" /></div>\n"
+  },
+  {
+    "pdf_page": 69,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 46. Sample 数据保存配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 69,
+    "label": "text",
+    "content": "可供用户配置的选项如下 $ \\underline{\\text{表 10}} $："
+  },
+  {
+    "pdf_page": 69,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表 10. Sample 数据保存配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 69,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Sample Rate(s)</td><td style='text-align: center; word-wrap: break-word;'>用于设定采样的时间间隔，用户手动输入，时间间隔范围为 1 ms 到 100 s，分辨率最小为 1 ms，默认为 100 ms</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Save Path:</td><td style='text-align: center; word-wrap: break-word;'>数据以 csv 表格的形式保存文件，保存在程序目录下。</td></tr></table>"
+  },
+  {
+    "pdf_page": 69,
+    "label": "text",
+    "content": "软件有数据记录保存的功能，可根据用户需要选择是否保存一段时间内的 OE1300 采集到的数据。"
+  },
+  {
+    "pdf_page": 69,
+    "label": "text",
+    "content": "保存的数据包括测量信号的 R、X、Y、 $ \\theta $、频率和噪声的值；测量的七路谐波的 R、X、Y 和  $ \\theta $ 的值；以及两路辅助输入的信号值。"
+  },
+  {
+    "pdf_page": 69,
+    "label": "text",
+    "content": "选择是否存储数据的具体步骤如下："
+  },
+  {
+    "pdf_page": 69,
+    "label": "text",
+    "content": "1. 数据以 csv 表格的形式保存文件，保存在程序目录下。"
+  },
+  {
+    "pdf_page": 69,
+    "label": "text",
+    "content": "2. 点击“Save Data”弹出 $ \\underline{\\text{图47}} $文件保存窗口，此时可修改文件名称和保存路径，点击"
+  },
+  {
+    "pdf_page": 69,
+    "label": "text",
+    "content": "“保存”按钮保存文件。"
+  },
+  {
+    "pdf_page": 70,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_252_145_1020_571.jpg\" alt=\"Image\" width=\"64%\" /></div>\n"
+  },
+  {
+    "pdf_page": 70,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 47. 数据文件保存窗口</div> </div>\n"
+  },
+  {
+    "pdf_page": 70,
+    "label": "text",
+    "content": "3. 当数据保存时，Sample 界面会显示 “saving”，如 $ \\underline{图48} $所示。"
+  },
+  {
+    "pdf_page": 70,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_454_666_818_1088.jpg\" alt=\"Image\" width=\"30%\" /></div>\n"
+  },
+  {
+    "pdf_page": 70,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 48. 数据保存配置区域图</div> </div>\n"
+  },
+  {
+    "pdf_page": 70,
+    "label": "text",
+    "content": "4. 再次按下 “Saving” 按钮，按钮状态由 “Saving” 重新变为 “Save Date”，表示停止保存采集的数据。"
+  },
+  {
+    "pdf_page": 70,
+    "label": "text",
+    "content": "5. 在 “Sample Rate(S)” 可以修改当前显示和保存数据的采样率，输入范围为 0.1 s 100s。"
+  },
+  {
+    "pdf_page": 71,
+    "label": "paragraph_title",
+    "content": "#### 6.3.10 谐波波形显示"
+  },
+  {
+    "pdf_page": 71,
+    "label": "text",
+    "content": "在软件左窗口选择“谐波波形显示”选项页， $ \\underline{图49} $如下："
+  },
+  {
+    "pdf_page": 71,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_174_252_1009_721.jpg\" alt=\"Image\" width=\"70%\" /></div>\n"
+  },
+  {
+    "pdf_page": 71,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 49. 谐波波形显示图</div> </div>\n"
+  },
+  {
+    "pdf_page": 71,
+    "label": "text",
+    "content": "此时左窗口中可以分别显示两个谐波的 XY 坐标图。对每一个谐波可设置显示 R、X、Y 和  $ \\theta $ 值。"
+  },
+  {
+    "pdf_page": 72,
+    "label": "paragraph_title",
+    "content": "#### 6.3.11 关闭输出检测窗口"
+  },
+  {
+    "pdf_page": 72,
+    "label": "text",
+    "content": "在软件内可以选择打开/关闭输出检测窗口，如 $ \\underline{\\text{图50}} $所示："
+  },
+  {
+    "pdf_page": 72,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_180_253_1009_719.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 72,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 50. 关闭输出检测窗口</div> </div>\n"
+  },
+  {
+    "pdf_page": 72,
+    "label": "paragraph_title",
+    "content": "#### 6.3.12 示波器窗口"
+  },
+  {
+    "pdf_page": 72,
+    "label": "text",
+    "content": "在软件在使用 TCP/IP 连接时左上目录能够选择“Function”选择“Oscilloscope”示波器功能，如 $ \\underline{图51} $所示："
+  },
+  {
+    "pdf_page": 72,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_906_1010_1376.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 72,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 51. 软件示波器功能</div> </div>\n"
+  },
+  {
+    "pdf_page": 72,
+    "label": "text",
+    "content": "此时可以打开左下角\"NEW\"调出测量选择菜单，调出对应显示窗口；同时右边示波器功能窗口可以调节的示波器基础设置。如 $ \\underline{图52} $所示："
+  },
+  {
+    "pdf_page": 73,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_143_1011_605.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 73,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 52. 示波器 Trigger 及测量功能菜单设置</div> </div>\n"
+  },
+  {
+    "pdf_page": 73,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表 11. 示波器 Trigger 功能配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 73,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Sampling Rate\\n采样率设置</td><td style='text-align: center; word-wrap: break-word;'>15.26 Hz ~ 4 MHz\\n值等于基本采样率除以 2^n，其中 n 是整数。</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Length(pts)\\n显示长度或持续时间</td><td style='text-align: center; word-wrap: break-word;'>8192/4096</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Edge\\n触发设置</td><td style='text-align: center; word-wrap: break-word;'>Rising/Falling\\n上升沿触发/下降沿触发</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Level\\n触发信号范围设置</td><td style='text-align: center; word-wrap: break-word;'>设置触发电平值（允许负值）</td></tr></table>"
+  },
+  {
+    "pdf_page": 74,
+    "label": "chart",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_chart_box_221_142_1055_603.jpg\" alt=\"Image\" width=\"70%\" /></div>\n"
+  },
+  {
+    "pdf_page": 74,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 53. 示波器 Cursor 功能菜单设置</div> </div>\n"
+  },
+  {
+    "pdf_page": 74,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表 12. Cursor 功能配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 74,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Type 光标设置</td><td style='text-align: center; word-wrap: break-word;'>Off/Voltage/Frequency/Both 关闭/电压轴（Y）/时间轴（X）/同时开启 X 和 Y 光标</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Cursor Line 光标移动设置</td><td style='text-align: center; word-wrap: break-word;'>Single/Both 单个移动光标/同时移动 X 和 Y 光标</td></tr></table>"
+  },
+  {
+    "pdf_page": 75,
+    "label": "paragraph_title",
+    "content": "#### 6.3.13 FFT 窗口"
+  },
+  {
+    "pdf_page": 75,
+    "label": "text",
+    "content": "在软件在使用 TCP/IP 连接时左上目录能够选择“Function”选择“FFT”测量功能，如 $ \\underline{图54} $所示："
+  },
+  {
+    "pdf_page": 75,
+    "label": "chart",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_chart_box_180_281_1010_754.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 75,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 54. 频谱分析功能</div> </div>\n"
+  },
+  {
+    "pdf_page": 75,
+    "label": "text",
+    "content": "红框中 FFT 功能窗口可以调节的 FFT 基础设置。如 $ \\underline{\\text{图 55}} $所示："
+  },
+  {
+    "pdf_page": 75,
+    "label": "chart",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_chart_box_179_935_1010_1408.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 75,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 55. 频谱分析 Trigger 功能菜单设置</div> </div>\n"
+  },
+  {
+    "pdf_page": 76,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表 13. 频谱分析 Trigger 功能配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 76,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Sampling Rate\\n采样率设置</td><td style='text-align: center; word-wrap: break-word;'>15.26 Hz ~ 4 MHz\\n值等于基本采样率除以 2^n，其中 n 是整数。</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Length(pts)\\n显示长度或持续时间</td><td style='text-align: center; word-wrap: break-word;'>8192/4096</td></tr></table>"
+  },
+  {
+    "pdf_page": 76,
+    "label": "chart",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_chart_box_180_380_1010_853.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 76,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 56. 频谱分析 Cursor 功能菜单设置</div> </div>\n"
+  },
+  {
+    "pdf_page": 76,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表 14. 频谱分析 Cursor 功能配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 76,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Type 光标设置</td><td style='text-align: center; word-wrap: break-word;'>Off/Voltage/Frequency/Both 关闭/电压轴（Y）/时间轴（X）/同时开启 X 和 Y 光标</td></tr><tr><td style='text-align: center; word-wrap: break-word;'>Cursor Line 光标移动设置</td><td style='text-align: center; word-wrap: break-word;'>Single/Both 单个移动光标/同时移动 X 和 Y 光标</td></tr></table>"
+  },
+  {
+    "pdf_page": 77,
+    "label": "chart",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_chart_box_180_141_1010_613.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 77,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 57. 频谱分析 Advanced 功能菜单设置</div> </div>\n"
+  },
+  {
+    "pdf_page": 77,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表 15. 频谱分析 Advanced 功能配置选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 77,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>FFT Window\\nFFT 窗函数设置</td><td style='text-align: center; word-wrap: break-word;'>Rectangular/Hanning/Blackman/Hamming\\n四种不同的 FFT 窗函数可供选择。每个窗函数在幅值精度和频谱泄漏之间会有不同程度的折衷。请查看相关文献，以便找到最符合您需求的窗函数。</td></tr></table>"
+  },
+  {
+    "pdf_page": 78,
+    "label": "paragraph_title",
+    "content": "#### 6.3.14 PID 控制窗口"
+  },
+  {
+    "pdf_page": 78,
+    "label": "text",
+    "content": "在软件控制主界面左上目录能够选择“Function”->“PID”测量功能，如图58所示："
+  },
+  {
+    "pdf_page": 78,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_180_255_1010_648.jpg\" alt=\"Image\" width=\"69%\" /></div>\n"
+  },
+  {
+    "pdf_page": 78,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 58. PID 控制功能</div> </div>\n"
+  },
+  {
+    "pdf_page": 78,
+    "label": "text",
+    "content": "红框中 PID 功能窗口可以调节的 PID 基础设置，有两个独立、可分别配置的 PID 可选择。如 $ \\underline{\\text{图59}} $所示："
+  },
+  {
+    "pdf_page": 78,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_769_950_1233.jpg\" alt=\"Image\" width=\"64%\" /></div>\n"
+  },
+  {
+    "pdf_page": 78,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 59. PID 控制菜单设置</div> </div>\n"
+  },
+  {
+    "pdf_page": 78,
+    "label": "text",
+    "content": "使用 PID 功能时，可以先将锁放接入系统，再配置好所有 PID 参数，开启 PID 即可。"
+  },
+  {
+    "pdf_page": 78,
+    "label": "text",
+    "content": "如果被测设备（DUT）的传递函数未知，并且只有少量噪声从环境中耦合到系统中，那么通常手动操作是最快的方法。手动配置新的控制环时，建议首先采用较小的 P 值，并将其他参数（I、D、Offset）设置为零。通过启用控制器，能够立即看到 P 的方向是否正确以及反馈是否作用于正确的输出参数，可以通过检查显示在 PID 选项卡中的<Output Select>的值来确认输出参数。积分增益 I 的逐步提高有助于将 PID 误差信号完全归零。启用微分增益 D 可提高反馈回路的速度，但也会导致反馈回路行为不稳定。用户可根据实际环路响"
+  },
+  {
+    "pdf_page": 79,
+    "label": "text",
+    "content": "应的速度和效果，调整 P、I、D 的参数。过程中也可调整滤波器带宽，限幅器的限幅范围等参数。"
+  },
+  {
+    "pdf_page": 79,
+    "label": "text",
+    "content": "在 PID 参数调整过程中，建议用户使用示波器查看 PID 的输入输出接口，OE1300 的上位机通讯接口速率最高是 1 ksps，而 PID 模块的实际运行速率最高为 4 Msps，上位机存在欠采样的问题，有可能无法捕捉一些高频的震荡现象。"
+  },
+  {
+    "pdf_page": 79,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_179_335_1014_791.jpg\" alt=\"Image\" width=\"70%\" /></div>\n"
+  },
+  {
+    "pdf_page": 79,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图 60. PID 采样保存设置</div> </div>\n"
+  },
+  {
+    "pdf_page": 79,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">表 16. PID 采样保存选项表</div> </div>\n"
+  },
+  {
+    "pdf_page": 79,
+    "label": "table",
+    "content": "\n\n<table border=1 style='margin: auto; word-wrap: break-word;'><tr><td style='text-align: center; word-wrap: break-word;'>Sample PID 控制器采样保存速率设置</td><td style='text-align: center; word-wrap: break-word;'>可调范围是 0.100~10000.000 s/sample，默认值为 0.100</td></tr></table>"
+  }
+]

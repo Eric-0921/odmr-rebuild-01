@@ -1,0 +1,277 @@
+[
+  {
+    "pdf_page": 5,
+    "label": "paragraph_title",
+    "content": "## 1. 技术参数"
+  },
+  {
+    "pdf_page": 5,
+    "label": "paragraph_title",
+    "content": "### 1.1 信号通道"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "- 电压输入模式 单端或差分输入"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "• 满量程范围 1 nV 至 5 V，以 1-2-5 的倍数顺序步进"
+  },
+  {
+    "pdf_page": 5,
+    "label": "inline_formula",
+    "content": " $$ 10^{6}\\mathrm{~V/A} $$ "
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "- 输入阻抗\n\n电压 10 MΩ//25 pF，交流或直流耦合电流 1 kΩ到虚拟地"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "比 >70 dB 至 10 kHz，以 6 dB/oct 减小"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "动态储备"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "增益精度"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "典型值0.2%，最大2%"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "997 Hz 时 5 nV/√Hz"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "电流噪声\n\n97 Hz 时 0.3 pA/ √ Hz\n\n997 Hz 时 0.3 pA/ √ Hz"
+  },
+  {
+    "pdf_page": 5,
+    "label": "paragraph_title",
+    "content": "### 1.2 参考通道"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "输入"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "频率范围 1 uHz 至 100 kHz/500 kHz\n\n参考输入 方波或正弦波\n\n输入阻抗 10 MΩ\n\n方波参考电平  $ V_{IH} > 3V $,  $ V_{IL} < 0.5V $\n\n正弦参考信号 >1 Hz\n\n> 300 mVpp"
+  },
+  {
+    "pdf_page": 5,
+    "label": "paragraph_title",
+    "content": "##### 相位"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "分辨率 1 udeg\n\n绝对相位误差 <2 deg\n\n相对相位误差 <1 deg\n\n温漂"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "低于  $ 10 \\, kHz $ <0.01 / °C"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "高于  $ 10 \\, kHz $ <0.1 / °C"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "谐波检测"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "2F, 3F, ...nF 至 100 kHz/500 kHz (n<65,535)"
+  },
+  {
+    "pdf_page": 5,
+    "label": "text",
+    "content": "采集时间\n\n内部参考 即时采集\n\n外部参考 (3个周期+5 ms)或者40 ms"
+  },
+  {
+    "pdf_page": 6,
+    "label": "paragraph_title",
+    "content": "### 1.3 解调器"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "8个"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "数量"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "- 稳定性\n\n  数字输出 所有设置均无零点漂移\n\n  显示 所有设置均无零点漂移\n\n  模拟输出 所有动态储备设置小于 5 ppm/℃\n\n- 谐波抑制 -75 dB\n\n- 时间常数 1 us 至 3 ks. 6, 12, 18, 24, 30, 36, 42, 48 dB/oct 陡降\n\n- 同步滤波器 低于 1 kHz 且大于 18 dB/oct 陡降方可开启"
+  },
+  {
+    "pdf_page": 6,
+    "label": "paragraph_title",
+    "content": "### 1.4 信号发生器"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "● 频率"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "范围 1 mHz 至 100 kHz/500 kHz\n\n精度 2 ppm + 10 uHz\n\n分辨率 1 uHz\n\n-80 dBc (f<10 kHz), -70 dBc (f>10 kHz)"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "失真"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "- 正弦幅值\n\n范围 100 uVrms 至 5 Vrms\n\n分辨率 最低 10 uVrms\n\n误差 标准 0.5% (f<10 kHz)，最大 1%\n\n温度稳定性 100 ppm/°C\n\n正弦输出 正弦信号，输出阻抗 50 Ω\n\nTTL 同步输出 5V TTL/CMOS 电平，输出阻抗 200 Ω"
+  },
+  {
+    "pdf_page": 6,
+    "label": "paragraph_title",
+    "content": "### 1.5 输出"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "- CH 1 和 CH 2\n\n功能 输出 X,Y,R, $ \\theta $ 和谐波\n\n幅值  $ \\pm10\\ V $\n\n驱动电流  $ \\pm30\\ mA\\ max $"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "AUX Inputs\n\n功能 2 通道输入\n\n幅值  $ \\pm10\\ V $，1 mV 分辨率\n\n阻抗 1 M $ \\Omega $"
+  },
+  {
+    "pdf_page": 6,
+    "label": "paragraph_title",
+    "content": "### 1.6 接口"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "UART 接口类型 RS232（可改为 XH2.54-4PIN 端子 TTL 电平）\n\n网口 隔离式 1000 Mbps RJ45 接口"
+  },
+  {
+    "pdf_page": 6,
+    "label": "text",
+    "content": "1.7 其他"
+  },
+  {
+    "pdf_page": 7,
+    "label": "paragraph_title",
+    "content": "##### OE1300 Lock-In Amplifier"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "电源要求"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "电压"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "12 VDC $ \\pm $5%"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "功率"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "标准 18 W，最大不超过 24 W"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "重量"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "400 g"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "尺寸"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "长"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "180 mm"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "宽"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "106 mm"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "高"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "44 mm"
+  },
+  {
+    "pdf_page": 7,
+    "label": "text",
+    "content": "产品结构尺寸图："
+  },
+  {
+    "pdf_page": 7,
+    "label": "image",
+    "content": "<div style=\"text-align: center;\"><img src=\"imgs/img_in_image_box_150_509_1023_1019.jpg\" alt=\"Image\" width=\"73%\" /></div>\n"
+  },
+  {
+    "pdf_page": 7,
+    "label": "figure_title",
+    "content": "<div style=\"text-align: center;\"><div style=\"text-align: center;\">图1. 产品尺寸图</div> </div>\n"
+  }
+]
