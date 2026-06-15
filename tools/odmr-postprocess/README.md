@@ -179,3 +179,28 @@ runs/<run_id>/postprocess/ml_report/
   ml_report_summary.json
   ml_report_summary.md
 ```
+
+## 拆分多 point GPT review
+
+多 point 笛卡尔扫描给网页版 GPT 或人工逐条看谱线时，可以把全量 `li_odmr_gpt_review_<run_id>.csv` 拆成每个 point 一个 CSV，并为每个 point 生成谱线-频率图：
+
+```bash
+python3 tools/odmr-postprocess/split_li_odmr_gpt_review_by_point.py \
+  --postprocess runs/<run_id>/postprocess
+```
+
+输出：
+
+```text
+runs/<run_id>/postprocess/li_odmr_gpt_review_by_point/
+  csv/
+    001_<point_id>.csv
+    ...
+  plots/
+    001_<point_id>.png
+    ...
+  manifest.csv
+  summary.json
+```
+
+每个 point CSV 会重复写入该 point 的 `target_b_nt`、RF、激光、overload、PLL 等元数据；每张图标题中也会包含 point id、三轴磁场标签和关键采集参数。
