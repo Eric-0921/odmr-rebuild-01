@@ -720,7 +720,7 @@ public static class ConfigDrivenRun
         {
             try
             {
-                using var smb = new Smb100aSession(host, port, Smb100aDefaults.TimeoutMs);
+                using var smb = Smb100aTcp.Open(host, port, Smb100aDefaults.TimeoutMs);
                 var idn = smb.Query(Smb100aCommands.QueryIdn);
                 if (IdentityMatches(device.Identity, idn))
                 {

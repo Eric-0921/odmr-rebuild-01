@@ -152,6 +152,8 @@ public static class Smb100aTcp
 
     public static Smb100aSession Open(string host, int port) => new(host, port);
 
+    public static Smb100aSession Open(string host, int port, int connectTimeoutMs) => new(host, port, connectTimeoutMs);
+
     public static bool ErrorIsClean(string response) =>
         response.StartsWith("0,", StringComparison.Ordinal) ||
         response.Contains("No error", StringComparison.OrdinalIgnoreCase);
