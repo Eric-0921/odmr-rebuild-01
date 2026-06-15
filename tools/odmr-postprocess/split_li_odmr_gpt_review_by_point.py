@@ -20,6 +20,19 @@ def find_one(directory: Path, pattern: str) -> Path:
     return matches[0]
 
 
+def find_spectrum_csv(directory: Path) -> Path:
+    matches = sorted(
+        path
+        for path in directory.glob("li_odmr_gpt_review_*.csv")
+        if not path.name.endswith("_metadata.csv")
+    )
+    if not matches:
+        raise FileNotFoundError(f"no spectrum review CSV in {directory}")
+    if len(matches) > 1:
+        raise ValueError(f"multiple spectrum review CSV files in {directory}: {matches}")
+    return matches[0]
+
+
 def safe_name(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in value)
 
@@ -99,9 +112,7 @@ def plot_point(path: Path, rows: list[dict[str, str]], metadata: dict[str, str])
 
 def split_review(args: argparse.Namespace) -> int:
     postprocess = Path(args.postprocess).resolve()
-    spectrum_csv = Path(args.spectrum_csv).resolve() if args.spectrum_csv else find_one(
-        postprocess, "li_odmr_gpt_review_*.csv"
-    )
+    spectrum_csv = Path(args.spectrum_csv).resolve() if args.spectrum_csv else find_spectrum_csv(postprocess)
     metadata_csv = Path(args.metadata_csv).resolve() if args.metadata_csv else find_one(
         postprocess, "li_odmr_gpt_review_*_metadata.csv"
     )
