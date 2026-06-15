@@ -158,3 +158,24 @@ sample_count
 - 标签使用 `target_b_nt`，当前语义是 `helmholtz_setpoint_calibrated`。
 - 用 `sample_weight` 过滤或降权 overload / PLL 不完整样本。
 - train/test split 至少按 `source_run` 分组，后续再增加样品、日期、磁铁配置等 group 字段。
+
+## 生成汇报图和 ML 诊断
+
+对已经生成 `ml_dataset_*.npz` 和 `ml_samples_*.csv` 的 run，可以生成导师汇报和 ML 诊断用的基础图：
+
+```bash
+python3 tools/odmr-postprocess/analyze_odmr_ml_dataset.py \
+  --postprocess runs/<run_id>/postprocess
+```
+
+输出目录：
+
+```text
+runs/<run_id>/postprocess/ml_report/
+  li_odmr_representative_spectra.png
+  li_odmr_mean_spectra_by_bz.png
+  ml_quality_by_bz.png
+  ml_pca_scatter_by_bz.png
+  ml_report_summary.json
+  ml_report_summary.md
+```
