@@ -163,13 +163,30 @@ public sealed class Smb100aSession : IDisposable
     private readonly NetworkStream stream;
 
     public Smb100aSession(string host, int port)
+        : this(host, port, Smb100aDefaults.TimeoutMs)
+    {
+    }
+
+    public Smb100aSession(string host, int port, int connectTimeoutMs)
     {
         client = new TcpClient
         {
             ReceiveTimeout = Smb100aDefaults.TimeoutMs,
             SendTimeout = Smb100aDefaults.TimeoutMs
         };
-        client.Connect(host, port);
+        var connectTask = client.ConnectAsync(host, port);
+        if (!connectTask.Wait(connectTimeoutMs))
+        {
+            client.Dispose();
+            throw new TimeoutException($"SMB100A TCP connect timeout: host={host}, port={port}, timeout_ms={connectTimeoutMs}");
+        }
+
+        if (connectTask.IsFaulted)
+        {
+            client.Dispose();
+            throw connectTask.Exception?.GetBaseException() ?? new IOException($"SMB100A TCP connect failed: host={host}, port={port}");
+        }
+
         stream = client.GetStream();
     }
 

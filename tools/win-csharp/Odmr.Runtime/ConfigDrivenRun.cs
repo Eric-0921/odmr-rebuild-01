@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Ports;
 using Odmr.Artifacts;
 using Odmr.Devices;
 
@@ -21,6 +22,14 @@ internal sealed record ConfigMagAxis(
     string AxisId,
     StationDeviceSpec Device,
     M8812AxisSession Session);
+
+internal sealed record RuntimeResolvedConnections(
+    string OeResource,
+    int OeBaudRate,
+    string SmbHost,
+    int SmbPort,
+    IReadOnlyDictionary<string, string> MagPorts,
+    string? LaserPort);
 
 internal sealed class EmergencyStopException : OperationCanceledException
 {
@@ -105,16 +114,18 @@ public static class ConfigDrivenRun
             null,
             null);
 
-        ApplyOeFixedProfile(bundle, eventsPath, processStart);
+        var resolvedConnections = ResolveRuntimeConnections(bundle, eventsPath, processStart);
+
+        ApplyOeFixedProfile(bundle, resolvedConnections, eventsPath, processStart);
 
         using var collector = new OeRallCollector(
-            bundle.Connections.OeResource,
-            bundle.Connections.OeBaudRate,
+            resolvedConnections.OeResource,
+            resolvedConnections.OeBaudRate,
             rawPath,
             indexPath,
             processStart);
-        using var smb = Smb100aTcp.Open(bundle.Connections.SmbHost, bundle.Connections.SmbPort);
-        var magAxes = bundle.ResolvedPlan.RequiresMagneticControl ? OpenMagAxes(bundle) : [];
+        using var smb = Smb100aTcp.Open(resolvedConnections.SmbHost, resolvedConnections.SmbPort);
+        var magAxes = bundle.ResolvedPlan.RequiresMagneticControl ? OpenMagAxes(bundle, resolvedConnections) : [];
         CniLaserSession? laser = null;
         var pointsPassed = 0;
         var pointsFailed = 0;
@@ -530,13 +541,32 @@ public static class ConfigDrivenRun
         RallArtifactWriter.WritePrettyJson(Path.Combine(outDir, "laser_profile_snapshot.json"), bundle.LaserProfile);
     }
 
-    private static List<ConfigMagAxis> OpenMagAxes(RunConfigBundle bundle)
+    private static RuntimeResolvedConnections ResolveRuntimeConnections(RunConfigBundle bundle, string eventsPath, long processStart)
+    {
+        var oeDevice = bundle.Station.Devices.First(device => device.DeviceId == "oe1022d_main");
+        var smbDevice = bundle.Station.Devices.First(device => device.DeviceId == "smb100a_main");
+        var resolvedOeResource = ResolveOeResource(oeDevice, bundle.Connections.OeBaudRate, eventsPath, processStart, bundle.Plan.RunId);
+        var resolvedSmbHost = ResolveSmbHost(smbDevice, bundle.Connections.SmbPort, eventsPath, processStart, bundle.Plan.RunId);
+        var magPorts = bundle.ResolvedPlan.RequiresMagneticControl
+            ? ResolveMagPorts(bundle, eventsPath, processStart)
+            : new Dictionary<string, string>();
+
+        return new RuntimeResolvedConnections(
+            resolvedOeResource,
+            bundle.Connections.OeBaudRate,
+            resolvedSmbHost,
+            bundle.Connections.SmbPort,
+            magPorts,
+            bundle.Connections.LaserPort);
+    }
+
+    private static List<ConfigMagAxis> OpenMagAxes(RunConfigBundle bundle, RuntimeResolvedConnections resolvedConnections)
     {
         var axes = new List<ConfigMagAxis>
         {
-            OpenMagAxis(bundle, "mag_x", bundle.Connections.XPort ?? throw new InvalidOperationException("mag_x port missing")),
-            OpenMagAxis(bundle, "mag_y", bundle.Connections.YPort ?? throw new InvalidOperationException("mag_y port missing")),
-            OpenMagAxis(bundle, "mag_z", bundle.Connections.ZPort ?? throw new InvalidOperationException("mag_z port missing"))
+            OpenMagAxis(bundle, "mag_x", resolvedConnections.MagPorts["mag_x"]),
+            OpenMagAxis(bundle, "mag_y", resolvedConnections.MagPorts["mag_y"]),
+            OpenMagAxis(bundle, "mag_z", resolvedConnections.MagPorts["mag_z"])
         };
 
         foreach (var axis in axes)
@@ -613,9 +643,9 @@ public static class ConfigDrivenRun
         return session;
     }
 
-    private static void ApplyOeFixedProfile(RunConfigBundle bundle, string eventsPath, long processStart)
+    private static void ApplyOeFixedProfile(RunConfigBundle bundle, RuntimeResolvedConnections resolvedConnections, string eventsPath, long processStart)
     {
-        using var oe = Oe1022dVisa.Open(bundle.Connections.OeResource, bundle.Connections.OeBaudRate);
+        using var oe = Oe1022dVisa.Open(resolvedConnections.OeResource, resolvedConnections.OeBaudRate);
         var commands = BuildOeFixedCommands(bundle.OeProfile.Fixed);
         foreach (var command in commands)
         {
@@ -628,8 +658,177 @@ public static class ConfigDrivenRun
             profile_id = bundle.OeProfile.ProfileId,
             fixed_commands_sent = true,
             command_count = commands.Length,
-            channel = bundle.OeProfile.Fixed.Channel
+            channel = bundle.OeProfile.Fixed.Channel,
+            resource = resolvedConnections.OeResource
         });
+    }
+
+    private static string ResolveOeResource(StationDeviceSpec device, int baudRate, string eventsPath, long processStart, string runId)
+    {
+        var candidates = new List<string>();
+        AppendUnique(candidates, device.TransportHint.Resource);
+        foreach (var candidate in device.TransportHint.ResourceCandidates ?? Array.Empty<string>())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        foreach (var candidate in Oe1022dVisa.ListResources())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        var failures = new List<string>();
+        foreach (var resource in candidates)
+        {
+            try
+            {
+                using var oe = Oe1022dVisa.Open(resource, baudRate);
+                var idn = oe.QueryIdn();
+                if (IdentityMatches(device.Identity, idn))
+                {
+                    AppendEvent(eventsPath, processStart, runId, "device_resolved", "resolve", null, device.DeviceId, new
+                    {
+                        transport = "visa_resource",
+                        resource,
+                        idn
+                    });
+                    return resource;
+                }
+
+                failures.Add($"{resource}: identity mismatch idn={idn}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{resource}: {ex.Message}");
+            }
+        }
+
+        throw new InvalidOperationException($"failed to resolve OE1022D resource for {device.DeviceId}: {string.Join(" | ", failures)}");
+    }
+
+    private static string ResolveSmbHost(StationDeviceSpec device, int port, string eventsPath, long processStart, string runId)
+    {
+        var candidates = new List<string>();
+        AppendUnique(candidates, device.TransportHint.Host);
+        foreach (var candidate in device.TransportHint.HostCandidates ?? Array.Empty<string>())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        var failures = new List<string>();
+        foreach (var host in candidates)
+        {
+            try
+            {
+                using var smb = new Smb100aSession(host, port, Smb100aDefaults.TimeoutMs);
+                var idn = smb.Query(Smb100aCommands.QueryIdn);
+                if (IdentityMatches(device.Identity, idn))
+                {
+                    AppendEvent(eventsPath, processStart, runId, "device_resolved", "resolve", null, device.DeviceId, new
+                    {
+                        transport = "tcp_socket",
+                        host,
+                        port,
+                        idn
+                    });
+                    return host;
+                }
+
+                failures.Add($"{host}:{port}: identity mismatch idn={idn}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{host}:{port}: {ex.Message}");
+            }
+        }
+
+        throw new InvalidOperationException($"failed to resolve SMB100A host for {device.DeviceId}: {string.Join(" | ", failures)}");
+    }
+
+    private static IReadOnlyDictionary<string, string> ResolveMagPorts(RunConfigBundle bundle, string eventsPath, long processStart)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var axisId in new[] { "mag_x", "mag_y", "mag_z" })
+        {
+            var device = bundle.Station.Devices.First(device => device.DeviceId == axisId);
+            result[axisId] = ResolveMagPort(device, eventsPath, processStart, bundle.Plan.RunId);
+        }
+
+        return result;
+    }
+
+    private static string ResolveMagPort(StationDeviceSpec device, string eventsPath, long processStart, string runId)
+    {
+        var candidates = new List<string>();
+        AppendUnique(candidates, device.TransportHint.PortPath);
+        foreach (var candidate in device.TransportHint.PortCandidates ?? Array.Empty<string>())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        foreach (var candidate in SerialPort.GetPortNames().OrderBy(name => name, StringComparer.OrdinalIgnoreCase))
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        var failures = new List<string>();
+        foreach (var port in candidates)
+        {
+            try
+            {
+                using var session = M8812Serial.Open(port);
+                session.Clear();
+                var idn = session.QueryIdn();
+                if (IdentityMatches(device.Identity, idn))
+                {
+                    AppendEvent(eventsPath, processStart, runId, "device_resolved", "resolve", null, device.DeviceId, new
+                    {
+                        transport = "serial_port",
+                        port,
+                        idn
+                    });
+                    return port;
+                }
+
+                failures.Add($"{port}: identity mismatch idn={idn}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{port}: {ex.Message}");
+            }
+        }
+
+        throw new InvalidOperationException($"failed to resolve M8812 port for {device.DeviceId}: {string.Join(" | ", failures)}");
+    }
+
+    private static bool IdentityMatches(StationIdentity? identity, string idn)
+    {
+        if (identity is null)
+        {
+            return true;
+        }
+
+        var containsAll = identity.ContainsAll ?? Array.Empty<string>();
+        var containsAny = identity.ContainsAny ?? Array.Empty<string>();
+        if (containsAll.Any(token => !idn.Contains(token, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        return containsAny.Count == 0 || containsAny.Any(token => idn.Contains(token, StringComparison.Ordinal));
+    }
+
+    private static void AppendUnique(List<string> values, string? candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return;
+        }
+
+        if (!values.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+        {
+            values.Add(candidate);
+        }
     }
 
     private static BaselineSnapshot LockBaseline(RunConfigBundle bundle, IReadOnlyList<ConfigMagAxis> axes, string baselinePath)
