@@ -143,6 +143,29 @@ def target_b(point: dict[str, Any]) -> list[Any]:
     return values[:3]
 
 
+def point_id(row: dict[str, Any]) -> str:
+    value = row.get("point_id")
+    if value is None:
+        raise ValueError("row missing point_id")
+    return str(value)
+
+
+def index_by_point(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {point_id(row): row for row in rows}
+
+
+def resolve_rf(point: dict[str, Any], smb: dict[str, Any]) -> dict[str, Any]:
+    rf = dict(smb.get("default_sweep") or {})
+    rf.update(point.get("rf") or {})
+    return rf
+
+
+def finite_or_blank(value: Any) -> Any:
+    if isinstance(value, float) and not math.isfinite(value):
+        return ""
+    return value
+
+
 def write_review_csv(args: argparse.Namespace) -> int:
     try:
         import numpy as np
@@ -166,62 +189,23 @@ def write_review_csv(args: argparse.Namespace) -> int:
     laser = load_json(run_dir / "laser_profile_snapshot.json", {})
     summary = load_json(run_dir / "summary.json", {})
 
-    point = points[0]
-    field_row = point_fields[0]
-    quality = qualities[0] if qualities else {}
-    rf = dict(smb.get("default_sweep") or {})
-    rf.update(point.get("rf") or {})
-
-    start_hz = float(rf["start_hz"])
-    stop_hz = float(rf["stop_hz"])
-    step_hz = float(rf["step_hz"])
-    dwell_ms = float(rf["dwell_ms"])
-    frequency_hz = build_frequency_grid(start_hz, stop_hz, step_hz)
-    samples_per_freq = max(1, int(round(dwell_ms / args.sample_interval_ms)))
-
-    sidecar_rel = (field_row.get("sidecar") or {}).get("relative_path")
-    if not sidecar_rel:
-        raise ValueError("point_fields row has no sidecar.relative_path")
-    sidecar_path = run_dir / sidecar_rel
-
-    with np.load(sidecar_path, allow_pickle=False) as data:
-        b_x_mean, b_x_std, sample_count, cycles, leftover = fold_trace(
-            np, data["b_x"], len(frequency_hz), samples_per_freq
-        )
-        b_y_mean, b_y_std, _, _, _ = fold_trace(np, data["b_y"], len(frequency_hz), samples_per_freq)
-        b_noise_mean, _, _, _, _ = fold_trace(np, data["b_noise"], len(frequency_hz), samples_per_freq)
-
-    frequency_hz_arr = np.asarray(frequency_hz[: b_x_mean.size], dtype=float)
-    b_r_mean = np.sqrt(b_x_mean * b_x_mean + b_y_mean * b_y_mean)
-
-    b_x_detrended, b_x_trend = linear_detrend(np, frequency_hz_arr, b_x_mean)
-    b_y_detrended, b_y_trend = linear_detrend(np, frequency_hz_arr, b_y_mean)
-    b_r_detrended, b_r_trend = linear_detrend(np, frequency_hz_arr, b_r_mean)
-
-    b_x_smooth9 = moving_average(np, b_x_detrended, 9)
-    b_y_smooth9 = moving_average(np, b_y_detrended, 9)
-    b_r_smooth9 = moving_average(np, b_r_detrended, 9)
-    b_x_smooth21 = moving_average(np, b_x_detrended, 21)
-    b_y_smooth21 = moving_average(np, b_y_detrended, 21)
-    b_r_smooth21 = moving_average(np, b_r_detrended, 21)
-
-    b_x_z = robust_z(np, b_x_detrended)
-    b_y_z = robust_z(np, b_y_detrended)
-    b_r_z = robust_z(np, b_r_detrended)
-    b_x_smooth9_z = robust_z(np, b_x_smooth9)
-    b_y_smooth9_z = robust_z(np, b_y_smooth9)
-    b_r_smooth9_z = robust_z(np, b_r_smooth9)
-    hints = peak_hints([float(v) for v in b_x_smooth9])
-
     output_dir = Path(args.out).resolve() if args.out else run_dir / "postprocess"
     output_dir.mkdir(parents=True, exist_ok=True)
     suffix = args.name_suffix or run_dir.name
     csv_path = output_dir / f"li_odmr_gpt_review_{suffix}.csv"
+    metadata_csv_path = output_dir / f"li_odmr_gpt_review_{suffix}_metadata.csv"
+    metadata_jsonl_path = output_dir / f"li_odmr_gpt_review_{suffix}_metadata.jsonl"
     summary_path = output_dir / f"li_odmr_gpt_review_{suffix}_summary.json"
 
-    labels = target_b(point)
+    fields_by_point = index_by_point(point_fields)
+    qualities_by_point = index_by_point(qualities) if qualities else {}
+    metadata_rows: list[dict[str, Any]] = []
+    skipped_rows: list[dict[str, Any]] = []
+    total_rows = 0
+
     fieldnames = [
         "source_run",
+        "point_index",
         "point_id",
         "frequency_index",
         "frequency_hz",
@@ -260,58 +244,186 @@ def write_review_csv(args: argparse.Namespace) -> int:
         "b_gain_overload_ratio",
         "b_pll_locked_ratio",
     ]
+    metadata_fieldnames = [
+        "source_run",
+        "point_index",
+        "point_id",
+        "target_bx_nt",
+        "target_by_nt",
+        "target_bz_nt",
+        "rf_start_hz",
+        "rf_stop_hz",
+        "rf_step_hz",
+        "rf_dwell_ms",
+        "rf_power_dbm",
+        "frequency_bins",
+        "samples_per_frequency",
+        "complete_sweeps_used",
+        "leftover_samples_ignored",
+        "laser_mode",
+        "laser_power_mw",
+        "quality_status",
+        "b_input_overload_ratio",
+        "b_gain_overload_ratio",
+        "b_pll_locked_ratio",
+        "sidecar_npz",
+    ]
 
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
-        for index in range(frequency_hz_arr.size):
-            writer.writerow(
+        for point_index, point in enumerate(points):
+            pid = point_id(point)
+            field_row = fields_by_point.get(pid)
+            if field_row is None:
+                skipped_rows.append({"point_id": pid, "reason": "missing_point_fields"})
+                continue
+
+            quality = qualities_by_point.get(pid, {})
+            rf = resolve_rf(point, smb)
+            try:
+                start_hz = float(rf["start_hz"])
+                stop_hz = float(rf["stop_hz"])
+                step_hz = float(rf["step_hz"])
+                dwell_ms = float(rf["dwell_ms"])
+            except (KeyError, TypeError, ValueError) as exc:
+                skipped_rows.append({"point_id": pid, "reason": f"bad_rf:{exc}"})
+                continue
+            frequency_hz = build_frequency_grid(start_hz, stop_hz, step_hz)
+            samples_per_freq = max(1, int(round(dwell_ms / args.sample_interval_ms)))
+
+            sidecar_rel = (field_row.get("sidecar") or {}).get("relative_path")
+            if not sidecar_rel:
+                skipped_rows.append({"point_id": pid, "reason": "missing_sidecar_path"})
+                continue
+            sidecar_path = run_dir / sidecar_rel
+            if not sidecar_path.exists():
+                skipped_rows.append({"point_id": pid, "reason": "sidecar_not_found"})
+                continue
+
+            with np.load(sidecar_path, allow_pickle=False) as data:
+                b_x_mean, b_x_std, sample_count, cycles, leftover = fold_trace(
+                    np, data["b_x"], len(frequency_hz), samples_per_freq
+                )
+                b_y_mean, b_y_std, _, _, _ = fold_trace(np, data["b_y"], len(frequency_hz), samples_per_freq)
+                b_noise_mean, _, _, _, _ = fold_trace(np, data["b_noise"], len(frequency_hz), samples_per_freq)
+
+            frequency_hz_arr = np.asarray(frequency_hz[: b_x_mean.size], dtype=float)
+            b_r_mean = np.sqrt(b_x_mean * b_x_mean + b_y_mean * b_y_mean)
+
+            b_x_detrended, b_x_trend = linear_detrend(np, frequency_hz_arr, b_x_mean)
+            b_y_detrended, b_y_trend = linear_detrend(np, frequency_hz_arr, b_y_mean)
+            b_r_detrended, b_r_trend = linear_detrend(np, frequency_hz_arr, b_r_mean)
+
+            b_x_smooth9 = moving_average(np, b_x_detrended, 9)
+            b_y_smooth9 = moving_average(np, b_y_detrended, 9)
+            b_r_smooth9 = moving_average(np, b_r_detrended, 9)
+            b_x_smooth21 = moving_average(np, b_x_detrended, 21)
+            b_y_smooth21 = moving_average(np, b_y_detrended, 21)
+            b_r_smooth21 = moving_average(np, b_r_detrended, 21)
+
+            b_x_z = robust_z(np, b_x_detrended)
+            b_y_z = robust_z(np, b_y_detrended)
+            b_r_z = robust_z(np, b_r_detrended)
+            b_x_smooth9_z = robust_z(np, b_x_smooth9)
+            b_y_smooth9_z = robust_z(np, b_y_smooth9)
+            b_r_smooth9_z = robust_z(np, b_r_smooth9)
+            hints = peak_hints([float(v) for v in b_x_smooth9])
+            labels = target_b(point)
+
+            metadata_rows.append(
                 {
                     "source_run": run_dir.name,
-                    "point_id": point.get("point_id"),
-                    "frequency_index": index,
-                    "frequency_hz": f"{frequency_hz_arr[index]:.0f}",
-                    "frequency_ghz": f"{frequency_hz_arr[index] / 1e9:.9f}",
-                    "b_x_mean": f"{b_x_mean[index]:.12e}",
-                    "b_y_mean": f"{b_y_mean[index]:.12e}",
-                    "b_r_mean": f"{b_r_mean[index]:.12e}",
-                    "b_noise_mean": f"{b_noise_mean[index]:.12e}",
-                    "b_x_std": f"{b_x_std[index]:.12e}",
-                    "b_y_std": f"{b_y_std[index]:.12e}",
-                    "sample_count": int(sample_count[index]),
-                    "b_x_detrended": f"{b_x_detrended[index]:.12e}",
-                    "b_y_detrended": f"{b_y_detrended[index]:.12e}",
-                    "b_r_detrended": f"{b_r_detrended[index]:.12e}",
-                    "b_x_smooth9": f"{b_x_smooth9[index]:.12e}",
-                    "b_y_smooth9": f"{b_y_smooth9[index]:.12e}",
-                    "b_r_smooth9": f"{b_r_smooth9[index]:.12e}",
-                    "b_x_smooth21": f"{b_x_smooth21[index]:.12e}",
-                    "b_y_smooth21": f"{b_y_smooth21[index]:.12e}",
-                    "b_r_smooth21": f"{b_r_smooth21[index]:.12e}",
-                    "b_x_z": f"{b_x_z[index]:.9f}",
-                    "b_y_z": f"{b_y_z[index]:.9f}",
-                    "b_r_z": f"{b_r_z[index]:.9f}",
-                    "b_x_smooth9_z": f"{b_x_smooth9_z[index]:.9f}",
-                    "b_y_smooth9_z": f"{b_y_smooth9_z[index]:.9f}",
-                    "b_r_smooth9_z": f"{b_r_smooth9_z[index]:.9f}",
-                    "peak_hint_b_x_smooth9": hints[index],
+                    "point_index": point_index,
+                    "point_id": pid,
                     "target_bx_nt": labels[0],
                     "target_by_nt": labels[1],
                     "target_bz_nt": labels[2],
-                    "rf_power_dbm": rf.get("power_dbm"),
+                    "rf_start_hz": rf.get("start_hz"),
+                    "rf_stop_hz": rf.get("stop_hz"),
+                    "rf_step_hz": rf.get("step_hz"),
                     "rf_dwell_ms": rf.get("dwell_ms"),
+                    "rf_power_dbm": rf.get("power_dbm"),
+                    "frequency_bins": int(frequency_hz_arr.size),
+                    "samples_per_frequency": int(samples_per_freq),
+                    "complete_sweeps_used": int(cycles),
+                    "leftover_samples_ignored": int(leftover),
                     "laser_mode": laser.get("mode"),
                     "laser_power_mw": laser.get("power_mw"),
+                    "quality_status": quality.get("quality_status"),
                     "b_input_overload_ratio": field_row.get("b_input_overload_ratio"),
                     "b_gain_overload_ratio": field_row.get("b_gain_overload_ratio"),
                     "b_pll_locked_ratio": field_row.get("b_pll_locked_ratio"),
+                    "sidecar_npz": sidecar_rel,
                 }
             )
+
+            for index in range(frequency_hz_arr.size):
+                writer.writerow(
+                    {
+                        "source_run": run_dir.name,
+                        "point_index": point_index,
+                        "point_id": pid,
+                        "frequency_index": index,
+                        "frequency_hz": f"{frequency_hz_arr[index]:.0f}",
+                        "frequency_ghz": f"{frequency_hz_arr[index] / 1e9:.9f}",
+                        "b_x_mean": f"{b_x_mean[index]:.12e}",
+                        "b_y_mean": f"{b_y_mean[index]:.12e}",
+                        "b_r_mean": f"{b_r_mean[index]:.12e}",
+                        "b_noise_mean": f"{b_noise_mean[index]:.12e}",
+                        "b_x_std": f"{b_x_std[index]:.12e}",
+                        "b_y_std": f"{b_y_std[index]:.12e}",
+                        "sample_count": int(sample_count[index]),
+                        "b_x_detrended": f"{b_x_detrended[index]:.12e}",
+                        "b_y_detrended": f"{b_y_detrended[index]:.12e}",
+                        "b_r_detrended": f"{b_r_detrended[index]:.12e}",
+                        "b_x_smooth9": f"{b_x_smooth9[index]:.12e}",
+                        "b_y_smooth9": f"{b_y_smooth9[index]:.12e}",
+                        "b_r_smooth9": f"{b_r_smooth9[index]:.12e}",
+                        "b_x_smooth21": f"{b_x_smooth21[index]:.12e}",
+                        "b_y_smooth21": f"{b_y_smooth21[index]:.12e}",
+                        "b_r_smooth21": f"{b_r_smooth21[index]:.12e}",
+                        "b_x_z": f"{b_x_z[index]:.9f}",
+                        "b_y_z": f"{b_y_z[index]:.9f}",
+                        "b_r_z": f"{b_r_z[index]:.9f}",
+                        "b_x_smooth9_z": f"{b_x_smooth9_z[index]:.9f}",
+                        "b_y_smooth9_z": f"{b_y_smooth9_z[index]:.9f}",
+                        "b_r_smooth9_z": f"{b_r_smooth9_z[index]:.9f}",
+                        "peak_hint_b_x_smooth9": hints[index],
+                        "target_bx_nt": labels[0],
+                        "target_by_nt": labels[1],
+                        "target_bz_nt": labels[2],
+                        "rf_power_dbm": rf.get("power_dbm"),
+                        "rf_dwell_ms": rf.get("dwell_ms"),
+                        "laser_mode": laser.get("mode"),
+                        "laser_power_mw": laser.get("power_mw"),
+                        "b_input_overload_ratio": field_row.get("b_input_overload_ratio"),
+                        "b_gain_overload_ratio": field_row.get("b_gain_overload_ratio"),
+                        "b_pll_locked_ratio": field_row.get("b_pll_locked_ratio"),
+                    }
+                )
+            total_rows += int(frequency_hz_arr.size)
+
+    with metadata_csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=metadata_fieldnames)
+        writer.writeheader()
+        for row in metadata_rows:
+            writer.writerow({key: finite_or_blank(row.get(key)) for key in metadata_fieldnames})
+    with metadata_jsonl_path.open("w", encoding="utf-8") as handle:
+        for row in metadata_rows:
+            handle.write(safe_json_dumps(row) + "\n")
 
     summary_row = {
         "source_run": run_dir.name,
         "purpose": "li_odmr_bias_magnet_zero_crossing_resonance_peak_review",
+        "point_count": len(metadata_rows),
+        "skipped_point_count": len(skipped_rows),
+        "spectrum_row_count": total_rows,
         "recommended_gpt_columns": [
+            "point_id",
+            "target_bx_nt",
+            "target_by_nt",
+            "target_bz_nt",
             "frequency_ghz",
             "b_x_smooth9_z",
             "b_y_smooth9_z",
@@ -323,36 +435,24 @@ def write_review_csv(args: argparse.Namespace) -> int:
             "Use detrended and smoothed columns for visual/GPT peak review.",
             "Do not infer sample validity from quality_status alone; inspect overload ratios.",
         ],
-        "rf": {key: rf.get(key) for key in ["start_hz", "stop_hz", "step_hz", "dwell_ms", "power_dbm"]},
         "laser": laser,
         "oe_fixed": oe.get("fixed"),
-        "quality": quality,
-        "point_fields_overload": {
-            "b_input_overload_ratio": field_row.get("b_input_overload_ratio"),
-            "b_gain_overload_ratio": field_row.get("b_gain_overload_ratio"),
-            "b_pll_locked_ratio": field_row.get("b_pll_locked_ratio"),
-        },
-        "folding": {
-            "frequency_bins": int(frequency_hz_arr.size),
-            "samples_per_frequency": int(samples_per_freq),
-            "complete_sweeps_used": int(cycles),
-            "leftover_samples_ignored": int(leftover),
-        },
-        "trend_coefficients": {
-            "b_x_linear": b_x_trend,
-            "b_y_linear": b_y_trend,
-            "b_r_linear": b_r_trend,
-        },
         "summary": summary,
+        "skipped_points": skipped_rows,
         "outputs": {
             "csv": str(csv_path),
+            "metadata_csv": str(metadata_csv_path),
+            "metadata_jsonl": str(metadata_jsonl_path),
             "summary_json": str(summary_path),
         },
     }
     summary_path.write_text(safe_json_dumps(summary_row) + "\n", encoding="utf-8")
 
-    print(f"wrote {frequency_hz_arr.size} rows: {csv_path}")
+    print(f"wrote {total_rows} rows from {len(metadata_rows)} points: {csv_path}")
+    print(f"wrote metadata: {metadata_csv_path}")
     print(f"wrote summary: {summary_path}")
+    if skipped_rows:
+        print(f"skipped {len(skipped_rows)} points", file=sys.stderr)
     return 0
 
 

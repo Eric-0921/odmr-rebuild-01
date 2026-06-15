@@ -210,13 +210,21 @@ python3 tools/odmr-postprocess/build_li_odmr_gpt_review.py \
 
 ```text
 runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>.csv
+runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_metadata.csv
+runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_metadata.jsonl
 runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_summary.json
 ```
+
+数据粒度：
+
+- `li_odmr_gpt_review_<run_id>.csv` 是逐频点谱线明细，多 point run 会包含全部 point。比如 125 个 point、每条 641 个频点时，输出应为 `80125` 行。
+- `li_odmr_gpt_review_<run_id>_metadata.csv/jsonl` 是 point 级元数据，一行一个 point，用于把谱线和 `target_bx_nt/target_by_nt/target_bz_nt`、RF 参数、激光参数、overload/PLL 质量状态对应起来。
+- 网页版 GPT 判断多 point run 时必须按 `point_id` 分组；不能把整个 CSV 当成一条连续谱线。
 
 给网页版 GPT 的提示词可以直接写：
 
 ```text
-请重点看 frequency_ghz、b_x_smooth9_z、b_y_smooth9_z、b_r_smooth9_z 和 peak_hint_b_x_smooth9，判断 LI-ODMR 偏置磁场过零点附近的共振峰/反对称结构。b_x_mean/b_y_mean 是 lock-in 原始输出，不是荧光强度。quality_status 只代表采集连续，还要看 overload ratio。
+这份数据包含多条 LI-ODMR 谱线。请按 point_id 分组，每个 point_id 是一条谱线；metadata 文件里有每条谱线对应的 target_bx_nt/target_by_nt/target_bz_nt。请重点看 frequency_ghz、b_x_smooth9_z、b_y_smooth9_z、b_r_smooth9_z 和 peak_hint_b_x_smooth9，判断每个 point 的 LI-ODMR 偏置磁场过零点附近共振峰/反对称结构。b_x_mean/b_y_mean 是 lock-in 原始输出，不是荧光强度。quality_status 只代表采集连续，还要看 overload ratio。
 ```
 
 ## 9. 机器学习数据集整理流程

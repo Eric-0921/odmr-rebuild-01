@@ -87,15 +87,21 @@ python3 tools/odmr-postprocess/build_li_odmr_gpt_review.py \
 
 ```text
 runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>.csv
+runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_metadata.csv
+runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_metadata.jsonl
 runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_summary.json
 ```
+
+`li_odmr_gpt_review_<run_id>.csv` 是逐频点谱线明细。多 point run 会输出所有 point，例如 125 个 point、每条 641 个频点时，CSV 会有 `125 * 641 = 80125` 行。
+
+`li_odmr_gpt_review_<run_id>_metadata.csv/jsonl` 是 point 级元数据，每行一个 point，包含 `target_b_nt`、RF sweep、激光、overload、PLL、sidecar 路径和折叠统计。
 
 如果 Windows 端只有 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl`，没有 `point_fields.jsonl`，`--extract-missing-point-fields` 会先离线重建 point sidecar。
 
 给网页版 GPT 时建议说明：
 
 ```text
-请重点看 frequency_ghz、b_x_smooth9_z、b_y_smooth9_z、b_r_smooth9_z 和 peak_hint_b_x_smooth9，判断 LI-ODMR 偏置磁场过零点附近的共振峰/反对称结构。b_x_mean/b_y_mean 是 lock-in 原始输出，不是荧光强度。
+这份数据包含多条 LI-ODMR 谱线。请按 point_id 分组，每个 point_id 是一条谱线；metadata 文件里有每条谱线对应的 target_bx_nt/target_by_nt/target_bz_nt。请重点看 frequency_ghz、b_x_smooth9_z、b_y_smooth9_z、b_r_smooth9_z 和 peak_hint_b_x_smooth9，判断每个 point 的 LI-ODMR 偏置磁场过零点附近共振峰/反对称结构。b_x_mean/b_y_mean 是 lock-in 原始输出，不是荧光强度。
 ```
 
 注意：
