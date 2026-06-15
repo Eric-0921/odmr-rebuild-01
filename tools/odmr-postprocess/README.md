@@ -104,3 +104,51 @@ runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_summary.json
 - 人眼和 GPT 优先看 `detrended`、`smooth9`、`smooth21` 和 `*_z` 列。
 - `quality_status=passed` 只代表采集连续；必须同时看 `b_input_overload_ratio`、`b_gain_overload_ratio`、`b_pll_locked_ratio`。
 - 如果 `b_input_overload_ratio` 或 `b_gain_overload_ratio` 非 0，不要当作正常谱线给训练或结论判断。
+
+## 构建机器学习数据集
+
+笛卡尔磁场扫描或多 point run 不应该直接使用 GPT review CSV 训练。GPT review CSV 面向“单条谱线人工判峰”；机器学习应使用一行一个 point 的样本表和定长矩阵：
+
+```bash
+python3 tools/odmr-postprocess/build_odmr_ml_dataset.py \
+  --run runs/<run_id> \
+  --extract-missing-point-fields
+```
+
+输出：
+
+```text
+runs/<run_id>/postprocess/ml_dataset_<run_id>.npz
+runs/<run_id>/postprocess/ml_samples_<run_id>.csv
+runs/<run_id>/postprocess/ml_samples_<run_id>.jsonl
+runs/<run_id>/postprocess/ml_dataset_<run_id>_summary.json
+```
+
+`ml_dataset_<run_id>.npz` 是训练主输入：
+
+```text
+frequency_hz
+point_id
+target_b_nt
+sample_weight
+X_bx_smooth_z
+X_by_smooth_z
+X_br_smooth_z
+X_bx_detrended
+X_by_detrended
+X_br_detrended
+X_bx_mean
+X_by_mean
+X_br_mean
+X_bnoise_mean
+sample_count
+```
+
+`ml_samples_<run_id>.csv/jsonl` 是 point 级索引和质量表，包含 setpoint 标签、overload/PLL、SNR-like 指标、粗峰位、零交叉数量和对应 sidecar 路径。
+
+训练建议：
+
+- 优先使用 `X_bx_smooth_z`、`X_by_smooth_z`、`X_br_smooth_z` 作为第一版输入。
+- 标签使用 `target_b_nt`，当前语义是 `helmholtz_setpoint_calibrated`。
+- 用 `sample_weight` 过滤或降权 overload / PLL 不完整样本。
+- train/test split 至少按 `source_run` 分组，后续再增加样品、日期、磁铁配置等 group 字段。

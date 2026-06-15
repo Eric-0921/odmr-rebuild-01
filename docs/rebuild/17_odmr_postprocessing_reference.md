@@ -183,7 +183,6 @@ frequency_hz = start_hz + frequency_index * step_hz
 
 - 建立 OE `time_constant_index -> time_constant_ms` 和 `filter_slope -> dB/oct` 映射表。
 - 明确 `SWE:FREQ:EXEC` 到真实 RF sweep 起点的触发延迟审计方法。
-- 生成固定长度 `.npz` 或 `.parquet` 训练集，避免长期依赖 CSV。
 - 增加 group split 字段，例如 `run_id/date/sample_id`，防止同一 run 的相邻点同时进入 train/test。
 - 在积累足够数据后比较三条路线：多峰拟合、GPR、小型 1D-CNN。
 
@@ -219,6 +218,57 @@ runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_summary.json
 ```text
 请重点看 frequency_ghz、b_x_smooth9_z、b_y_smooth9_z、b_r_smooth9_z 和 peak_hint_b_x_smooth9，判断 LI-ODMR 偏置磁场过零点附近的共振峰/反对称结构。b_x_mean/b_y_mean 是 lock-in 原始输出，不是荧光强度。quality_status 只代表采集连续，还要看 overload ratio。
 ```
+
+## 9. 机器学习数据集整理流程
+
+网页版 GPT 的 CSV 是人工/LLM 判峰视图，不是训练主格式。尤其是 `x/y/z` 笛卡尔扫描时，一个 run 会包含很多 point；训练样本应该是一行一个 point，谱线作为定长矩阵保存。
+
+使用：
+
+```bash
+python3 tools/odmr-postprocess/build_odmr_ml_dataset.py \
+  --run runs/<run_id> \
+  --extract-missing-point-fields
+```
+
+输出：
+
+```text
+runs/<run_id>/postprocess/ml_dataset_<run_id>.npz
+runs/<run_id>/postprocess/ml_samples_<run_id>.csv
+runs/<run_id>/postprocess/ml_samples_<run_id>.jsonl
+runs/<run_id>/postprocess/ml_dataset_<run_id>_summary.json
+```
+
+`ml_dataset_<run_id>.npz` 是训练主文件：
+
+| 数组 | 含义 |
+|---|---|
+| `frequency_hz` | 固定频率轴 |
+| `point_id` | point 标识 |
+| `target_b_nt` | 监督标签，shape 为 `[N, 3]` |
+| `sample_weight` | 基于 overload / PLL 的第一版样本权重 |
+| `X_bx_smooth_z` | `B-X` 去趋势、平滑、robust Z-score 后的输入矩阵 |
+| `X_by_smooth_z` | `B-Y` 去趋势、平滑、robust Z-score 后的输入矩阵 |
+| `X_br_smooth_z` | `sqrt(B-X^2 + B-Y^2)` 的同类输入矩阵 |
+| `X_bx_detrended`, `X_by_detrended`, `X_br_detrended` | 保留幅度语义的去趋势谱线 |
+| `X_bx_mean`, `X_by_mean`, `X_br_mean`, `X_bnoise_mean` | 频率 bin 均值 |
+| `sample_count` | 每个频点聚合的样本数 |
+
+`ml_samples_<run_id>.csv/jsonl` 是 point 级索引和审计文件：
+
+- `target_bx_nt/target_by_nt/target_bz_nt` 保留三轴 setpoint 标签。
+- `b_input_overload_ratio/b_gain_overload_ratio/b_pll_locked_ratio` 用于筛样。
+- `snr_like_bx/edge_noise_bx/span_bx_detrended` 是第一版质量特征。
+- `*_max_freq_hz/*_min_freq_hz/*_max_abs_freq_hz` 是粗峰位提示，不作为最终物理拟合真值。
+- `*_zero_crossings` 和 `*_strongest_slope_freq_hz` 给 LI-ODMR 过零点识别做初筛。
+
+第一版训练建议：
+
+- 输入先用 `X_bx_smooth_z + X_by_smooth_z + X_br_smooth_z` 三通道。
+- 标签用 `target_b_nt`，当前语义为 `helmholtz_setpoint_calibrated`。
+- `sample_weight == 0` 的样本默认不进主训练集。
+- 切分数据时至少按 `source_run` 分组，不能把同一个 run 的邻近磁场点同时放进 train/test 后宣称泛化。
 
 有效性边界：
 
