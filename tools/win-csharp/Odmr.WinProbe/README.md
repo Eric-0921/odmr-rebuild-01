@@ -58,15 +58,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-idn --port COM8 --
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-rall --port COM8 --baud 115200 --count 1 --out-dir runs/oe1300_serial_probe
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-idn --host 192.168.1.1 --port 10001
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-rall --host 192.168.1.1 --port 10001 --count 1 --out-dir runs/oe1300_net_probe
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --duration-sec 60 --out-dir runs/oe1300_net_collector_demo
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --decode-in-loop true --duration-sec 60 --out-dir runs/oe1300_net_collector_demo_decode
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 0 --write-artifacts false --duration-sec 10 --out-dir runs/oe1300_net_collector_benchmark
-dotnet .\tools\win-csharp\Odmr.WinProbe\bin\Release\net8.0\Odmr.WinProbe.dll oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 0 --drain-before-write true --duration-sec 60 --out-dir D:\temp\oe1300_net_collector_release
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-outp-demo --host 192.168.1.1 --port 10001 --param-index 0 --duration-sec 10 --out-dir runs/oe1300_net_outp_demo
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-ascii-demo --host 192.168.1.1 --port 10001 --mode outp --param-index 0 --parse-in-loop true --duration-sec 10 --out-dir runs/oe1300_net_ascii_outp
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-ascii-demo --host 192.168.1.1 --port 10001 --mode snap --snap-indices 0,1,2,3,34 --parse-in-loop true --duration-sec 10 --out-dir runs/oe1300_net_ascii_snap
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --duration-sec 10 --out-dir runs/oe1300_net_labview_demo
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-raw-analyze --raw runs/oe1300_net_collector_demo/raw/oe1300_tcp.rall --max-frames 5000 --duration-sec 60
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
@@ -84,52 +76,6 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/wi
 - `raw/oe1022d.frames.idx.jsonl`
 - `segments.jsonl`
 - `summary.json`
-
-`oe1300-net-collector-demo` is a standalone OE1300 TCP sampling demo. It only:
-
-- writes `RALL?\r`
-- waits `5ms` by default
-- reads until `32768B`
-- appends raw frame and frame index
-
-With `--decode-in-loop true`, it additionally runs the current experimental
-`Oe1300Parsers.DecodeTcpRall(...)` inside the collector loop so sampling-rate
-impact can be compared directly against the raw-only path.
-
-With `--write-artifacts false`, it skips raw/index/segment writes and acts as a
-transport ceiling benchmark for the current `RALL?` path.
-
-With `--drain-before-write true` (default), the collector clears any buffered
-stale bytes before sending the next `RALL?\r`, so the measured rate is the fresh
-query loop rate rather than a socket-backlog replay rate.
-
-With `--drain-before-write false`, it skips that pre-drain step. This is only
-useful for diagnosing socket backlog behavior and must not be treated as a fresh
-sampling-rate measurement.
-
-`oe1300-net-raw-analyze` is a post-run diagnostic helper. It scans adjacent
-32768 B blocks in a captured raw file and reports how often the block content
-actually changes, so query rate and new-block rate can be compared explicitly.
-
-`oe1300-net-outp-demo` is the matching OE1300 TCP ASCII query benchmark for a
-single parameter. It repeatedly sends `OUTP? <index>`, records one returned
-ASCII float per query, and writes:
-
-- `values.csv`
-- `summary.json`
-
-This path is intentionally separate from the `RALL?` collector so device-layer
-fresh-query rate can be measured without the 32768 B binary block path.
-
-`oe1300-net-ascii-demo` is a unified TCP ASCII sampling benchmark. It supports:
-
-- `--mode outp` for single-parameter `OUTP? <index>`
-- `--mode snap` for multi-parameter `SNAP? i,j,...`
-- `--parse-in-loop true|false` to compare loop-internal parse overhead
-- `--write-values true|false` to compare CSV write overhead
-
-This is the recommended device-layer benchmark path when the goal is to reach
-or explain a 1 kHz sampling rate without involving the `RALL?` block collector.
 
 `oe1300-net-labview-demo` is the LabVIEW-style `RALL?` decode benchmark. It
 keeps the same TCP binary hot path:
@@ -149,11 +95,23 @@ The summary reports both:
 - `query_hz` for host-side `RALL?` loops
 - `effective_sample_hz_per_parameter` under the LabVIEW-style `37 x 100` decode assumption
 
-It writes:
+It also writes:
 
-- `parameter_values.csv` with one LabVIEW-style `Parameter Values` row per `RALL`
-- `preview_values.csv` for the selected preview parameter when `--write-values true`
+- `raw/oe1300_tcp.rall`
+- `raw/oe1300_tcp.frames.idx.jsonl`
+- `segments.jsonl`
 - `summary.json`
+- `parameter_values.csv`
+- `preview_values.csv` when `--write-values true`
+
+Current verified interpretation is:
+
+- first `29600 B` contains the parameter payload
+- payload order follows the serial/PDF `RALL?` table exactly
+- `37` parameters map to `X .. Aux-IN2`
+- each parameter contains `100` samples
+- each sample is one big-endian `double`
+- fixed offsets also expose `status` and `Trig_Count`
 
 For strict LabVIEW-style behavior, `--drain-before-write` now defaults to
 `false`. The pre-drain path should only be used as a socket-backlog diagnostic,
