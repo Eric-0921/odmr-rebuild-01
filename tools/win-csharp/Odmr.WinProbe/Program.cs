@@ -1358,7 +1358,7 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
         write_values = writeValues,
         preview_param_index = previewParamIndex,
         preview_param_name = previewParamName,
-        decode_mode = "labview_37_parameters_x_100_samples_little_endian_v1",
+        decode_mode = "labview_37_parameters_x_100_samples_big_endian_v2",
         rall_payload_bytes = Oe1300Defaults.TcpRallPayloadBytes,
         rall_frame_bytes = Oe1300Defaults.TcpRallFrameBytes,
         labview_parameter_count = Oe1300Defaults.TcpRallLabviewParameterCount,

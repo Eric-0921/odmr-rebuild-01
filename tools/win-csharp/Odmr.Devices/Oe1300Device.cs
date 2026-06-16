@@ -316,7 +316,7 @@ public static class Oe1300Parsers
         var values = new double[Oe1300Defaults.TcpRallLabviewSamplesPerParameter];
         for (var i = 0; i < values.Length; i++)
         {
-            values[i] = ReadLittleEndianDouble(payload, parameterOffset + (i * sizeof(double)));
+            values[i] = ReadBigEndianDouble(payload, parameterOffset + (i * sizeof(double)));
         }
 
         return values;
@@ -325,12 +325,6 @@ public static class Oe1300Parsers
     private static double ReadBigEndianDouble(byte[] payload, int offset)
     {
         var bits = BinaryPrimitives.ReadInt64BigEndian(payload.AsSpan(offset, sizeof(long)));
-        return BitConverter.Int64BitsToDouble(bits);
-    }
-
-    private static double ReadLittleEndianDouble(byte[] payload, int offset)
-    {
-        var bits = BinaryPrimitives.ReadInt64LittleEndian(payload.AsSpan(offset, sizeof(long)));
         return BitConverter.Int64BitsToDouble(bits);
     }
 

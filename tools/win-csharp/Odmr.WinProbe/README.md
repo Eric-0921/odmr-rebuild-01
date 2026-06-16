@@ -141,7 +141,7 @@ keeps the same TCP binary hot path:
 Then it decodes the first `29600 B` as:
 
 - `37` parameters
-- `100` little-endian `double` samples per parameter
+- `100` big-endian `double` samples per parameter
 - plus fixed-offset `status` and `Trig_Count`
 
 The summary reports both:
