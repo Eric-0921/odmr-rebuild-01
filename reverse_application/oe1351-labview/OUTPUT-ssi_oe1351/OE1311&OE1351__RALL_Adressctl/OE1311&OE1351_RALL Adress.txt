@@ -1,0 +1,23 @@
+<VI syntaxVersion=12 LVversion=25008000 revision=6 name="OE1311&OE1351_RALL Adress.ctl" encoding="System">
+<TITLE><NO_TITLE name="OE1311&OE1351_RALL Adress.ctl"></TITLE>
+<HELP_PATH></HELP_PATH>
+<HELP_TAG></HELP_TAG>
+<DESC></DESC>
+<CONTENT>
+	<GROUPER>
+		<PARTS>
+		</PARTS></GROUPER>
+	<CONTROL ID=87 type="下拉列表" name="RALLaddress">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>InputFilter</STRING><STRING>Tc</STRING><STRING>Gain</STRING><STRING>Ref</STRING><STRING>Phase</STRING><STRING>Freq</STRING><STRING>Demodulator_Type</STRING><STRING>Demodulator_Harm</STRING><STRING>Demodulator_Freq</STRING><STRING>Sineout_Mode</STRING><STRING>Sineout_Fix</STRING><STRING>Channelout_Source</STRING><STRING>Channelout</STRING><STRING>System</STRING><STRING>Temperature</STRING><STRING>SerialNumber</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT>RALLaddress</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+</CONTENT>
+<BDCONTENT>
+</BDCONTENT>
+</VI>
+
+

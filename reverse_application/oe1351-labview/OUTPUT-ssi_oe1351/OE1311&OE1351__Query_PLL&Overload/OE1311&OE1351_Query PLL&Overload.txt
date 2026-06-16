@@ -1,0 +1,317 @@
+<VI syntaxVersion=12 LVversion=25008000 revision=57 name="OE1311&OE1351_Query PLL&Overload.vi" encoding="System">
+<TITLE><NO_TITLE name="OE1311&OE1351_Query PLL&Overload.vi"></TITLE>
+<HELP_PATH></HELP_PATH>
+<HELP_TAG></HELP_TAG>
+<RTM_PATH type="default"></RTM_PATH>
+<DESC></DESC>
+<CONTENT>
+	<GROUPER>
+		<PARTS>
+		</PARTS></GROUPER>
+	<CONTROL ID=85 type="VISA资源名称" name="VISA resource name">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=8017 order=0 type="显示I/O名称">
+				<CONTROL ID=148 type="" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B' size=18>VISA resource name</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表" name="Remote Mode">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>RS232</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Remote Mode</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error in (no error)">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out（no error）</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error out">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=85 type="VISA资源名称" name="VISA resource  out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=8017 order=0 type="显示I/O名称">
+				<CONTROL ID=148 type="" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B' size=18>VISA resource  out</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="Output String">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Output String</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="OE1300_Query PLL&Overload">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT style='B' color=100000C>OE1300_Query PLL&Overload</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="PLL Lock(1: External Lock)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>PLL Lock(1: External Lock)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=79 type="布尔" name="Input Overlaod">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING>关</STRING><STRING>开</STRING><STRING>关</STRING><STRING>开</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Input Overlaod</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=85 type="TCP网络连接引用句柄" name="Connection ID in">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Connection ID in</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=85 type="TCP网络连接引用句柄" name="Connection ID out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Connection ID out</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Timeout">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Timeout</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+</CONTENT>
+<BDCONTENT>
+	<CONTROL ID=80 type="数值常量" name="Number of bytes">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串常量" >
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT>;</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<DESC></DESC>
+	<TIP></TIP>
+	<PARTS>
+	</PARTS>
+	<CONTROL ID=87 type="Enum" name="Command Type">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=80 type="数值常量" name="行索引">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值常量" name="行索引">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=47 type="Function" primID=434E494C primName="选行并添加至字符串">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=47 type="Function" primID=20234425 primName="十进制数字符串至数值转换">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=47 type="Function" primID=434E494C primName="选行并添加至字符串">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=62 type="Concatenate Strings">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=87 type="Enum" name="Command Type">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表常量" name="Opera">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Set</STRING><STRING>Query</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=52 type="Bundle">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=47 type="Function" primID=20234425 primName="十进制数字符串至数值转换">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=202 type="Flat Sequence">
+		<DESC></DESC>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+	</NODE>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+</BDCONTENT>
+</VI>
+
+

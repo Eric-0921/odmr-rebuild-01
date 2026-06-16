@@ -1,0 +1,217 @@
+{
+  "run_id": "test-ymag-repeat",
+  "operator": "local",
+  "acquisition_window_ms": 0,
+  "point_settle_ms": 500,
+  "failure_policy": "continue",
+  "mag_baseline_policy": {
+    "baseline_current_a": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "settle_ms": 1000,
+    "readback_samples": 3,
+    "settle_tolerance_a": 0.002,
+    "voltage_v": 75.0,
+    "voltage_protection_v": 75.0,
+    "output_enabled": true
+  },
+  "quality_thresholds": {
+    "min_frames": 20,
+    "max_timeout_count": 2,
+    "max_duplicate_ratio": 0.3,
+    "max_last_frame_age_ms": 500
+  },
+  "points": [
+    {
+      "point_id": "x-line_p000001",
+      "target_b_nt": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000002",
+      "target_b_nt": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000003",
+      "target_b_nt": [
+        2.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000004",
+      "target_b_nt": [
+        3.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000005",
+      "target_b_nt": [
+        4.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000006",
+      "target_b_nt": [
+        5.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000007",
+      "target_b_nt": [
+        6.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000008",
+      "target_b_nt": [
+        7.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000009",
+      "target_b_nt": [
+        8.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000010",
+      "target_b_nt": [
+        9.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000011",
+      "target_b_nt": [
+        10.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000012",
+      "target_b_nt": [
+        11.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000013",
+      "target_b_nt": [
+        12.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000014",
+      "target_b_nt": [
+        13.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000015",
+      "target_b_nt": [
+        14.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000016",
+      "target_b_nt": [
+        15.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000017",
+      "target_b_nt": [
+        16.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000018",
+      "target_b_nt": [
+        17.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000019",
+      "target_b_nt": [
+        18.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000020",
+      "target_b_nt": [
+        19.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "x-line_p000021",
+      "target_b_nt": [
+        20.0,
+        0.0,
+        0.0
+      ],
+      "magnetic_mode": "controlled"
+    }
+  ]
+}

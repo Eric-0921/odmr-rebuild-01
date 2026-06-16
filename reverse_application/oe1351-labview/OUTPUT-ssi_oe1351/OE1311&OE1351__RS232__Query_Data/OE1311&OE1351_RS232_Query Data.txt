@@ -1,0 +1,526 @@
+<VI syntaxVersion=12 LVversion=25008000 revision=87 name="OE1311&OE1351_RS232_Query Data.vi" encoding="System">
+<TITLE><NO_TITLE name="OE1311&OE1351_RS232_Query Data.vi"></TITLE>
+<HELP_PATH></HELP_PATH>
+<HELP_TAG></HELP_TAG>
+<RTM_PATH type="default"></RTM_PATH>
+<DESC></DESC>
+<CONTENT>
+	<GROUPER>
+		<PARTS>
+		</PARTS></GROUPER>
+	<CONTROL ID=85 type="VISA资源名称" name="VISA resource name">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=8017 order=0 type="显示I/O名称">
+				<CONTROL ID=148 type="" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B' size=18>VISA resource name</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error in (no error)">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out（no error）</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error out">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=85 type="VISA资源名称" name="VISA resource  out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=8017 order=0 type="显示I/O名称">
+				<CONTROL ID=148 type="" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B' size=18>VISA resource  out</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Parameter Values">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=80 type="数值" name="X">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>X</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="Y">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Y</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="R">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>R</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="θ">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>θ</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="XD1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>XD1</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="YD1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>YD1</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="RD1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>RD1</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="θD1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>θD1</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="XD2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>XD2</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="YD2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>YD2</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="RD2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>RD2</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="θD2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>θD2</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="XD3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>XD3</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="YD3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>YD3</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="RD3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>RD3</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="θD3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>θD3</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="XD4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>XD4</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="YD4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>YD4</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="RD4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>RD4</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="θD4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>θD4</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="XD5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>XD5</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="YD5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>YD5</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="RD5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>RD5</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="θD5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>θD5</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="XD6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>XD6</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="YD6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>YD6</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="RD6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>RD6</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="θD6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>θD6</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="XD7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>XD7</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="YD7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>YD7</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="RD7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>RD7</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="θD7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>θD7</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="X-Noise">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>X-Noise</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="Y-Noise">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Y-Noise</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="Frequency">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Frequency</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="AUX-IN1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>AUX-IN1</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="AUX-IN2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>AUX-IN2</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="Output String">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Output String</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=82 type="数组" name="Data Array">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Data Array</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<CONTROL ID=80 type="数值" name="X">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>X</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+</CONTENT>
+<BDCONTENT>
+	<NODE ID=47 type="Function" primID=414F5443 primName="簇至数组转换">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Remote Mode">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>USB</STRING><STRING>RS232</STRING><STRING>GPIB</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串常量" name="字符串">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT>;</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=87 type="Enum" name="Command Type">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表常量" name="Opera">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Set</STRING><STRING>Query</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+		<DESC></DESC>
+	</NODE>
+	<DESC></DESC>
+	<TIP></TIP>
+	<PARTS>
+	</PARTS>
+	<NODE ID=62 type="Concatenate Strings">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=50 type="Global Variable">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=81 type="字符串常量" name="格式字符串">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT>%.;%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<NODE ID=52 type="Bundle">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=146 type="Scan From String">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=202 type="Flat Sequence">
+		<DESC></DESC>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+</BDCONTENT>
+</VI>
+
+

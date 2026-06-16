@@ -1,0 +1,1977 @@
+<VI syntaxVersion=12 LVversion=25008000 revision=38 name="Example_OE1311&OE1351 Trig in.vi" encoding="System">
+<TITLE><NO_TITLE name="Example_OE1311&OE1351 Trig in.vi"></TITLE>
+<HELP_PATH></HELP_PATH>
+<HELP_TAG></HELP_TAG>
+<RTM_PATH type="default"></RTM_PATH>
+<DESC></DESC>
+<CONTENT>
+	<GROUPER>
+		<PARTS>
+		</PARTS></GROUPER>
+	<CONTROL ID=80 type="数值" name="cnt">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>cnt</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=82 type="数组" name="data_buffer">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>data_buffer</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<CONTROL ID=80 type="数值" name="">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'></STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表" name="Sweep">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>OFF</STRING><STRING>ON</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT style='B' color=1000012>Sweep</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表" name="Ref_Source">
+		<DESC>Sets the reference source of the internal oscillator.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>External</STRING><STRING>Internal</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Ref_Source</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Interval Count">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Interval C<FONT predef=DLGFONT style='B' color=100000C>ount</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=195 type="选项卡输入控件" name="选项卡控件">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<DESC></DESC>
+			<TIP></TIP>
+			<PARTS>
+				<PART ID=92 order=0 type="选项卡标题"><LABEL><STEXT><FONT predef=DLGFONT color=1000006>选项卡 </STEXT></LABEL></PART>
+			</PARTS>
+			<PART ID=8001 order=0 type="数字显示">
+				<CONTROL ID=87 type="Enum" name="">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=APPFONT color=100000C><STRINGS></STRINGS></MLABEL></PART>
+						<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C></STEXT></LABEL></PART>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>选项卡控件</STEXT></LABEL></PART>
+		</PARTS>
+		<PAGE>
+			<DESC></DESC>
+			<TIP></TIP>
+			<CONTROL ID=87 type="下拉列表" name="Sweep Run Mode">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Stop</STRING><STRING>Singal</STRING><STRING>Loop</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Sweep Run Mode</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="Step Time(ms)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Step Time(ms)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="Log Step Percent(%)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Log Step Percent(%)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="Linear Step Frequency(Hz)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Linear Step Frequency(Hz)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="Stop Frequency(Hz)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Stop Frequency(Hz)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="Start Frequency(Hz)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Start Frequency(Hz)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Sweep Mode">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Linear</STRING><STRING>Log</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Sweep Mode</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</PAGE>
+		<PAGE_CAP_FONT><FONT predef=DLGFONT color=1000006></PAGE_CAP_FONT>
+		<PRIV><PAGE_CAPTIONS><STRING>选项卡 </STRING></PAGE_CAPTIONS></PRIV>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="IP Address">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>192.168.1.1</STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B' color=100000C>IP Address</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Timeout">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Timeout</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Port">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Port</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=79 type="布尔" name="Connect">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING>Connect</STRING><STRING>Connected</STRING><STRING>Connect</STRING><STRING>Connected</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT>Connect</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="Enum" name="function">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>function</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error out">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Group">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Group</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="loss count">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT style='B' color=100000C>loss count</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=94 type="波形图表" name="Wave">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=8022 order=0 type="">
+				<CONTROL ID=231 type="树形控件" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<GROUPER>
+							<PARTS>
+							</PARTS></GROUPER>
+					</PARTS>
+					<PRIV>
+						<CELL_FONTS>
+							[-2 -2]<FONT predef=APPFONT color=000000>
+							[-1 -2]<FONT predef=APPFONT style='B' color=000000>
+						</CELL_FONTS>
+						<ROW_HEADER>
+						</ROW_HEADER>
+						<COL_HEADER>
+							<STRING>游标：</STRING>
+							<STRING>X</STRING>
+							<STRING>Y</STRING>
+						</COL_HEADER>
+						<STRINGS>
+						</STRINGS>
+					</PRIV>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT>Wave</STEXT></LABEL></PART>
+		</PARTS>
+		<PRIV>
+			<PLOTS><STRING>曲线 0</STRING></PLOTS>
+			<SCALE_NAMES><STRING>时间</STRING><STRING>幅值</STRING></SCALE_NAMES>
+		</PRIV>
+	</CONTROL>
+	<LABEL><STEXT><FONT predef=SYSFONT style='IB' size=27 color=005624>Tel          :   +86-020-84133345<LF>
+Website  :   www.ssi-instrument.com<LF>
+E-mail     :   support@si-instrument.com</STEXT></LABEL>
+	<CONTROL ID=87 type="下拉列表" name="Trig Source">
+		<DESC>Sets the reference source of the internal oscillator.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Internal</STRING><STRING>Aux-in1</STRING><STRING>Aux-in2</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Trig Source</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表" name="Trig Mode">
+		<DESC>Sets the reference source of the internal oscillator.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Ext_Rissing_Edge</STRING><STRING>Ext_Falling_Edge</STRING><STRING>Ext_Bilateral_Edge</STRING><STRING>Ext_High_Level</STRING><STRING>Ext_Low_Level</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Trig Mode</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表" name="Parameter Index">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>X</STRING><STRING>Y</STRING><STRING>R</STRING><STRING>θ</STRING><STRING>XD1</STRING><STRING>YD1</STRING><STRING>RD1</STRING><STRING>θD1</STRING><STRING>XD2</STRING><STRING>YD2</STRING><STRING>RD2</STRING><STRING>θD2</STRING><STRING>XD3</STRING><STRING>YD3</STRING><STRING>RD3</STRING><STRING>θD3</STRING><STRING>XD4</STRING><STRING>YD4</STRING><STRING>RD4</STRING><STRING>θD4</STRING><STRING>XD5</STRING><STRING>YD5</STRING><STRING>RD5</STRING><STRING>θD5</STRING><STRING>XD6</STRING><STRING>YD6</STRING><STRING>RD6</STRING><STRING>θD6</STRING><STRING>XD7</STRING><STRING>YD7</STRING><STRING>RD7</STRING><STRING>θD7</STRING><STRING>X_Noise</STRING><STRING>Y_Noise</STRING><STRING>Frequency</STRING><STRING>AUX-IN1</STRING><STRING>AUX-IN2</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT style='B' color=100000C>Parameter Index</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+</CONTENT>
+<BDCONTENT>
+	<NODE ID=202 type="Flat Sequence">
+		<DESC></DESC>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<NODE ID=140 type="Property Node" name="Trig Mode">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=140 type="Property Node" name="Trig Source">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=140 type="Property Node" name="Ref_Source">
+					<DESC></DESC>
+				</NODE>
+				<LABEL><STEXT>初始化</STEXT></LABEL>
+				<CONTROL ID=80 type="数值常量" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<CONTROL ID=82 type="数组常量" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+					<CONTENT>
+						<CONTROL ID=80 type="数值常量" >
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+					</CONTENT>
+				</CONTROL>
+				<CONTROL ID=87 type="Enum" name="function">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=80 type="数值常量" name="Interval Count">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=82 type="数组常量" name="历史数据">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+					<CONTENT>
+						<CONTROL ID=80 type="数值常量" >
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+					</CONTENT>
+				</CONTROL>
+				<NODE ID=140 type="Property Node" name="Wave">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=140 type="Property Node" name="Sweep">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=82 type="数组常量" name="历史数据">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+					<CONTENT>
+						<CONTROL ID=80 type="数值常量" >
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+					</CONTENT>
+				</CONTROL>
+				<NODE ID=140 type="Property Node" name="Wave">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=80 type="数值常量" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=169 type="Invoke Node" name="Error out">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=79 type="布尔常量" name="Connect">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=91 type="路径常量" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>OE1311&OE1351\Query\OE1311&OE1351_Ethernet_Query Data.vi</STEXT></LABEL></PART>
+					</PARTS>
+					<PRIV>
+						<PROMPT></PROMPT>
+						<MTCH_PTN></MTCH_PTN>
+						<PTN_LBEL></PTN_LBEL>
+						<STRT_PTH><PATH type="absolute"></PATH></STRT_PTH>
+						<PTH_BTN_LBL></PTH_BTN_LBL>
+					</PRIV>
+					<DEFAULT>
+						<PATH type="relative">OE1311&OE1351<SEP>Query<SEP>OE1311&OE1351_Ethernet_Query Data.vi</PATH>
+					</DEFAULT>
+				</CONTROL>
+				<NODE ID=44 type="Select">
+					<DESC></DESC>
+					<BDCONTENT>
+						<CONTROL ID=81 type="字符串常量" name="消息">
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+								<PART ID=11 order=0 type="文本"><LABEL><STEXT>调用VI路径错误，继续运<LF>
+行可能会导致数据错误</STEXT></LABEL></PART>
+							</PARTS>
+							<DEFAULT><SAME_AS_LABEL></DEFAULT>
+						</CONTROL>
+						<NODE ID=47 type="Function" primID=4C444231 primName="单按钮对话框">
+							<DESC></DESC>
+						</NODE>
+					</BDCONTENT>
+					<BDCONTENT>
+						<NODE ID=169 type="Invoke Node">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=534C4343 primName="关闭引用">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=4E504F43 primName="打开VI引用">
+							<DESC></DESC>
+						</NODE>
+					</BDCONTENT>
+				</NODE>
+				<NODE ID=47 type="Function" primID=48545042 primName="创建路径">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=49 type="SubVI" subVIName="Check if File or Folder Exists.vi">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=47 type="Function" primID=4C464956 primName="当前VI路径">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=47 type="Function" primID=48545053 primName="拆分路径">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=47 type="Function" primID=48545053 primName="拆分路径">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<NODE ID=33 type="While Loop">
+					<DESC></DESC>
+					<BDCONTENT>
+					</BDCONTENT>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=80 type="数值常量" name="loss count">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<CONTROL ID=80 type="数值常量" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<CONTROL ID=80 type="数值常量" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<CONTROL ID=80 type="数值常量" name="f">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=33 type="While Loop">
+					<DESC></DESC>
+					<BDCONTENT>
+						<NODE ID=47 type="Function" primID=2020524F primName="或">
+							<DESC></DESC>
+						</NODE>
+						<CONTROL ID=80 type="数值常量" >
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+						<NODE ID=213 type="Event Struct">
+							<DESC></DESC>
+							<BDCONTENT>
+								<NODE ID=44 type="Select">
+									<DESC></DESC>
+									<BDCONTENT>
+										<CONTROL ID=87 type="Enum" name="禁用">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<CONTROL ID=87 type="Enum" name="禁用">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=2020524F primName="或">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Interval Count">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="选项卡控件">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=20444E41 primName="与">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=87 type="Enum" name="f">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<CONTROL ID=87 type="Enum" name="禁用">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Sweep">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=2020454C primName="小于等于？">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=80 type="数值常量" name="y">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=44 type="Select">
+											<DESC></DESC>
+											<BDCONTENT>
+											</BDCONTENT>
+											<BDCONTENT>
+												<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=140 type="Property Node" name="Interval Count">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=140 type="Property Node" name="Step Time(ms)">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=44 type="Select">
+													<DESC></DESC>
+													<BDCONTENT>
+														<CONTROL ID=87 type="Enum" name="禁用">
+															<DESC></DESC>
+															<TIP></TIP>
+															<PARTS>
+																<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+															</PARTS>
+														</CONTROL>
+														<CONTROL ID=87 type="Enum" name="禁用">
+															<DESC></DESC>
+															<TIP></TIP>
+															<PARTS>
+																<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+															</PARTS>
+														</CONTROL>
+													</BDCONTENT>
+													<BDCONTENT>
+														<CONTROL ID=87 type="Enum" name="禁用">
+															<DESC></DESC>
+															<TIP></TIP>
+															<PARTS>
+																<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+															</PARTS>
+														</CONTROL>
+														<CONTROL ID=87 type="Enum" name="禁用">
+															<DESC></DESC>
+															<TIP></TIP>
+															<PARTS>
+																<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+															</PARTS>
+														</CONTROL>
+													</BDCONTENT>
+												</NODE>
+												<NODE ID=47 type="Function" primID=20544F4E primName="非">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=140 type="Property Node" name="Log Step Percent(%)">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=140 type="Property Node" name="Linear Step Frequency(Hz)">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+											</BDCONTENT>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Trig Mode">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Trig Source">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Configure Trig.vi">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=87 type="下拉列表常量" name="Remote Mode">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>USB</STRING><STRING>RS232</STRING><STRING>GPIB</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=140 type="Property Node" name="Ref_Source">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Sweep">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=87 type="Enum" name="禁用">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<CONTROL ID=83 type="簇常量" name="error in (no error)">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+											<CONTENT>
+												<GROUPER>
+													<PARTS>
+													</PARTS></GROUPER>
+												<CONTROL ID=81 type="字符串常量" name="source">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+													</PARTS>
+													<DEFAULT><SAME_AS_LABEL></DEFAULT>
+												</CONTROL>
+												<CONTROL ID=80 type="数值常量" name="code">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+													</PARTS>
+												</CONTROL>
+												<CONTROL ID=79 type="布尔常量" name="status">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+													</PARTS>
+												</CONTROL>
+											</CONTENT>
+										</CONTROL>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=52 type="Bundle">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=87 type="下拉列表常量" name="Control">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=49 type="SubVI" subVIName="SSI_Initialize.vi">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<DESC></DESC>
+										<TIP></TIP>
+										<PARTS>
+										</PARTS>
+										<NODE ID=62 type="Concatenate Strings">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=81 type="字符串常量" name="格式字符串">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=11 order=0 type="文本"><LABEL><STEXT>FMOD %d;</STEXT></LABEL></PART>
+											</PARTS>
+											<DEFAULT><SAME_AS_LABEL></DEFAULT>
+										</CONTROL>
+										<NODE ID=147 type="Format Into String">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=87 type="Enum" name="function">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<CONTROL ID=80 type="数值常量" >
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+										</CONTROL>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=47 type="Function" primID=2020524F primName="或">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=2020454C primName="小于等于？">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=80 type="数值常量" name="y">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=20444E41 primName="与">
+											<DESC></DESC>
+										</NODE>
+										<LABEL><STEXT>发送触发模式的指令</STEXT></LABEL>
+										<NODE ID=44 type="Select">
+											<DESC></DESC>
+											<BDCONTENT>
+												<CONTROL ID=87 type="Enum" name="function">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+											</BDCONTENT>
+											<BDCONTENT>
+												<CONTROL ID=87 type="Enum" name="function">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+												<CONTROL ID=87 type="Enum" name="function">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+												<CONTROL ID=87 type="Enum" name="function">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+												<CONTROL ID=87 type="Enum" name="function">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+												<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+												<LABEL><STEXT>选择扫频模式下，判断是否Sweep run模式。</STEXT></LABEL>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=47 type="Function" primID=20305447 primName="大于0？">
+													<DESC></DESC>
+												</NODE>
+											</BDCONTENT>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=20434E49 primName="加1">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=80 type="数值常量" >
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=202 type="Flat Sequence">
+											<DESC></DESC>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Ethernet_Query Data.vi">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=49 type="SubVI" subVIName="SSI_check packet.vi">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=2020454E primName="不等于？">
+														<DESC></DESC>
+													</NODE>
+													<LABEL><STEXT>单次触发采集显示</STEXT></LABEL>
+													<NODE ID=44 type="Select">
+														<DESC></DESC>
+														<BDCONTENT>
+															<NODE ID=47 type="Function" primID=20444E41 primName="与">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=414D5553 primName="数组元素相加">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=44 type="Select">
+																<DESC></DESC>
+																<BDCONTENT>
+																</BDCONTENT>
+																<BDCONTENT>
+																	<NODE ID=47 type="Function" primID=20204547 primName="大于等于？">
+																		<DESC></DESC>
+																	</NODE>
+																	<CONTROL ID=80 type="数值常量" name="y">
+																		<DESC></DESC>
+																		<TIP></TIP>
+																		<PARTS>
+																		</PARTS>
+																	</CONTROL>
+																	<NODE ID=50 type="Global Variable">
+																		<DESC></DESC>
+																	</NODE>
+																	<NODE ID=44 type="Select">
+																		<DESC></DESC>
+																		<BDCONTENT>
+																			<NODE ID=50 type="Global Variable">
+																				<DESC></DESC>
+																			</NODE>
+																		</BDCONTENT>
+																		<BDCONTENT>
+																			<NODE ID=202 type="Flat Sequence">
+																				<DESC></DESC>
+																				<NODE ID=289 type="Sequence Frame">
+																					<DESC></DESC>
+																					<BDCONTENT>
+																						<CONTROL ID=80 type="数值常量" name="禁用的索引 (列)">
+																							<DESC></DESC>
+																							<TIP></TIP>
+																							<PARTS>
+																							</PARTS>
+																						</CONTROL>
+																						<NODE ID=68 type="Index Array">
+																							<DESC></DESC>
+																						</NODE>
+																						<NODE ID=32 type="For Loop">
+																							<DESC></DESC>
+																							<BDCONTENT>
+																								<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Data Index.vi">
+																									<DESC></DESC>
+																								</NODE>
+																								<NODE ID=50 type="Global Variable">
+																									<DESC></DESC>
+																								</NODE>
+																							</BDCONTENT>
+																						</NODE>
+																						<NODE ID=47 type="Function" primID=455A4953 primName="数组大小">
+																							<DESC></DESC>
+																						</NODE>
+																					</BDCONTENT>
+																				</NODE>
+																				<NODE ID=289 type="Sequence Frame">
+																					<DESC></DESC>
+																					<BDCONTENT>
+																						<CONTROL ID=80 type="数值常量" name="cnt">
+																							<DESC></DESC>
+																							<TIP></TIP>
+																							<PARTS>
+																							</PARTS>
+																						</CONTROL>
+																						<NODE ID=50 type="Global Variable">
+																							<DESC></DESC>
+																						</NODE>
+																						<CONTROL ID=82 type="数组常量" name="data_buffer">
+																							<DESC></DESC>
+																							<TIP></TIP>
+																							<PARTS>
+																							</PARTS>
+																							<CONTENT>
+																								<CONTROL ID=80 type="数值常量" >
+																									<DESC></DESC>
+																									<TIP></TIP>
+																									<PARTS>
+																									</PARTS>
+																								</CONTROL>
+																							</CONTENT>
+																						</CONTROL>
+																						<NODE ID=50 type="Global Variable">
+																							<DESC></DESC>
+																						</NODE>
+																					</BDCONTENT>
+																				</NODE>
+																			</NODE>
+																		</BDCONTENT>
+																	</NODE>
+																	<NODE ID=187 type="Insert Into Array">
+																		<DESC></DESC>
+																	</NODE>
+																	<NODE ID=50 type="Global Variable">
+																		<DESC></DESC>
+																	</NODE>
+																	<NODE ID=49 type="SubVI" subVIName="SSI_Trig In Array.vi">
+																		<DESC></DESC>
+																	</NODE>
+																	<NODE ID=50 type="Global Variable">
+																		<DESC></DESC>
+																	</NODE>
+																</BDCONTENT>
+															</NODE>
+														</BDCONTENT>
+														<BDCONTENT>
+															<NODE ID=44 type="Select">
+																<DESC></DESC>
+																<BDCONTENT>
+																</BDCONTENT>
+																<BDCONTENT>
+																	<NODE ID=50 type="Global Variable">
+																		<DESC></DESC>
+																	</NODE>
+																	<NODE ID=32 type="For Loop">
+																		<DESC></DESC>
+																		<BDCONTENT>
+																			<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Data Index.vi">
+																				<DESC></DESC>
+																			</NODE>
+																			<NODE ID=50 type="Global Variable">
+																				<DESC></DESC>
+																			</NODE>
+																			<NODE ID=50 type="Global Variable">
+																				<DESC></DESC>
+																			</NODE>
+																		</BDCONTENT>
+																	</NODE>
+																	<NODE ID=47 type="Function" primID=54414432 primName="二维数组转置">
+																		<DESC></DESC>
+																	</NODE>
+																</BDCONTENT>
+															</NODE>
+														</BDCONTENT>
+													</NODE>
+													<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<CONTROL ID=87 type="Enum" name="function">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+															<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+														</PARTS>
+													</CONTROL>
+												</BDCONTENT>
+											</NODE>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=202 type="Flat Sequence">
+											<DESC></DESC>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Ethernet_Query Data.vi">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<LABEL><STEXT>外部触发扫频，读取数据判读是否触发和数据丢失，<LF>
+如果没有，判断Interval Count（触发间隔点数）<LF>
+是否相等，若相等，则进行显示和设置<LF>
+下一个频率点</STEXT></LABEL>
+													<NODE ID=44 type="Select">
+														<DESC></DESC>
+														<BDCONTENT>
+														</BDCONTENT>
+														<BDCONTENT>
+															<NODE ID=47 type="Function" primID=20204547 primName="大于等于？">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=80 type="数值常量" >
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=47 type="Function" primID=20544F4E primName="非">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=20434E49 primName="加1">
+																<DESC></DESC>
+															</NODE>
+														</BDCONTENT>
+													</NODE>
+													<NODE ID=47 type="Function" primID=20444E41 primName="与">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=20444E41 primName="与">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=2020454E primName="不等于？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=414D5553 primName="数组元素相加">
+														<DESC></DESC>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<NODE ID=44 type="Select">
+														<DESC></DESC>
+														<BDCONTENT>
+															<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+														</BDCONTENT>
+														<BDCONTENT>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Data Index.vi">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=87 type="下拉列表常量" name="Remote Mode">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>USB</STRING><STRING>RS232</STRING><STRING>GPIB</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=87 type="下拉列表常量" name="Control">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=49 type="SubVI" subVIName="SSI_Trig In Array.vi">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=80 type="数值常量" name="索引 (行)">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=68 type="Index Array">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<LABEL><STEXT>这里最低100ms触发一个点，即10hz以下的触发。</STEXT></LABEL>
+															<LABEL><STEXT>读取显示</STEXT></LABEL>
+															<CONTROL ID=80 type="数值常量" name="f">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=20434E49 primName="加1">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=2020454E primName="不等于？">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=74 type="Formula Box">
+																<DESC></DESC>
+															</NODE>
+															<DESC></DESC>
+															<TIP></TIP>
+															<PARTS>
+															</PARTS>
+															<NODE ID=62 type="Concatenate Strings">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=81 type="字符串常量" name="格式字符串">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=11 order=0 type="文本"><LABEL><STEXT>FREQ%.3f</STEXT></LABEL></PART>
+																</PARTS>
+																<DEFAULT><SAME_AS_LABEL></DEFAULT>
+															</CONTROL>
+															<NODE ID=147 type="Format Into String">
+																<DESC></DESC>
+															</NODE>
+														</BDCONTENT>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=2020524F primName="或">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<CONTROL ID=87 type="Enum" name="function">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+															<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+														</PARTS>
+													</CONTROL>
+													<CONTROL ID=87 type="Enum" name="function">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+															<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+														</PARTS>
+													</CONTROL>
+													<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=202 type="Flat Sequence">
+														<DESC></DESC>
+														<NODE ID=289 type="Sequence Frame">
+															<DESC></DESC>
+															<BDCONTENT>
+																<NODE ID=44 type="Select">
+																	<DESC></DESC>
+																	<BDCONTENT>
+																		<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+																			<DESC></DESC>
+																			<TIP></TIP>
+																			<PARTS>
+																			</PARTS>
+																		</CONTROL>
+																		<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+																			<DESC></DESC>
+																		</NODE>
+																	</BDCONTENT>
+																	<BDCONTENT>
+																		<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+																			<DESC></DESC>
+																			<TIP></TIP>
+																			<PARTS>
+																			</PARTS>
+																		</CONTROL>
+																		<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+																			<DESC></DESC>
+																		</NODE>
+																	</BDCONTENT>
+																</NODE>
+															</BDCONTENT>
+														</NODE>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=202 type="Flat Sequence">
+											<DESC></DESC>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Ethernet_Query Data.vi">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=2020454E primName="不等于？">
+														<DESC></DESC>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<NODE ID=44 type="Select">
+														<DESC></DESC>
+														<BDCONTENT>
+															<CONTROL ID=79 type="布尔常量" >
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																</PARTS>
+															</CONTROL>
+														</BDCONTENT>
+														<BDCONTENT>
+															<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Data Index.vi">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=87 type="下拉列表常量" name="Remote Mode">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>USB</STRING><STRING>RS232</STRING><STRING>GPIB</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=87 type="下拉列表常量" name="Control">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=80 type="数值常量" name="禁用的索引 (列)">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=68 type="Index Array">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=2020454E primName="不等于？">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=80 type="数值常量" name="f">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																</PARTS>
+															</CONTROL>
+															<CONTROL ID=81 type="字符串常量" name="格式字符串">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=11 order=0 type="文本"><LABEL><STEXT>FREQ%.3f</STEXT></LABEL></PART>
+																</PARTS>
+																<DEFAULT><SAME_AS_LABEL></DEFAULT>
+															</CONTROL>
+															<DESC></DESC>
+															<TIP></TIP>
+															<PARTS>
+															</PARTS>
+															<NODE ID=62 type="Concatenate Strings">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=147 type="Format Into String">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=20434E49 primName="加1">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=74 type="Formula Box">
+																<DESC></DESC>
+															</NODE>
+														</BDCONTENT>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=2020524F primName="或">
+														<DESC></DESC>
+													</NODE>
+													<CONTROL ID=87 type="Enum" name="function">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+															<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+														</PARTS>
+													</CONTROL>
+													<CONTROL ID=87 type="Enum" name="function">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+															<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+														</PARTS>
+													</CONTROL>
+													<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<CONTROL ID=80 type="数值常量" name="f">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+														</PARTS>
+													</CONTROL>
+													<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+														<DESC></DESC>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+										</NODE>
+									</BDCONTENT>
+								</NODE>
+							</BDCONTENT>
+							<BDCONTENT>
+								<CONTROL ID=87 type="Enum" name="function">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+										<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+									</PARTS>
+								</CONTROL>
+								<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+									<DESC></DESC>
+								</NODE>
+								<CONTROL ID=82 type="数组常量" name="历史数据">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+									<CONTENT>
+										<CONTROL ID=80 type="数值常量" >
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+										</CONTROL>
+									</CONTENT>
+								</CONTROL>
+								<NODE ID=140 type="Property Node" name="Wave">
+									<DESC></DESC>
+								</NODE>
+							</BDCONTENT>
+							<BDCONTENT>
+								<NODE ID=202 type="Flat Sequence">
+									<DESC></DESC>
+									<NODE ID=289 type="Sequence Frame">
+										<DESC></DESC>
+										<BDCONTENT>
+											<NODE ID=50 type="Global Variable">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Configure Trig.vi">
+												<DESC></DESC>
+											</NODE>
+											<CONTROL ID=87 type="下拉列表常量" name="Remote Mode">
+												<DESC></DESC>
+												<TIP></TIP>
+												<PARTS>
+													<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>USB</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+												</PARTS>
+											</CONTROL>
+											<NODE ID=50 type="Global Variable">
+												<DESC></DESC>
+											</NODE>
+										</BDCONTENT>
+									</NODE>
+									<NODE ID=289 type="Sequence Frame">
+										<DESC></DESC>
+										<BDCONTENT>
+											<CONTROL ID=87 type="Enum" name="禁用">
+												<DESC></DESC>
+												<TIP></TIP>
+												<PARTS>
+													<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+												</PARTS>
+											</CONTROL>
+											<CONTROL ID=87 type="Enum" name="禁用">
+												<DESC></DESC>
+												<TIP></TIP>
+												<PARTS>
+													<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+												</PARTS>
+											</CONTROL>
+											<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=140 type="Property Node" name="Trig Mode">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=50 type="Global Variable">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=47 type="Function" primID=2020524F primName="或">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=44 type="Select">
+												<DESC></DESC>
+												<BDCONTENT>
+												</BDCONTENT>
+												<BDCONTENT>
+													<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=140 type="Property Node" name="Interval Count">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=140 type="Property Node" name="Step Time(ms)">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=44 type="Select">
+														<DESC></DESC>
+														<BDCONTENT>
+															<CONTROL ID=87 type="Enum" name="禁用">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+																</PARTS>
+															</CONTROL>
+															<CONTROL ID=87 type="Enum" name="禁用">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+																</PARTS>
+															</CONTROL>
+														</BDCONTENT>
+														<BDCONTENT>
+															<CONTROL ID=87 type="Enum" name="禁用">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+																</PARTS>
+															</CONTROL>
+															<CONTROL ID=87 type="Enum" name="禁用">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																	<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+																</PARTS>
+															</CONTROL>
+														</BDCONTENT>
+													</NODE>
+													<NODE ID=47 type="Function" primID=20544F4E primName="非">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=140 type="Property Node" name="Log Step Percent(%)">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=140 type="Property Node" name="Linear Step Frequency(Hz)">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+											<NODE ID=140 type="Property Node" name="Interval Count">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=140 type="Property Node" name="选项卡控件">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=47 type="Function" primID=20444E41 primName="与">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=50 type="Global Variable">
+												<DESC></DESC>
+											</NODE>
+											<CONTROL ID=87 type="Enum" name="f">
+												<DESC></DESC>
+												<TIP></TIP>
+												<PARTS>
+													<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+												</PARTS>
+											</CONTROL>
+											<CONTROL ID=87 type="Enum" name="禁用">
+												<DESC></DESC>
+												<TIP></TIP>
+												<PARTS>
+													<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+												</PARTS>
+											</CONTROL>
+											<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=140 type="Property Node" name="Sweep">
+												<DESC></DESC>
+											</NODE>
+											<NODE ID=47 type="Function" primID=2020454C primName="小于等于？">
+												<DESC></DESC>
+											</NODE>
+											<CONTROL ID=80 type="数值常量" name="y">
+												<DESC></DESC>
+												<TIP></TIP>
+												<PARTS>
+												</PARTS>
+											</CONTROL>
+											<NODE ID=50 type="Global Variable">
+												<DESC></DESC>
+											</NODE>
+										</BDCONTENT>
+									</NODE>
+									<NODE ID=289 type="Sequence Frame">
+										<DESC></DESC>
+										<BDCONTENT>
+											<CONTROL ID=87 type="Enum" name="function">
+												<DESC></DESC>
+												<TIP></TIP>
+												<PARTS>
+													<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+												</PARTS>
+											</CONTROL>
+										</BDCONTENT>
+									</NODE>
+								</NODE>
+								<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+									<DESC></DESC>
+								</NODE>
+								<CONTROL ID=82 type="数组常量" name="历史数据">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+									<CONTENT>
+										<CONTROL ID=80 type="数值常量" >
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+										</CONTROL>
+									</CONTENT>
+								</CONTROL>
+								<NODE ID=140 type="Property Node" name="Wave">
+									<DESC></DESC>
+								</NODE>
+							</BDCONTENT>
+							<BDCONTENT>
+								<CONTROL ID=87 type="下拉列表常量" name="Remote Mode">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+										<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>USB</STRING><STRING>RS232</STRING><STRING>GPIB</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+									</PARTS>
+								</CONTROL>
+								<CONTROL ID=82 type="数组常量" name="历史数据">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+									<CONTENT>
+										<CONTROL ID=80 type="数值常量" >
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+										</CONTROL>
+									</CONTENT>
+								</CONTROL>
+								<NODE ID=140 type="Property Node" name="Wave">
+									<DESC></DESC>
+								</NODE>
+								<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+									<DESC></DESC>
+								</NODE>
+								<CONTROL ID=87 type="下拉列表常量" name="Control">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+										<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=50 type="Global Variable">
+									<DESC></DESC>
+								</NODE>
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+								<NODE ID=62 type="Concatenate Strings">
+									<DESC></DESC>
+								</NODE>
+								<CONTROL ID=81 type="字符串常量" name="格式字符串">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+										<PART ID=11 order=0 type="文本"><LABEL><STEXT>FMOD %d;</STEXT></LABEL></PART>
+									</PARTS>
+									<DEFAULT><SAME_AS_LABEL></DEFAULT>
+								</CONTROL>
+								<NODE ID=147 type="Format Into String">
+									<DESC></DESC>
+								</NODE>
+							</BDCONTENT>
+							<BDCONTENT>
+								<NODE ID=140 type="Property Node" name="Interval Count">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=140 type="Property Node" name="选项卡控件">
+									<DESC></DESC>
+								</NODE>
+								<CONTROL ID=87 type="Enum" name="function">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+										<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=47 type="Function" primID=2030454E primName="不等于0？">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=50 type="Global Variable">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=44 type="Select">
+									<DESC></DESC>
+									<BDCONTENT>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Interval Count">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Step Time(ms)">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=44 type="Select">
+											<DESC></DESC>
+											<BDCONTENT>
+												<CONTROL ID=87 type="Enum" name="禁用">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+												<CONTROL ID=87 type="Enum" name="禁用">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+											</BDCONTENT>
+											<BDCONTENT>
+												<CONTROL ID=87 type="Enum" name="禁用">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+												<CONTROL ID=87 type="Enum" name="禁用">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+													</PARTS>
+												</CONTROL>
+											</BDCONTENT>
+										</NODE>
+										<NODE ID=47 type="Function" primID=20544F4E primName="非">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Log Step Percent(%)">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=140 type="Property Node" name="Linear Step Frequency(Hz)">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=20305145 primName="等于0？">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+								</NODE>
+								<CONTROL ID=82 type="数组常量" name="历史数据">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+									<CONTENT>
+										<CONTROL ID=80 type="数值常量" >
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+											</PARTS>
+										</CONTROL>
+									</CONTENT>
+								</CONTROL>
+								<NODE ID=140 type="Property Node" name="Wave">
+									<DESC></DESC>
+								</NODE>
+							</BDCONTENT>
+						</NODE>
+						<NODE ID=47 type="Function" primID=20544F4E primName="非">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=50 type="Global Variable">
+							<DESC></DESC>
+						</NODE>
+					</BDCONTENT>
+				</NODE>
+				<NODE ID=49 type="SubVI" subVIName="SSI_Close.vi">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+	</NODE>
+</BDCONTENT>
+</VI>
+
+

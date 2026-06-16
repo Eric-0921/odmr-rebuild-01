@@ -15,11 +15,11 @@
     "lf_source_impedance": "LOW"
   },
   "default_sweep": {
-    "start_hz": 2500000000.0,
-    "stop_hz": 3300000000.0,
-    "step_hz": 1000000.0,
+    "start_hz": 2700000000.0,
+    "stop_hz": 3200000000.0,
+    "step_hz": 500000.0,
     "dwell_ms": 100,
-    "power_dbm": -10.0,
+    "power_dbm": -15.0,
     "sweep_mode": "AUTO",
     "spacing": "LIN",
     "shape": "SAWT",

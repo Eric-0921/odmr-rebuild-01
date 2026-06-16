@@ -1,0 +1,1637 @@
+<VI syntaxVersion=12 LVversion=25008000 revision=99 name="OE1311&OE1351_Ethernet_Query Setting.vi" encoding="System">
+<TITLE><NO_TITLE name="OE1311&OE1351_Ethernet_Query Setting.vi"></TITLE>
+<HELP_PATH></HELP_PATH>
+<HELP_TAG></HELP_TAG>
+<RTM_PATH type="default"></RTM_PATH>
+<DESC></DESC>
+<CONTENT>
+	<GROUPER>
+		<PARTS>
+		</PARTS></GROUPER>
+	<CONTROL ID=85 type="TCP网络连接引用句柄" name="Connection ID in">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Connection ID in</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error in (no error)">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out（no error）</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error out">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=85 type="TCP网络连接引用句柄" name="Connection ID out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Connection ID out</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="Output String">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Output String</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Input Filter">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Input Filter</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=87 type="下拉列表" name="InputCoupling">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT><STRINGS><STRING>AC</STRING><STRING>DC</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>InputCoupling</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="InputSource">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>A</STRING><STRING>B</STRING><STRING>Current</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>InputSource</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Reference Phase">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Reference Phase</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=82 type="数组" name="Phase0 (degree)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Phase0 (degree)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Internal Frequency(Hz)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Internal Frequency(Hz)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Reference Source">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>External</STRING><STRING>Internal</STRING><STRING>Self</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Reference Source</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="External Ref Trigger">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>TTL Rising Edge</STRING><STRING>TTL Fallling Edge</STRING><STRING>Sine Zero Crossing</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>External Ref Trigger</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Channel Out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Channel Out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=87 type="下拉列表" name="Ch_source_1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT><STRINGS><STRING>Fixed</STRING><STRING>X</STRING><STRING>Y</STRING><STRING>R</STRING><STRING>Theta</STRING><STRING>Xh1</STRING><STRING>Yh1</STRING><STRING>Rh1</STRING><STRING>Theta h1</STRING><STRING>Xh2</STRING><STRING>Yh2</STRING><STRING>Rh2</STRING><STRING>Theta h2</STRING><STRING>Xh3</STRING><STRING>Yh3</STRING><STRING>Rh3</STRING><STRING>Theta h3</STRING><STRING>Rh4</STRING><STRING>Xh4</STRING><STRING>Yh4</STRING><STRING>Theta h4</STRING><STRING>Rh5</STRING><STRING>Xh5</STRING><STRING>Yh5</STRING><STRING>Theta h5</STRING><STRING>Rh6</STRING><STRING>Xh6</STRING><STRING>Yh6</STRING><STRING>Theta h6</STRING><STRING>Rh7</STRING><STRING>Xh6</STRING><STRING>Yh6</STRING><STRING>Theta h7</STRING><STRING>X_Noise</STRING><STRING>Y_Noise</STRING><STRING>Freq</STRING><STRING>AuxIn1</STRING><STRING>AuxIn2</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Ch_source_1</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Ch_source_2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT><STRINGS><STRING>Fixed</STRING><STRING>X</STRING><STRING>Y</STRING><STRING>R</STRING><STRING>Theta</STRING><STRING>Xh1</STRING><STRING>Yh1</STRING><STRING>Rh1</STRING><STRING>Theta h1</STRING><STRING>Xh2</STRING><STRING>Yh2</STRING><STRING>Rh2</STRING><STRING>Theta h2</STRING><STRING>Xh3</STRING><STRING>Yh3</STRING><STRING>Rh3</STRING><STRING>Theta h3</STRING><STRING>Rh4</STRING><STRING>Xh4</STRING><STRING>Yh4</STRING><STRING>Theta h4</STRING><STRING>Rh5</STRING><STRING>Xh5</STRING><STRING>Yh5</STRING><STRING>Theta h5</STRING><STRING>Rh6</STRING><STRING>Xh6</STRING><STRING>Yh6</STRING><STRING>Theta h6</STRING><STRING>Rh7</STRING><STRING>Xh6</STRING><STRING>Yh6</STRING><STRING>Theta h7</STRING><STRING>X_Noise</STRING><STRING>Y_Noise</STRING><STRING>Freq</STRING><STRING>AuxIn1</STRING><STRING>AuxIn2</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Ch_source_2</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="AUX OUT1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>AUX OUT1</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="AUX OUT2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>AUX OUT2</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="CH1 Offset(%)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>CH1 Offset(%)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="CH2 Offset(%)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>CH2 Offset(%)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="CH1 Expand">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>CH1 Expand</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="CH2 Expand">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>CH2 Expand</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Demodulator">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Demodulator</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=87 type="下拉列表" name="Demodulator type_1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Harm</STRING><STRING>Arb_Freq</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Demodulator type_1</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Demodulator type_2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Harm</STRING><STRING>Arb_Freq</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Demodulator type_2</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Demodulator type_3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Harm</STRING><STRING>Arb_Freq</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Demodulator type_3</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Demodulator type_4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Harm</STRING><STRING>Arb_Freq</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Demodulator type_4</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Demodulator type_5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Harm</STRING><STRING>Arb_Freq</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Demodulator type_5</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Demodulator type_6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Harm</STRING><STRING>Arb_Freq</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Demodulator type_6</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Demodulator type_7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Harm</STRING><STRING>Arb_Freq</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Demodulator type_7</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Phase1 (degree)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Phase1 (degree)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Phase2 (degree)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Phase2 (degree)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Phase3 (degree)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Phase3 (degree)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Phase4 (degree)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Phase4 (degree)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Phase5 (degree)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Phase5 (degree)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Phase6 (degree)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Phase6 (degree)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Phase7 (degree)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Phase7 (degree)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator harm_1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator harm_1</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator harm_2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator harm_2</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator harm_3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator harm_3</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator harm_4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator harm_4</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator harm_5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator harm_5</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator harm_6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator harm_6</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator harm_7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator harm_7</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator freq_1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator freq_1</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator freq_2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator freq_2</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator freq_3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator freq_3</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator freq_4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator freq_4</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator freq_5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator freq_5</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator freq_6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator freq_6</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Demodulator freq_7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Demodulator freq_7</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Sensitivity and Filter">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Sensitivity and Filter</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=87 type="下拉列表" name="Input Range">
+				<DESC>Sets the sensitivity.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>5 V/uA</STRING><STRING>2 V/uA</STRING><STRING>1 V/uA</STRING><STRING>500 mV/nA</STRING><STRING>200 mV/nA</STRING><STRING>100 mV/nA</STRING><STRING>50 mV/nA</STRING><STRING>20 mV/nA</STRING><STRING>10 mV/nA</STRING><STRING>5 mV/nA</STRING><STRING>2 mV/nA</STRING><STRING>1 mV/nA</STRING><STRING>500 uV/pA</STRING><STRING>200 uV/pA</STRING><STRING>100 uV/pA</STRING><STRING>50 uV/pA</STRING><STRING>20 uV/pA</STRING><STRING>10 uV/pA</STRING><STRING>5 uV/pA</STRING><STRING>2 uV/pA</STRING><STRING>1 uV/pA</STRING><STRING>500 nV/fA</STRING><STRING>200 nV/fA</STRING><STRING>100 nV/fA</STRING><STRING>50 nV/fA</STRING><STRING>20 nV/fA</STRING><STRING>10 nV/fA</STRING><STRING>5 nV/fA</STRING><STRING>2 nV/fA</STRING><STRING>1 nV/fA</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Input Range</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Time Constant(s) ">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Time Constant(s) </STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Low Pass Filter Slope ">
+				<DESC>Sets the low pass filter slope. </DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>6 dB/oct</STRING><STRING>12 dB/oct</STRING><STRING>18 db/oct</STRING><STRING>24 dB/oct</STRING><STRING>30 dB/oct</STRING><STRING>36 dB/oct</STRING><STRING>42 dB/oct</STRING><STRING>48 dB/oct</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Low Pass Filter Slope </STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Enable Sync Filter ">
+				<DESC>Enables/disables sync filter.<LF>
+<LF>
+<<B>>Note:<</B>><LF>
+<LF>
+Syncronous filtering is turned on only when the detection frequency (reference x harmonic number) is less than 200 Hz.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>OFF</STRING><STRING>ON</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Enable Sync Filter </STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Sine Out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Sine Out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=87 type="下拉列表" name="SineOut Mode">
+				<DESC>Sets the reference source of the internal oscillator.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>OFF</STRING><STRING>Fixed</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>SineOut Mode</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Sine Output Amplitude (V)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Sine Output Amplitude (V)</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="System">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>System</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=82 type="数组" name="Temperature">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Temperature</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=79 type="布尔" name="PLL state<LF>
+(1: External Lock)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>PLL state<LF>
+(1: External Lock)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=79 type="布尔" name="Input ovld state<LF>
+(1:Overload)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING>关</STRING><STRING>开</STRING><STRING>关</STRING><STRING>开</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Input ovld state<LF>
+(1:Overload)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Timeout">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Timeout</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+</CONTENT>
+<BDCONTENT>
+	<NODE ID=44 type="Select">
+		<DESC></DESC>
+		<BDCONTENT>
+			<CONTROL ID=83 type="簇常量" name="Sine Out">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=82 type="数组常量" name="Sine Output Amplitude (V)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="SineOut Mode">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=83 type="簇常量" name="Sensitivity and Filter">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=80 type="数值常量" name="Enable Sync Filter ">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Low Pass Filter Slope ">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Time Constant(s) ">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Input Range">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=83 type="簇常量" name="System">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=79 type="布尔常量" name="Input ovld state<LF>
+(1:Overload)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=79 type="布尔常量" name="PLL state<LF>
+(1: External Lock)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Temperature">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=83 type="簇常量" name="Demodulator">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=82 type="数组常量" name="Demodulator freq_7">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator freq_6">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator freq_5">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator freq_4">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator freq_3">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator freq_2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator freq_1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator harm_7">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator harm_6">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator harm_5">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator harm_4">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator harm_3">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator harm_2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Demodulator harm_1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Phase7 (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Phase6 (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Phase5 (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Phase4 (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Phase3 (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Phase2 (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Phase1 (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Demodulator type_7">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Demodulator type_6">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Demodulator type_5">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Demodulator type_4">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Demodulator type_3">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Demodulator type_2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Demodulator type_1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=83 type="簇常量" name="Channel Out">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=82 type="数组常量" name="CH2 Expand">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="CH1 Expand">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="CH2 Offset(%)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="CH1 Offset(%)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="AUX OUT2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="AUX OUT1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Ch_source_2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Ch_source_1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=83 type="簇常量" name="Reference Phase">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=80 type="数值常量" name="External Ref Trigger">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="Reference Source">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Internal Frequency(Hz)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Phase0 (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=83 type="簇常量" name="Input Filter">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=80 type="数值常量" name="InputSource">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值常量" name="InputCoupling">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</BDCONTENT>
+		<BDCONTENT>
+			<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_SET Transmit.vi">
+				<DESC></DESC>
+			</NODE>
+		</BDCONTENT>
+	</NODE>
+	<CONTROL ID=80 type="数值常量" name="y">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=47 type="Function" primID=20205145 primName="等于？">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=47 type="Function" primID=455A4953 primName="数组大小">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=202 type="Flat Sequence">
+		<DESC></DESC>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+	</NODE>
+	<NODE ID=47 type="Function" primID=20385524 primName="字符串至字节数组转换">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Remote Mode">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>USB</STRING><STRING>RS232</STRING><STRING>GPIB</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串常量" name="字符串">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT>;</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=87 type="Enum" name="Command Type">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表常量" name="Opera">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Set</STRING><STRING>Query</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+		<DESC></DESC>
+	</NODE>
+	<DESC></DESC>
+	<TIP></TIP>
+	<PARTS>
+	</PARTS>
+	<NODE ID=62 type="Concatenate Strings">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=80 type="数值常量" name="Number of bytes">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+</BDCONTENT>
+</VI>
+
+

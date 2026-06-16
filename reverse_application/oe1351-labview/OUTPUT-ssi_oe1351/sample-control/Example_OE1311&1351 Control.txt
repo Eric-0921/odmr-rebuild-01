@@ -1,0 +1,1348 @@
+<VI syntaxVersion=12 LVversion=25008000 revision=105 name="Example_OE1311&1351 Control.vi" encoding="System">
+<TITLE><NO_TITLE name="Example_OE1311&1351 Control.vi"></TITLE>
+<HELP_PATH></HELP_PATH>
+<HELP_TAG></HELP_TAG>
+<RTM_PATH type="default"></RTM_PATH>
+<DESC></DESC>
+<CONTENT>
+	<GROUPER>
+		<PARTS>
+		</PARTS></GROUPER>
+	<CONTROL ID=80 type="数值" name="Baud Rate (115200) ">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Baud Rate (115200) </STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表" name="Remote Mode">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>RS232</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Remote Mode</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=85 type="VISA资源名称" name="VISA resource name">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=8017 order=0 type="显示I/O名称">
+				<CONTROL ID=148 type="" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT size=18>VISA resource name</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=79 type="布尔" name="Connect">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING>Connect</STRING><STRING>Connected</STRING><STRING>Connect</STRING><STRING>Connected</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT>Connect</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="Status">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Status</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=195 type="选项卡输入控件" name="Table">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<DESC></DESC>
+			<TIP></TIP>
+			<PARTS>
+				<PART ID=92 order=0 type="选项卡标题"><LABEL><STEXT>Input Filter</STEXT></LABEL></PART>
+			</PARTS>
+			<PART ID=8001 order=0 type="数字显示">
+				<CONTROL ID=87 type="Enum" name="">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=APPFONT color=100000C><STRINGS></STRINGS></MLABEL></PART>
+						<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C></STEXT></LABEL></PART>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>选项卡控件</STEXT></LABEL></PART>
+		</PARTS>
+		<PAGE>
+			<DESC></DESC>
+			<TIP></TIP>
+			<CONTROL ID=83 type="簇" name="OE1300_Configure Input Filter">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>OE1300_Configure Input Filter</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=87 type="下拉列表" name="Input Source">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>A</STRING><STRING>B</STRING><STRING>Current</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Input Source</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="Input Coupling ">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>AC</STRING><STRING>DC</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Input Coupling </STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</PAGE>
+		<PAGE>
+			<DESC></DESC>
+			<TIP></TIP>
+			<CONTROL ID=83 type="簇" name="OE1300_Configure Ref Phase">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>OE1300_Configure Ref Phase</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=87 type="下拉列表" name="Reference Source">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>External</STRING><STRING>Internal</STRING><STRING>Self</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Reference Source</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="Internal Frequency(Hz)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Internal Frequency(Hz)</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="Phase  (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Phase  (degree)</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="External Ref Trigger">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>TTL Rising Edge</STRING><STRING>TTL Fallling Edge</STRING><STRING>Sine Zero Crossing</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>External Ref Trigger</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="Instrument Mode ">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>OE1311</STRING><STRING>OE1351</STRING><STRING>OE1301</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Instrument Mode </STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</PAGE>
+		<PAGE>
+			<DESC></DESC>
+			<TIP></TIP>
+			<CONTROL ID=83 type="簇" name="OE1300_Configure Sens and Filter">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>OE1300_Configure Sens and Filter</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=80 type="数值" name="Time Constant(s) ">
+						<DESC>Sets the time constant.<LF>
+<LF>
+<<B>>Note:<</B>><LF>
+<LF>
+Time constants greateer than 30s may NOT be set if the harmonic ref. frequency exceeds 200 Hz. Time constants shorter than the minimum time constant will set the time constant to the minimum allowed time constant. </DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Time Constant(s)<FONT predef=APPFONT> </STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="Low Pass Filter Slope ">
+						<DESC>Sets the low pass filter slope. </DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>6 dB/oct</STRING><STRING>12 dB/oct</STRING><STRING>18 db/oct</STRING><STRING>24 dB/oct</STRING><STRING>30 dB/oct</STRING><STRING>36 dB/oct</STRING><STRING>42 dB/oct</STRING><STRING>48 dB/oct</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Low Pass Filter Slope<FONT predef=APPFONT> </STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="Enable Sync Filter ">
+						<DESC>Enables/disables sync filter.<LF>
+<LF>
+<<B>>Note:<</B>><LF>
+<LF>
+Syncronous filtering is turned on only when the detection frequency (reference x harmonic number) is less than 200 Hz.</DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>OFF</STRING><STRING>ON</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Enable Sync Filter<FONT predef=APPFONT style='I'> </STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="Input Range">
+						<DESC>Sets the sensitivity.</DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>5 V/uA</STRING><STRING>2 V/uA</STRING><STRING>1 V/uA</STRING><STRING>500 mV/nA</STRING><STRING>200 mV/nA</STRING><STRING>100 mV/nA</STRING><STRING>50 mV/nA</STRING><STRING>20 mV/nA</STRING><STRING>10 mV/nA</STRING><STRING>5 mV/nA</STRING><STRING>2 mV/nA</STRING><STRING>1 mV/nA</STRING><STRING>500 uV/pA</STRING><STRING>200 uV/pA</STRING><STRING>100 uV/pA</STRING><STRING>50 uV/pA</STRING><STRING>20 uV/pA</STRING><STRING>10 uV/pA</STRING><STRING>5 uV/pA</STRING><STRING>2 uV/pA</STRING><STRING>1 uV/pA</STRING><STRING>500 nV/fA</STRING><STRING>200 nV/fA</STRING><STRING>100 nV/fA</STRING><STRING>50 nV/fA</STRING><STRING>20 nV/fA</STRING><STRING>10 nV/fA</STRING><STRING>5 nV/fA</STRING><STRING>2 nV/fA</STRING><STRING>1 nV/fA</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Input Range</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</PAGE>
+		<PAGE>
+			<DESC></DESC>
+			<TIP></TIP>
+			<CONTROL ID=83 type="簇" name="OE1300_Configure Channel Out">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>OE1300_Configure Channel Out</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=80 type="数值" name="CH2 Offset">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>CH2 Offset</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="CH1 Offset">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>CH1 Offset</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="CH2 Expand">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>CH2 Expand</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="CH1 Expand">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>CH1 Expand</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="AUX OUT1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>AUX OUT1</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="AUX OUT2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>AUX OUT2</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="CH 1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT><STRINGS><STRING>Fixed</STRING><STRING>X</STRING><STRING>Y</STRING><STRING>R</STRING><STRING>Theta</STRING><STRING>Xh1</STRING><STRING>Yh1</STRING><STRING>Rh1</STRING><STRING>Theta h1</STRING><STRING>Xh2</STRING><STRING>Yh2</STRING><STRING>Rh2</STRING><STRING>Theta h2</STRING><STRING>Xh3</STRING><STRING>Yh3</STRING><STRING>Rh3</STRING><STRING>Theta h3</STRING><STRING>Rh4</STRING><STRING>Xh4</STRING><STRING>Yh4</STRING><STRING>Theta h4</STRING><STRING>Rh5</STRING><STRING>Xh5</STRING><STRING>Yh5</STRING><STRING>Theta h5</STRING><STRING>Rh6</STRING><STRING>Xh6</STRING><STRING>Yh6</STRING><STRING>Theta h6</STRING><STRING>Rh7</STRING><STRING>Xh6</STRING><STRING>Yh6</STRING><STRING>Theta h7</STRING><STRING>X_Noise</STRING><STRING>Y_Noise</STRING><STRING>Freq</STRING><STRING>AuxIn1</STRING><STRING>AuxIn2</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>CH 1</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="CH 2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT><STRINGS><STRING>Fixed</STRING><STRING>X</STRING><STRING>Y</STRING><STRING>R</STRING><STRING>Theta</STRING><STRING>Xh1</STRING><STRING>Yh1</STRING><STRING>Rh1</STRING><STRING>Theta h1</STRING><STRING>Xh2</STRING><STRING>Yh2</STRING><STRING>Rh2</STRING><STRING>Theta h2</STRING><STRING>Xh3</STRING><STRING>Yh3</STRING><STRING>Rh3</STRING><STRING>Theta h3</STRING><STRING>Rh4</STRING><STRING>Xh4</STRING><STRING>Yh4</STRING><STRING>Theta h4</STRING><STRING>Rh5</STRING><STRING>Xh5</STRING><STRING>Yh5</STRING><STRING>Theta h5</STRING><STRING>Rh6</STRING><STRING>Xh6</STRING><STRING>Yh6</STRING><STRING>Theta h6</STRING><STRING>Rh7</STRING><STRING>Xh6</STRING><STRING>Yh6</STRING><STRING>Theta h7</STRING><STRING>X_Noise</STRING><STRING>Y_Noise</STRING><STRING>Freq</STRING><STRING>AuxIn1</STRING><STRING>AuxIn2</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>CH 2</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</PAGE>
+		<PAGE>
+			<DESC></DESC>
+			<TIP></TIP>
+			<CONTROL ID=83 type="簇" name="OE1300_Configure Sine Out ">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT style='B'>OE1300_Configure Sine Out </STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=80 type="数值" name="Sine Output Amplitude (V)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Sine Output Amplitude (V)</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="SineOut Mode">
+						<DESC>Sets the reference source of the internal oscillator.</DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>OFF</STRING><STRING>Fixed</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>SineOut Mode</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</PAGE>
+		<PAGE>
+			<DESC></DESC>
+			<TIP></TIP>
+			<CONTROL ID=83 type="簇" name="OE1300_Configure Demodulator">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>OE1300_Configure Demodulator</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=87 type="下拉列表" name="Demodulator">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT><STRINGS><STRING>1</STRING><STRING>2</STRING><STRING>3</STRING><STRING>4</STRING><STRING>5</STRING><STRING>6</STRING><STRING>7</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Demodulator</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="Mode">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>Harm</STRING><STRING>Arb_Freq</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT style='B' color=100000C>Mode</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="Arbitrary Frequency">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Arbitrary Frequency</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="Harmonic">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Harmonic</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=87 type="下拉列表" name="Instrument Mode ">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>OE1311</STRING><STRING>OE1351</STRING><STRING>OE1301</STRING></STRINGS></MLABEL></PART>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Instrument Mode </STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=80 type="数值" name="Phase  (degree)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Phase  (degree)</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</PAGE>
+		<PAGE>
+			<DESC></DESC>
+			<TIP></TIP>
+			<CONTROL ID=80 type="数值" name="Sample Rate">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>Sample Rate</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=91 type="路径" name="file path">
+				<DESC><<B>>文件路径<</B>>表示文件的路径名。如<<B>>文件路径<</B>>为空（默认值）或为<<非法路径>>，VI可显示用于选择文件的文件对话框。如在对话框内选择取消，可发生错误43。</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=8019 order=0 type="浏览按钮">
+						<CONTROL ID=79 type="布尔" >
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+					</PART>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>file path</STEXT></LABEL></PART>
+				</PARTS>
+				<PRIV>
+					<PROMPT></PROMPT>
+					<MTCH_PTN>*.xls</MTCH_PTN>
+					<PTN_LBEL></PTN_LBEL>
+					<STRT_PTH><PATH type="absolute"></PATH></STRT_PTH>
+					<PTH_BTN_LBL></PTH_BTN_LBL>
+				</PRIV>
+				<DEFAULT>
+					<PATH type="absolute"></PATH>
+				</DEFAULT>
+			</CONTROL>
+			<CONTROL ID=79 type="布尔" name="Save Button">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING>Save</STRING><STRING>Saving...</STRING><STRING>Save</STRING><STRING>Saving...</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Save Button</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</PAGE>
+		<PAGE_CAP_FONT><FONT predef=APPFONT color=000000></PAGE_CAP_FONT>
+		<PRIV><PAGE_CAPTIONS><STRING>Input Filter</STRING><STRING>Ref Phase</STRING><STRING>Sensitivity and Filter</STRING><STRING>Channel Out</STRING><STRING>Sine Out</STRING><STRING>Demodulation</STRING><STRING>Save Data</STRING></PAGE_CAPTIONS></PRIV>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="Serial Versions">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Serial Versions</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="Error">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT>Error</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=79 type="布尔" name="PLL Lock">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>PLL Lock</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=79 type="布尔" name="Input Overlaod">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING>关</STRING><STRING>开</STRING><STRING>关</STRING><STRING>开</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Input Overlaod</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="R">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>R</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="xita">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>xita</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Freq">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Freq</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<LABEL><STEXT><FONT predef=SYSFONT style='IB' size=27 color=005624>Tel          :   +86-020-84133345<LF>
+Website  :   www.ssi-instrument.com<LF>
+E-mail     :   support@si-instrument.com</STEXT></LABEL>
+	<CONTROL ID=81 type="字符串" name="IP Address">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT><FONT predef=DLGFONT color=100000C></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT color=100000C>IP Address</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Port">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Port</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Timeout">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>Timeout</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=85 type="队列引用句柄" name="Queue output">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Queue output</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<CONTROL ID=82 type="数组" name="">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT></STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Queue out">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=79 type="布尔" name="Zero Data?">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Zero Data?</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="buffer">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>buffer</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Sample count">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT>Sample count</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="loss count">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT style='B' color=100000C>loss count</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+</CONTENT>
+<BDCONTENT>
+	<NODE ID=202 type="Flat Sequence">
+		<DESC></DESC>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<NODE ID=169 type="Invoke Node" name="Sample count">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=169 type="Invoke Node" name="Save Button">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=169 type="Invoke Node" name="Connect">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=169 type="Invoke Node" name="Serial Versions">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=169 type="Invoke Node" name="Error">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=81 type="字符串常量" name="status">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT>Waiting to start</STEXT></LABEL></PART>
+					</PARTS>
+					<DEFAULT><SAME_AS_LABEL></DEFAULT>
+				</CONTROL>
+			</BDCONTENT>
+		</NODE>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<NODE ID=33 type="While Loop">
+					<DESC></DESC>
+					<BDCONTENT>
+						<NODE ID=140 type="Property Node" name="Timeout">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=140 type="Property Node" name="Port">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=20544F4E primName="非">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=140 type="Property Node" name="Baud Rate (115200) ">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=140 type="Property Node" name="VISA resource name">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=140 type="Property Node" name="IP Address">
+							<DESC></DESC>
+						</NODE>
+						<CONTROL ID=80 type="数值常量" name="y">
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+						<NODE ID=47 type="Function" primID=20205145 primName="等于？">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=50 type="Global Variable">
+							<DESC></DESC>
+						</NODE>
+					</BDCONTENT>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=80 type="数值常量" name="y">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=47 type="Function" primID=20205145 primName="等于？">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=44 type="Select">
+					<DESC></DESC>
+					<BDCONTENT>
+					</BDCONTENT>
+					<BDCONTENT>
+						<CONTROL ID=91 type="路径常量" >
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+								<PART ID=11 order=0 type="文本"><LABEL><STEXT><FONT predef=DLGFONT color=100000C>OE1311&OE1351\Query\OE1311&OE1351_Ethernet_Query Data.vi</STEXT></LABEL></PART>
+							</PARTS>
+							<PRIV>
+								<PROMPT></PROMPT>
+								<MTCH_PTN></MTCH_PTN>
+								<PTN_LBEL></PTN_LBEL>
+								<STRT_PTH><PATH type="absolute"></PATH></STRT_PTH>
+								<PTH_BTN_LBL></PTH_BTN_LBL>
+							</PRIV>
+							<DEFAULT>
+								<PATH type="relative">OE1311&OE1351<SEP>Query<SEP>OE1311&OE1351_Ethernet_Query Data.vi</PATH>
+							</DEFAULT>
+						</CONTROL>
+						<NODE ID=44 type="Select">
+							<DESC></DESC>
+							<BDCONTENT>
+								<CONTROL ID=81 type="字符串常量" name="消息">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+										<PART ID=11 order=0 type="文本"><LABEL><STEXT>调用VI路径错误，继续运<LF>
+行可能会导致数据错误</STEXT></LABEL></PART>
+									</PARTS>
+									<DEFAULT><SAME_AS_LABEL></DEFAULT>
+								</CONTROL>
+								<NODE ID=47 type="Function" primID=4C444231 primName="单按钮对话框">
+									<DESC></DESC>
+								</NODE>
+							</BDCONTENT>
+							<BDCONTENT>
+								<NODE ID=169 type="Invoke Node">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=47 type="Function" primID=534C4343 primName="关闭引用">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=47 type="Function" primID=4E504F43 primName="打开VI引用">
+									<DESC></DESC>
+								</NODE>
+							</BDCONTENT>
+						</NODE>
+						<NODE ID=47 type="Function" primID=48545042 primName="创建路径">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=49 type="SubVI" subVIName="Check if File or Folder Exists.vi">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=4C464956 primName="当前VI路径">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=48545053 primName="拆分路径">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=48545053 primName="拆分路径">
+							<DESC></DESC>
+						</NODE>
+					</BDCONTENT>
+				</NODE>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=83 type="簇常量" name="Error in (no error)">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+					<CONTENT>
+						<GROUPER>
+							<PARTS>
+							</PARTS></GROUPER>
+						<CONTROL ID=81 type="字符串常量" name="source">
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+								<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+							</PARTS>
+							<DEFAULT><SAME_AS_LABEL></DEFAULT>
+						</CONTROL>
+						<CONTROL ID=80 type="数值常量" name="code">
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+						<CONTROL ID=79 type="布尔常量" name="status">
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+					</CONTENT>
+				</CONTROL>
+				<NODE ID=49 type="SubVI" subVIName="Queue initial.vi">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=52 type="Bundle">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=99 type="(Un)Bundle by Name">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=44 type="Select">
+					<DESC></DESC>
+					<BDCONTENT>
+						<CONTROL ID=81 type="字符串常量" >
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+								<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+							</PARTS>
+							<DEFAULT><SAME_AS_LABEL></DEFAULT>
+						</CONTROL>
+					</BDCONTENT>
+					<BDCONTENT>
+					</BDCONTENT>
+				</NODE>
+				<CONTROL ID=81 type="字符串常量" name="status">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT>connecting...</STEXT></LABEL></PART>
+					</PARTS>
+					<DEFAULT><SAME_AS_LABEL></DEFAULT>
+				</CONTROL>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=49 type="SubVI" subVIName="SSI_Query ID.vi">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=49 type="SubVI" subVIName="SSI_Initialize.vi">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=80 type="数值常量" name="loss count">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=33 type="While Loop">
+					<DESC></DESC>
+					<BDCONTENT>
+						<NODE ID=47 type="Function" primID=2020524F primName="或">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=20544F4E primName="非">
+							<DESC></DESC>
+						</NODE>
+						<CONTROL ID=100 type="自定义类型" name="type of dialog (OK msg:1)">
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+								<PART ID=8010 order=0 type="自定义类型控件">
+									<CONTROL ID=87 type="下拉列表常量" name="">
+										<DESC></DESC>
+										<TIP></TIP>
+										<PARTS>
+											<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>无对话框</STRING><STRING>确定信息</STRING><STRING>继续或停止信息</STRING><STRING>确定信息＋警告</STRING><STRING>继续/停止+警告</STRING></STRINGS></MLABEL></PART>
+										</PARTS>
+									</CONTROL>
+								</PART>
+							</PARTS>
+						</CONTROL>
+						<NODE ID=49 type="SubVI" subVIName="General Error Handler.vi">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=49 type="SubVI" subVIName="Queue read.vi">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=108 type="Compound Arithmetic Node">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=20205145 primName="等于？">
+							<DESC></DESC>
+						</NODE>
+						<CONTROL ID=80 type="数值常量" name="y">
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+						<NODE ID=50 type="Global Variable">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=50 type="Global Variable">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=44 type="Select">
+							<DESC></DESC>
+							<BDCONTENT>
+								<CONTROL ID=80 type="数值常量" name="Loop count variable">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=47 type="Function" primID=2020544C primName="小于？">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=50 type="Global Variable">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=47 type="Function" primID=20434E49 primName="加1">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=50 type="Global Variable">
+									<DESC></DESC>
+								</NODE>
+								<CONTROL ID=80 type="数值常量" name="y">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=47 type="Function" primID=204C554D primName="乘">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=50 type="Global Variable">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=44 type="Select">
+									<DESC></DESC>
+									<BDCONTENT>
+									</BDCONTENT>
+									<BDCONTENT>
+										<CONTROL ID=87 type="下拉列表常量" name="Parameter Type">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>X</STRING><STRING>Y</STRING><STRING>R</STRING><STRING>θ</STRING><STRING>XD1</STRING><STRING>YD1</STRING><STRING>RD1</STRING><STRING>θD1</STRING><STRING>XD2</STRING><STRING>YD2</STRING><STRING>RD2</STRING><STRING>θD2</STRING><STRING>XD3</STRING><STRING>YD3</STRING><STRING>RD3</STRING><STRING>θD3</STRING><STRING>XD4</STRING><STRING>YD4</STRING><STRING>RD4</STRING><STRING>θD4</STRING><STRING>XD5</STRING><STRING>YD5</STRING><STRING>RD5</STRING><STRING>θD5</STRING><STRING>XD6</STRING><STRING>YD6</STRING><STRING>RD6</STRING><STRING>θD6</STRING><STRING>XD7</STRING><STRING>YD7</STRING><STRING>RD7</STRING><STRING>θD7</STRING><STRING>X_Noise</STRING><STRING>Y_Noise</STRING><STRING>Frequency</STRING><STRING>AUX-IN1</STRING><STRING>AUX-IN2</STRING></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<CONTROL ID=87 type="下拉列表常量" name="Parameter Type">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>X</STRING><STRING>Y</STRING><STRING>R</STRING><STRING>θ</STRING><STRING>XD1</STRING><STRING>YD1</STRING><STRING>RD1</STRING><STRING>θD1</STRING><STRING>XD2</STRING><STRING>YD2</STRING><STRING>RD2</STRING><STRING>θD2</STRING><STRING>XD3</STRING><STRING>YD3</STRING><STRING>RD3</STRING><STRING>θD3</STRING><STRING>XD4</STRING><STRING>YD4</STRING><STRING>RD4</STRING><STRING>θD4</STRING><STRING>XD5</STRING><STRING>YD5</STRING><STRING>RD5</STRING><STRING>θD5</STRING><STRING>XD6</STRING><STRING>YD6</STRING><STRING>RD6</STRING><STRING>θD6</STRING><STRING>XD7</STRING><STRING>YD7</STRING><STRING>RD7</STRING><STRING>θD7</STRING><STRING>X_Noise</STRING><STRING>Y_Noise</STRING><STRING>Frequency</STRING><STRING>AUX-IN1</STRING><STRING>AUX-IN2</STRING></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<CONTROL ID=87 type="下拉列表常量" name="Parameter Type">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>X</STRING><STRING>Y</STRING><STRING>R</STRING><STRING>θ</STRING><STRING>XD1</STRING><STRING>YD1</STRING><STRING>RD1</STRING><STRING>θD1</STRING><STRING>XD2</STRING><STRING>YD2</STRING><STRING>RD2</STRING><STRING>θD2</STRING><STRING>XD3</STRING><STRING>YD3</STRING><STRING>RD3</STRING><STRING>θD3</STRING><STRING>XD4</STRING><STRING>YD4</STRING><STRING>RD4</STRING><STRING>θD4</STRING><STRING>XD5</STRING><STRING>YD5</STRING><STRING>RD5</STRING><STRING>θD5</STRING><STRING>XD6</STRING><STRING>YD6</STRING><STRING>RD6</STRING><STRING>θD6</STRING><STRING>XD7</STRING><STRING>YD7</STRING><STRING>RD7</STRING><STRING>θD7</STRING><STRING>X_Noise</STRING><STRING>Y_Noise</STRING><STRING>Frequency</STRING><STRING>AUX-IN1</STRING><STRING>AUX-IN2</STRING></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Data Index.vi">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Data Index.vi">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Data Index.vi">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=49 type="SubVI" subVIName="SSI_Save.vi">
+											<DESC></DESC>
+										</NODE>
+										<CONTROL ID=87 type="Enum" name="Instrument Mode">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+											</PARTS>
+										</CONTROL>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+								</NODE>
+							</BDCONTENT>
+							<BDCONTENT>
+							</BDCONTENT>
+						</NODE>
+						<NODE ID=50 type="Global Variable">
+							<DESC></DESC>
+						</NODE>
+					</BDCONTENT>
+				</NODE>
+				<CONTROL ID=81 type="字符串常量" name="status">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT>Running</STEXT></LABEL></PART>
+					</PARTS>
+					<DEFAULT><SAME_AS_LABEL></DEFAULT>
+				</CONTROL>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=33 type="While Loop">
+					<DESC></DESC>
+					<BDCONTENT>
+						<NODE ID=47 type="Function" primID=20444E41 primName="与">
+							<DESC></DESC>
+						</NODE>
+						<NODE ID=47 type="Function" primID=20544F4E primName="非">
+							<DESC></DESC>
+						</NODE>
+						<CONTROL ID=80 type="数值常量" >
+							<DESC></DESC>
+							<TIP></TIP>
+							<PARTS>
+							</PARTS>
+						</CONTROL>
+						<NODE ID=213 type="Event Struct">
+							<DESC></DESC>
+							<BDCONTENT>
+								<CONTROL ID=79 type="布尔常量" name="NewVal">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=99 type="(Un)Bundle by Name">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=50 type="Global Variable">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=44 type="Select">
+									<DESC></DESC>
+									<BDCONTENT>
+										<NODE ID=202 type="Flat Sequence">
+											<DESC></DESC>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+														</PARTS>
+													</CONTROL>
+													<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Query PLL&Overload.vi">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=50 type="Global Variable">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=20205447 primName="大于？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+														<DESC></DESC>
+													</NODE>
+													<CONTROL ID=80 type="数值常量" name="y">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+														</PARTS>
+													</CONTROL>
+													<CONTROL ID=80 type="数值常量" name="y">
+														<DESC></DESC>
+														<TIP></TIP>
+														<PARTS>
+														</PARTS>
+													</CONTROL>
+													<NODE ID=47 type="Function" primID=204C554D primName="乘">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=3F504D45 primName="空数组？">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=47 type="Function" primID=414F5443 primName="簇至数组转换">
+														<DESC></DESC>
+													</NODE>
+													<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_RS232_Query Data.vi">
+														<DESC></DESC>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+											<NODE ID=289 type="Sequence Frame">
+												<DESC></DESC>
+												<BDCONTENT>
+													<NODE ID=44 type="Select">
+														<DESC></DESC>
+														<BDCONTENT>
+															<NODE ID=47 type="Function" primID=4C455342 primName="选择">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=80 type="数值常量" name="Loop count variable">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=47 type="Function" primID=2020544C primName="小于？">
+																<DESC></DESC>
+															</NODE>
+															<CONTROL ID=80 type="数值常量" name="y">
+																<DESC></DESC>
+																<TIP></TIP>
+																<PARTS>
+																</PARTS>
+															</CONTROL>
+															<NODE ID=47 type="Function" primID=204C554D primName="乘">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=44 type="Select">
+																<DESC></DESC>
+																<BDCONTENT>
+																	<NODE ID=49 type="SubVI" subVIName="SSI_Save.vi">
+																		<DESC></DESC>
+																	</NODE>
+																	<CONTROL ID=87 type="Enum" name="Instrument Mode">
+																		<DESC></DESC>
+																		<TIP></TIP>
+																		<PARTS>
+																			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+																		</PARTS>
+																	</CONTROL>
+																	<NODE ID=50 type="Global Variable">
+																		<DESC></DESC>
+																	</NODE>
+																	<NODE ID=50 type="Global Variable">
+																		<DESC></DESC>
+																	</NODE>
+																	<NODE ID=99 type="(Un)Bundle by Name">
+																		<DESC></DESC>
+																	</NODE>
+																</BDCONTENT>
+																<BDCONTENT>
+																</BDCONTENT>
+															</NODE>
+															<NODE ID=47 type="Function" primID=20434E49 primName="加1">
+																<DESC></DESC>
+															</NODE>
+															<NODE ID=50 type="Global Variable">
+																<DESC></DESC>
+															</NODE>
+														</BDCONTENT>
+														<BDCONTENT>
+														</BDCONTENT>
+													</NODE>
+												</BDCONTENT>
+											</NODE>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=49 type="SubVI" subVIName="SSI_check packet.vi">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=3F504D45 primName="空数组？">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=47 type="Function" primID=2020454E primName="不等于？">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=44 type="Select">
+											<DESC></DESC>
+											<BDCONTENT>
+											</BDCONTENT>
+											<BDCONTENT>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=50 type="Global Variable">
+													<DESC></DESC>
+												</NODE>
+												<NODE ID=49 type="SubVI" subVIName="Queue Write.vi">
+													<DESC></DESC>
+												</NODE>
+												<CONTROL ID=80 type="数值常量" name="Group Count">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+													</PARTS>
+												</CONTROL>
+											</BDCONTENT>
+										</NODE>
+										<NODE ID=50 type="Global Variable">
+											<DESC></DESC>
+										</NODE>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Ethernet_Query Data.vi">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+								</NODE>
+							</BDCONTENT>
+							<BDCONTENT>
+								<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=50 type="Global Variable">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=44 type="Select">
+									<DESC></DESC>
+									<BDCONTENT>
+										<CONTROL ID=81 type="字符串常量" name="source">
+											<DESC></DESC>
+											<TIP></TIP>
+											<PARTS>
+												<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+											</PARTS>
+											<DEFAULT><SAME_AS_LABEL></DEFAULT>
+										</CONTROL>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=99 type="(Un)Bundle by Name">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+								</NODE>
+								<CONTROL ID=79 type="布尔常量" name="Stop">
+									<DESC></DESC>
+									<TIP></TIP>
+									<PARTS>
+									</PARTS>
+								</CONTROL>
+								<NODE ID=50 type="Global Variable">
+									<DESC></DESC>
+								</NODE>
+								<NODE ID=44 type="Select">
+									<DESC></DESC>
+									<BDCONTENT>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Configure Input Filter.vi">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Configure Ref Phase.vi">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Configure Sensitivity and Filter.vi">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Configure Channel Out.vi">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Configure Sine Out.vi">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+										<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_Configure Demodulation.vi">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+								</NODE>
+							</BDCONTENT>
+							<BDCONTENT>
+								<NODE ID=44 type="Select">
+									<DESC></DESC>
+									<BDCONTENT>
+										<NODE ID=44 type="Select">
+											<DESC></DESC>
+											<BDCONTENT>
+												<CONTROL ID=81 type="字符串常量" name="source">
+													<DESC></DESC>
+													<TIP></TIP>
+													<PARTS>
+														<PART ID=11 order=0 type="文本"><LABEL><STEXT>Correct Connection!No Error...</STEXT></LABEL></PART>
+													</PARTS>
+													<DEFAULT><SAME_AS_LABEL></DEFAULT>
+												</CONTROL>
+											</BDCONTENT>
+											<BDCONTENT>
+												<NODE ID=99 type="(Un)Bundle by Name">
+													<DESC></DESC>
+												</NODE>
+											</BDCONTENT>
+										</NODE>
+										<NODE ID=49 type="SubVI" subVIName="SSI_Close.vi">
+											<DESC></DESC>
+										</NODE>
+									</BDCONTENT>
+									<BDCONTENT>
+									</BDCONTENT>
+								</NODE>
+							</BDCONTENT>
+						</NODE>
+					</BDCONTENT>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=81 type="字符串常量" name="status">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT>Disconnected</STEXT></LABEL></PART>
+					</PARTS>
+					<DEFAULT><SAME_AS_LABEL></DEFAULT>
+				</CONTROL>
+				<NODE ID=50 type="Global Variable">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+	</NODE>
+</BDCONTENT>
+</VI>
+
+

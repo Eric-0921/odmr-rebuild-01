@@ -14,7 +14,7 @@
     "harmonic_2": 1,
     "dynamic_reserve": 1,
     "sensitivity_index": 24,
-    "time_constant_index": 7,
+    "time_constant_index": 6,
     "filter_slope": 1,
     "sync_filter": 0,
     "sine_output_mode": 0,

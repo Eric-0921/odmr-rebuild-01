@@ -1,0 +1,108 @@
+{
+  "run_id": "x_axis_ymagtest",
+  "operator": "local",
+  "acquisition_window_ms": 0,
+  "point_settle_ms": 500,
+  "failure_policy": "continue",
+  "mag_baseline_policy": {
+    "baseline_current_a": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "settle_ms": 1000,
+    "readback_samples": 3,
+    "settle_tolerance_a": 0.002,
+    "voltage_v": 75.0,
+    "voltage_protection_v": 75.0,
+    "output_enabled": true
+  },
+  "quality_thresholds": {
+    "min_frames": 20,
+    "max_timeout_count": 2,
+    "max_duplicate_ratio": 0.3,
+    "max_last_frame_age_ms": 500
+  },
+  "points": [
+    {
+      "point_id": "acq_p000001",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000002",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000003",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000004",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000005",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000006",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000007",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000008",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000009",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000010",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000011",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000012",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000013",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000014",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000015",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000016",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000017",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000018",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000019",
+      "magnetic_mode": "none"
+    },
+    {
+      "point_id": "acq_p000020",
+      "magnetic_mode": "none"
+    }
+  ]
+}

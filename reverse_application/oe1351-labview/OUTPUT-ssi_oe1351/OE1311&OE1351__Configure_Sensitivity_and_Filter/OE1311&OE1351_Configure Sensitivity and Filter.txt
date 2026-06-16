@@ -1,0 +1,373 @@
+<VI syntaxVersion=12 LVversion=25008000 revision=28 name="OE1311&OE1351_Configure Sensitivity and Filter.vi" encoding="System">
+<TITLE><NO_TITLE name="OE1311&OE1351_Configure Sensitivity and Filter.vi"></TITLE>
+<HELP_PATH></HELP_PATH>
+<HELP_TAG></HELP_TAG>
+<RTM_PATH type="default"></RTM_PATH>
+<DESC></DESC>
+<CONTENT>
+	<GROUPER>
+		<PARTS>
+		</PARTS></GROUPER>
+	<CONTROL ID=81 type="字符串" name="Output String">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Output String</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="OE1300_Configure <LF>
+Sens and Filter">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>OE1300_Configure <LF>
+Sens and Filter</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=80 type="数值" name="Time Constant(s) ">
+				<DESC>Sets the time constant.<LF>
+<LF>
+<<B>>Note:<</B>><LF>
+<LF>
+Time constants greateer than 30s may NOT be set if the harmonic ref. frequency exceeds 200 Hz. Time constants shorter than the minimum time constant will set the time constant to the minimum allowed time constant. </DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Time Constant(s)<FONT predef=APPFONT> </STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Low Pass Filter Slope ">
+				<DESC>Sets the low pass filter slope. </DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>6 dB/oct</STRING><STRING>12 dB/oct</STRING><STRING>18 db/oct</STRING><STRING>24 dB/oct</STRING><STRING>30 dB/oct</STRING><STRING>36 dB/oct</STRING><STRING>42 dB/oct</STRING><STRING>48 dB/oct</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Low Pass Filter Slope<FONT predef=APPFONT> </STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Enable Sync Filter ">
+				<DESC>Enables/disables sync filter.<LF>
+<LF>
+<<B>>Note:<</B>><LF>
+<LF>
+Syncronous filtering is turned on only when the detection frequency (reference x harmonic number) is less than 200 Hz.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><FONT predef=DLGFONT color=100000C><STRINGS><STRING>OFF</STRING><STRING>ON</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Enable Sync Filter<FONT predef=APPFONT style='I'> </STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=87 type="下拉列表" name="Input Range">
+				<DESC>Sets the sensitivity.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>5 V/uA</STRING><STRING>2 V/uA</STRING><STRING>1 V/uA</STRING><STRING>500 mV/nA</STRING><STRING>200 mV/nA</STRING><STRING>100 mV/nA</STRING><STRING>50 mV/nA</STRING><STRING>20 mV/nA</STRING><STRING>10 mV/nA</STRING><STRING>5 mV/nA</STRING><STRING>2 mV/nA</STRING><STRING>1 mV/nA</STRING><STRING>500 uV/pA</STRING><STRING>200 uV/pA</STRING><STRING>100 uV/pA</STRING><STRING>50 uV/pA</STRING><STRING>20 uV/pA</STRING><STRING>10 uV/pA</STRING><STRING>5 uV/pA</STRING><STRING>2 uV/pA</STRING><STRING>1 uV/pA</STRING><STRING>500 nV/fA</STRING><STRING>200 nV/fA</STRING><STRING>100 nV/fA</STRING><STRING>50 nV/fA</STRING><STRING>20 nV/fA</STRING><STRING>10 nV/fA</STRING><STRING>5 nV/fA</STRING><STRING>2 nV/fA</STRING><STRING>1 nV/fA</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Input Range</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=85 type="VISA资源名称" name="VISA resource name">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=8017 order=0 type="显示I/O名称">
+				<CONTROL ID=148 type="" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B' size=18>VISA resource name</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=85 type="TCP网络连接引用句柄" name="Connection ID in">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Connection ID in</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表" name="Remote Mode">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>RS232</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Remote Mode</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error in (no error)">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out（no error）</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error out">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=85 type="TCP网络连接引用句柄" name="Connection ID out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Connection ID out</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=85 type="VISA资源名称" name="VISA resource  out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=8017 order=0 type="显示I/O名称">
+				<CONTROL ID=148 type="" >
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+			</PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B' size=18>VISA resource  out</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+</CONTENT>
+<BDCONTENT>
+	<NODE ID=202 type="Flat Sequence">
+		<DESC></DESC>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<NODE ID=47 type="Function" primID=20462523 primName="数值至小数字符串转换">
+					<DESC></DESC>
+				</NODE>
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTROL ID=80 type="数值常量" name="宽度(-)">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<CONTROL ID=80 type="数值常量" name="宽度(-)">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<CONTROL ID=80 type="数值常量" name="精度(6)">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<CONTROL ID=80 type="数值常量" name="精度(6)">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<CONTROL ID=81 type="字符串常量" name="替换字符串("""")">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT>;</STEXT></LABEL></PART>
+					</PARTS>
+					<DEFAULT><SAME_AS_LABEL></DEFAULT>
+				</CONTROL>
+				<NODE ID=62 type="Concatenate Strings">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=47 type="Function" primID=20462523 primName="数值至小数字符串转换">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=87 type="Enum" name="Command Type">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=99 type="(Un)Bundle by Name">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=81 type="字符串常量" name="替换字符串("""")">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT>;</STEXT></LABEL></PART>
+					</PARTS>
+					<DEFAULT><SAME_AS_LABEL></DEFAULT>
+				</CONTROL>
+				<NODE ID=62 type="Concatenate Strings">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=81 type="字符串常量" name="替换字符串("""")">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT>;</STEXT></LABEL></PART>
+					</PARTS>
+					<DEFAULT><SAME_AS_LABEL></DEFAULT>
+				</CONTROL>
+				<NODE ID=62 type="Concatenate Strings">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=81 type="字符串常量" name="替换字符串("""")">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=11 order=0 type="文本"><LABEL><STEXT>;</STEXT></LABEL></PART>
+					</PARTS>
+					<DEFAULT><SAME_AS_LABEL></DEFAULT>
+				</CONTROL>
+				<NODE ID=62 type="Concatenate Strings">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=87 type="下拉列表常量" name="Opera">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Set</STRING><STRING>Query</STRING></STRINGS></MLABEL></PART>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=47 type="Function" primID=20462523 primName="数值至小数字符串转换">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=87 type="Enum" name="Command Type">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=47 type="Function" primID=20442523 primName="数值至十进制数字符串转换">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=87 type="Enum" name="Command Type">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+					<DESC></DESC>
+				</NODE>
+				<NODE ID=62 type="Concatenate Strings">
+					<DESC></DESC>
+				</NODE>
+				<CONTROL ID=87 type="Enum" name="Command Type">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+						<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+</BDCONTENT>
+</VI>
+
+

@@ -1,0 +1,1533 @@
+<VI syntaxVersion=12 LVversion=25008000 revision=110 name="OE1311&OE1351_Ethernet_Query Data.vi" encoding="System">
+<TITLE><NO_TITLE name="OE1311&OE1351_Ethernet_Query Data.vi"></TITLE>
+<HELP_PATH></HELP_PATH>
+<HELP_TAG></HELP_TAG>
+<RTM_PATH type="default"></RTM_PATH>
+<DESC></DESC>
+<CONTENT>
+	<GROUPER>
+		<PARTS>
+		</PARTS></GROUPER>
+	<CONTROL ID=85 type="TCP网络连接引用句柄" name="Connection ID in">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Connection ID in</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error in (no error)">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out（no error）</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Error out">
+		<DESC><<B>>error in<</B>> can accept error information wired from VIs previously called. Use this information to decide if any functionality should be bypassed in the event of errors from other VIs.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>error out</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="status">
+				<DESC><<B>>status<</B>> is TRUE (X) if an error occurred or FALSE (checkmark) to indicate a warning or that no error occurred.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING></STRING><STRING></STRING><STRING></STRING><STRING></STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>State</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=80 type="数值" name="code">
+				<DESC><<B>>code<</B>> is the error or warning code.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Code</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=81 type="字符串" name="source">
+				<DESC><<B>>source<</B>> describes the origin of the error or warning.<LF>
+<LF>
+Right-click the <<B>>error in<</B>> control on the front panel and select <<B>>Explain Error<</B>> or <<B>>Explain Warning<</B>> from the shortcut menu for more information about the error.</DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT>Source</STEXT></LABEL></PART>
+				</PARTS>
+				<DEFAULT><SAME_AS_LABEL></DEFAULT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=85 type="TCP网络连接引用句柄" name="Connection ID out">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Connection ID out</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="Output String">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Output String</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name="Parameter Values">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Parameter Values</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=82 type="数组" name="AUXADC2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>AUXADC2</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="AUXADC1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>AUXADC1</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xita h7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xita h7</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Rh7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Rh7</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Yh7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Yh7</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xh7">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xh7</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xita h6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xita h6</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Rh6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Rh6</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Yh6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Yh6</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xh6">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xh6</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xita h5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xita h5</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Rh5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Rh5</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Yh5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Yh5</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xh5">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xh5</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xita h4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xita h4</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Rh4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Rh4</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Yh4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Yh4</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xh4">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xh4</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xita h3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xita h3</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Rh3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Rh3</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Yh3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Yh3</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xh3">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xh3</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xitah2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xitah2</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Rh2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Rh2</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Yh2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Yh2</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xh2">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xh2</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xita h1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xita h1</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Rh1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Rh1</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Yh1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Yh1</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xh1">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xh1</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Frequency">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Frequency</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="YNoise">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>YNoise</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="XNoise">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>XNoise</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Xita">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Xita</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="R">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>R</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>元素</STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="Y">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Y</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组" name="X">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>X</STEXT></LABEL></PART>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值" name="">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+							<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'></STEXT></LABEL></PART>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Timeout">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Timeout</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=82 type="数组" name="Total Date Array">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Total Date Array</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<CONTROL ID=80 type="数值" name="元素">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT>元素</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=80 type="数值" name="Buffer Count">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Buffer Count</STEXT></LABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=83 type="簇" name=" PLL&Overload">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=DLGFONT style='B' color=100000C> PLL&Overload</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<GROUPER>
+				<PARTS>
+				</PARTS></GROUPER>
+			<CONTROL ID=79 type="布尔" name="PLL Lock(1: External Lock)">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>PLL Lock(1: External Lock)</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+			<CONTROL ID=79 type="布尔" name="Input Overlaod">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=22 order=0 type="布尔文本"><MLABEL><STRINGS><STRING>关</STRING><STRING>开</STRING><STRING>关</STRING><STRING>开</STRING></STRINGS></MLABEL></PART>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Input Overlaod</STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=82 type="数组" name="Trig_Count">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'>Trig_Count</STEXT></LABEL></PART>
+		</PARTS>
+		<CONTENT>
+			<CONTROL ID=80 type="数值" name="">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+					<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT predef=SYSFONT style='B'></STEXT></LABEL></PART>
+				</PARTS>
+			</CONTROL>
+		</CONTENT>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="buffer">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT>buffer</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串" name="Read Buffer">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT></STEXT></LABEL></PART>
+			<PART ID=82 order=0 type="标题"><LABEL><STEXT><FONT style='B'>Read Buffer</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+</CONTENT>
+<BDCONTENT>
+	<NODE ID=47 type="Function" primID=20204547 primName="大于等于？">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=47 type="Function" primID=4E454C24 primName="字符串长度">
+		<DESC></DESC>
+	</NODE>
+	<NODE ID=62 type="Concatenate Strings">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=80 type="数值常量" name="y">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=202 type="Flat Sequence">
+		<DESC></DESC>
+		<NODE ID=289 type="Sequence Frame">
+			<DESC></DESC>
+			<BDCONTENT>
+				<CONTROL ID=80 type="数值常量" name="等待时间（毫秒）">
+					<DESC></DESC>
+					<TIP></TIP>
+					<PARTS>
+					</PARTS>
+				</CONTROL>
+				<NODE ID=47 type="Function" primID=54494157 primName="等待(ms)">
+					<DESC></DESC>
+				</NODE>
+			</BDCONTENT>
+		</NODE>
+	</NODE>
+	<NODE ID=44 type="Select">
+		<DESC></DESC>
+		<BDCONTENT>
+			<NODE ID=50 type="Global Variable">
+				<DESC></DESC>
+			</NODE>
+			<NODE ID=50 type="Global Variable">
+				<DESC></DESC>
+			</NODE>
+			<CONTROL ID=83 type="簇常量" name="Parameter Values">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=82 type="数组常量" name="AUXADC2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="AUXADC1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xita h7">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Rh7">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Yh7">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xh7">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xita h6">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Rh6">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Yh6">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xh6">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xita h5">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Rh5">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Yh5">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xh5">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xita h4">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Rh4">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Yh4">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xh4">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xita h3">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Rh3">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Yh3">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xh3">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xitah2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Rh2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Yh2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xh2">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xita h1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Rh1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Yh1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xh1">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Frequency">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="YNoise">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="XNoise">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Xita">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="R">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" name="元素">
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="Y">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+					<CONTROL ID=82 type="数组常量" name="X">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+						<CONTENT>
+							<CONTROL ID=80 type="数值常量" >
+								<DESC></DESC>
+								<TIP></TIP>
+								<PARTS>
+								</PARTS>
+							</CONTROL>
+						</CONTENT>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=83 type="簇常量" name=" PLL&Overload">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<GROUPER>
+						<PARTS>
+						</PARTS></GROUPER>
+					<CONTROL ID=79 type="布尔常量" name="Input Overlaod">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+					<CONTROL ID=79 type="布尔常量" name="PLL Lock(1: External Lock)">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组常量" name="Trig_Count">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值常量" >
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+			<CONTROL ID=82 type="数组常量" name="Total Data Array">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+				<CONTENT>
+					<CONTROL ID=80 type="数值常量" name="元素">
+						<DESC></DESC>
+						<TIP></TIP>
+						<PARTS>
+						</PARTS>
+					</CONTROL>
+				</CONTENT>
+			</CONTROL>
+		</BDCONTENT>
+		<BDCONTENT>
+			<NODE ID=50 type="Global Variable">
+				<DESC></DESC>
+			</NODE>
+			<NODE ID=47 type="Function" primID=4C505324 primName="搜索/拆分字符串">
+				<DESC></DESC>
+			</NODE>
+			<NODE ID=47 type="Function" primID=20385524 primName="字符串至字节数组转换">
+				<DESC></DESC>
+			</NODE>
+			<NODE ID=49 type="SubVI" subVIName="OE1311&OE1351_DATA Transmit.vi">
+				<DESC></DESC>
+			</NODE>
+			<CONTROL ID=80 type="数值常量" name="索引">
+				<DESC></DESC>
+				<TIP></TIP>
+				<PARTS>
+				</PARTS>
+			</CONTROL>
+			<NODE ID=68 type="Index Array">
+				<DESC></DESC>
+			</NODE>
+		</BDCONTENT>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Remote Mode">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>USB</STRING><STRING>RS232</STRING><STRING>GPIB</STRING><STRING>Ethernet</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=81 type="字符串常量" name="字符串">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=11 order=0 type="文本"><LABEL><STEXT>;</STEXT></LABEL></PART>
+		</PARTS>
+		<DEFAULT><SAME_AS_LABEL></DEFAULT>
+	</CONTROL>
+	<CONTROL ID=87 type="Enum" name="Command Type">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表常量" name="Opera">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Set</STRING><STRING>Query</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Command.vi">
+		<DESC></DESC>
+	</NODE>
+	<DESC></DESC>
+	<TIP></TIP>
+	<PARTS>
+	</PARTS>
+	<NODE ID=62 type="Concatenate Strings">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=80 type="数值常量" name="Number of bytes">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+		</PARTS>
+	</CONTROL>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+	<CONTROL ID=87 type="下拉列表常量" name="Control">
+		<DESC></DESC>
+		<TIP></TIP>
+		<PARTS>
+			<PART ID=12 order=0 type="下拉列表文本"><MLABEL><STRINGS><STRING>Write</STRING><STRING>Read</STRING></STRINGS></MLABEL></PART>
+		</PARTS>
+	</CONTROL>
+	<NODE ID=49 type="SubVI" subVIName="SSI_Control.vi">
+		<DESC></DESC>
+	</NODE>
+</BDCONTENT>
+</VI>
+
+
