@@ -414,6 +414,8 @@ public static class Oe1300Tcp
 
 public sealed class Oe1300TcpSession : IDisposable
 {
+    private static readonly byte[] RallCommandBytes = Encoding.ASCII.GetBytes(Oe1300Commands.QueryRall + "\r");
+
     private readonly TcpClient client;
     private readonly NetworkStream stream;
 
@@ -422,7 +424,10 @@ public sealed class Oe1300TcpSession : IDisposable
         client = new TcpClient
         {
             ReceiveTimeout = Oe1300Defaults.TcpReadTimeoutMs,
-            SendTimeout = Oe1300Defaults.TcpReadTimeoutMs
+            SendTimeout = Oe1300Defaults.TcpReadTimeoutMs,
+            NoDelay = true,
+            ReceiveBufferSize = Oe1300Defaults.TcpRallExpectedBytes,
+            SendBufferSize = 1024
         };
 
         var connectTask = client.ConnectAsync(host, port);
@@ -445,6 +450,11 @@ public sealed class Oe1300TcpSession : IDisposable
     {
         var payload = Encoding.ASCII.GetBytes(command + "\r");
         stream.Write(payload, 0, payload.Length);
+    }
+
+    public void SendRallCommand()
+    {
+        stream.Write(RallCommandBytes, 0, RallCommandBytes.Length);
     }
 
     public string QueryAsciiLine(string command, int maxBytes = Oe1300Defaults.TcpAsciiMaxBytes)
@@ -535,8 +545,11 @@ public sealed class Oe1300TcpSession : IDisposable
         }
 
         DrainAvailable();
-        SendAsciiCommand(Oe1300Commands.QueryRall);
-        Thread.Sleep(postWriteDelayMs);
+        SendRallCommand();
+        if (postWriteDelayMs > 0)
+        {
+            Thread.Sleep(postWriteDelayMs);
+        }
 
         var bytesReadTotal = 0;
         var started = Environment.TickCount64;

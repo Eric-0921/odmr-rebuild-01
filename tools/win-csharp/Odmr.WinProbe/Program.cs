@@ -622,6 +622,7 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
     var outDir = GetRequiredOption(options, "out-dir");
     var postWriteDelayMs = GetIntOption(options, "post-write-delay-ms", 5);
     var decodeInLoop = GetBoolOption(options, "decode-in-loop", false);
+    var writeArtifacts = GetBoolOption(options, "write-artifacts", true);
 
     if (durationSec <= 0)
     {
@@ -655,10 +656,14 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
     ulong? lastFrameMonotonicNs = null;
 
     using var oe = Oe1300Tcp.Open(host, port);
-    using var raw = new FileStream(rawPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 1024 * 1024);
-    using var index = new StreamWriter(
-        new FileStream(indexPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
-        new UTF8Encoding(false));
+    using var raw = writeArtifacts
+        ? new FileStream(rawPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 1024 * 1024)
+        : null;
+    using var index = writeArtifacts
+        ? new StreamWriter(
+            new FileStream(indexPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
+            new UTF8Encoding(false))
+        : null;
     var payload = new byte[Oe1300Defaults.TcpRallExpectedBytes];
 
     // Minimal OE1300 TCP collector hot path: write RALL?, wait, read-until-32768B,
@@ -678,11 +683,11 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
             }
 
             var monotonicNs = MonotonicNsSince(processStart);
-            var ts = UtcNowString();
-            raw.Write(payload, 0, bytesRead);
-            firstFrameTs ??= ts;
+            var ts = writeArtifacts ? UtcNowString() : string.Empty;
+            raw?.Write(payload, 0, bytesRead);
+            firstFrameTs ??= writeArtifacts ? ts : startedAt;
             firstFrameMonotonicNs ??= monotonicNs;
-            lastFrameTs = ts;
+            lastFrameTs = writeArtifacts ? ts : startedAt;
             lastFrameMonotonicNs = monotonicNs;
 
             if (decodeInLoop)
@@ -700,7 +705,10 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
                 }
             }
 
-            WriteFrameIndexRecordNoCounter(index, frameSeq, ts, monotonicNs, nextRawOffset, bytesRead);
+            if (index is not null)
+            {
+                WriteFrameIndexRecordNoCounter(index, frameSeq, ts, monotonicNs, nextRawOffset, bytesRead);
+            }
             nextRawOffset += bytesRead;
             frameSeq++;
             stats.FramesOk++;
@@ -717,25 +725,28 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
         }
     }
 
-    raw.Flush(true);
-    index.Flush();
+    raw?.Flush(true);
+    index?.Flush();
 
     var finishedAt = UtcNowString();
-    WriteWholeProbeSegment(
-        segmentsPath,
-        outDir,
-        "oe1300_tcp_demo",
-        "oe1300_tcp",
-        "raw/oe1300_tcp.rall",
-        firstFrameTs ?? startedAt,
-        lastFrameTs ?? finishedAt,
-        firstFrameMonotonicNs ?? 0,
-        lastFrameMonotonicNs ?? MonotonicNsSince(processStart),
-        nextRawOffset,
-        stats.FramesOk);
+    if (writeArtifacts)
+    {
+        WriteWholeProbeSegment(
+            segmentsPath,
+            outDir,
+            "oe1300_tcp_demo",
+            "oe1300_tcp",
+            "raw/oe1300_tcp.rall",
+            firstFrameTs ?? startedAt,
+            lastFrameTs ?? finishedAt,
+            firstFrameMonotonicNs ?? 0,
+            lastFrameMonotonicNs ?? MonotonicNsSince(processStart),
+            nextRawOffset,
+            stats.FramesOk);
+    }
 
     var elapsedMs = (long)(Stopwatch.GetElapsedTime(processStart).TotalMilliseconds);
-    var rawBytesWritten = new FileInfo(rawPath).Length;
+    var rawBytesWritten = writeArtifacts ? new FileInfo(rawPath).Length : stats.FramesOk * (long)Oe1300Defaults.TcpRallExpectedBytes;
     var meanFrameMs = stats.FramesOk > 0 ? elapsedMs / (double)stats.FramesOk : 0.0;
     var estimatedHz = meanFrameMs > 0 ? 1000.0 / meanFrameMs : 0.0;
     var summary = new
@@ -747,6 +758,7 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
         frame_bytes = Oe1300Defaults.TcpRallExpectedBytes,
         post_write_delay_ms = postWriteDelayMs,
         decode_in_loop = decodeInLoop,
+        write_artifacts = writeArtifacts,
         read_timeout_ms = Oe1300Defaults.TcpReadTimeoutMs,
         duration_sec = durationSec,
         started_at = startedAt,
@@ -763,9 +775,9 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
         raw_size_matches_frames_ok = rawBytesWritten == stats.FramesOk * Oe1300Defaults.TcpRallExpectedBytes,
         mean_frame_ms = meanFrameMs,
         estimated_hz = estimatedHz,
-        raw_path = PathRelative(outDir, rawPath),
-        index_path = PathRelative(outDir, indexPath),
-        segments_path = PathRelative(outDir, segmentsPath)
+        raw_path = writeArtifacts ? PathRelative(outDir, rawPath) : null,
+        index_path = writeArtifacts ? PathRelative(outDir, indexPath) : null,
+        segments_path = writeArtifacts ? PathRelative(outDir, segmentsPath) : null
     };
 
     File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
@@ -926,7 +938,7 @@ static void PrintUsage()
       Odmr.WinProbe oe1300-rall --port <COMx> [--baud 115200] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
       Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
-      Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--decode-in-loop true|false] --duration-sec 60 --out-dir <dir>
+      Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--decode-in-loop true|false] [--write-artifacts true|false] --duration-sec 60 --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
