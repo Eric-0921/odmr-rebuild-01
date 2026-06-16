@@ -1,11 +1,14 @@
-# OE1300/OE1351 Operational Notes
+# OE1300 系列（OE1301/OE1351）运行事实
 
 > 来源：
 > - `docs/equipment_manual/oe1300/clean/oe1300_manual_clean.md`
-> - 真机探测报告 `docs/equipment_manual/oe1300/clean/probe_reports/20260616_serial_probe.md`
+> - 真机探测报告 `docs/equipment_manual/oe1300/clean/probe_reports/20260616_serial_probe.md`（OE1351）
+> - 真机探测报告 `docs/equipment_manual/oe1300/clean/probe_reports/20260616_serial_probe_oe1301.md`（OE1301 完整版）
 > - 真机探测报告 `docs/equipment_manual/oe1300/clean/probe_reports/20260616_lan_probe.md`
 >
-> 设备实际身份：`SSI LIA-OE1351, SN:L2092228, Version:V1.3230310`
+> 已验证设备：
+> - `OE1351`（SN:L2092228，固件 `V1.3230310`）
+> - `OE1301`（SN:L2283261，固件 `V1.4h4-1.02-1.4.0.23B`）
 
 ---
 
@@ -15,106 +18,181 @@
 - 多条命令可用 `;` 分隔，但第一版建议保持简短、单条发送。
 - 默认串口波特率：`115200`（可改 `9600` / `921600`）。
 - 校验位：无；数据位：8；停止位：1。
-- **实际响应延迟约 20–80 ms/命令**；早期探测报告的 1.0–1.5 s 是读取策略等超时的假象。`*RST` 触发全系统重启，耗时约 3 s。网络配置命令当前固件下超时约 3 s。
+- **实际响应延迟约 20–80 ms/命令**；早期探测报告的 1.0–1.5 s 是读取策略等超时的假象。
+- `*RST` 触发全系统重启，耗时约 3 s；`RSET` / `OUTX` 也会触发 Boot Loader 输出。**正常使用避免发送**。
 - 串口接收缓冲区限制为 64 byte（手册 4.3.2 节），发送长命令或多条命令时需注意。
 
 ---
 
 ## Transport options
 
-### 串口（当前唯一可用的连接方式）
+### 串口（当前唯一可用的 ODMR 采集方式）
+
+#### OE1351（固件 V1.3230310）
 
 - 已验证可用的查询命令（26 条）：`*IDN?`、`*PLL?`、`ISRC?`、`ICPL?`、`IRNG?`、`FMOD?`、`FREQ?`、`PHAS?`、`RSLP?`、`OFLT?`、`OFSL?`、`SYNC?`、`HARM?`、`DMOD?`、`DARB?`、`BAUD?`、`OVLD?`、`RALL?`、`CAUX?`、`SWVT?`、`SLVL?`、`OAUX?`、`COUT?`、`COFP?`、`CEXP?`、`TEMP?`。
 - 单命令延迟约 20–80 ms；100 次连续 `RALL?` 实测平均吞吐 **~18 Hz**。
-- 超时/不支持的命令：所有 set 命令（`ISRC 0`、`FREQ 1000` 等）、`IGND?`、`RMOD?`、`INOV?`、`GNOV?`、`SNAP?`、`OUTP?`、全部 D 后缀命令、大量高级/未公开命令。
-- **关键限制**：当前固件串口基本只读，无法通过串口修改运行参数。
-- 第一版若仅支持串口，OE1300/1351 只能作为**固定配置的只读观察者**。
+- **所有 set 命令均无响应且不生效**（`ISRC 0`、`FREQ 1000`、`OFLT 0.01` 等）。
+- `IGND?`、`RMOD?`、`SNAP?`、`OUTP?`、全部 D 后缀命令、大量高级命令超时。
+- **关键限制**：串口基本只读，无法通过串口修改运行参数。
 
-### 网口（当前未调通）
+#### OE1301（固件 V1.4h4...）
 
-> 更完整的 LabVIEW 驱动协议细节见 `docs/equipment_manual/oe1300/clean/oe1351_labview_ethernet_reference.md`。
+- 已验证可用的查询命令（49 条），包括：
+  - 基础：`*IDN?`、`*PLL?`、`*PID? 0,1`、`BAUD?`、`TEMP?`、`OVLD?`
+  - 输入：`ISRC?`、`ICPL?`、`IRNG?`、`INOV?`、`GNOV?`
+  - 参考/相位：`FMOD?`、`FREQ?`、`PHAS?`/`PHAS? 0`、`RSLP?`、`HARM?`/`HARM? 0`
+  - 解调器：`DMOD?`/`DMOD? 0`、`DARB?`/`DARB? 0`
+  - 滤波：`OFLT?`、`OFSL?`、`SYNC?`、`SENS?`
+  - 输出：`SWVT?`、`SLVL?`、`COUT? 0`、`CAUX?`/`CAUX? 0`、`COFP?`/`COFP? 0`、`CEXP?`/`CEXP? 0`、`OAUX?`/`OAUX? 0`、`OUTP? 0`
+  - 数据：`RALL?`、`SNAP? 0,1`、`SNAP? 0,1,2,3`
+  - 网络：`NMOD?`、`NIPA?`、`NSMA?`、`NGWA?`、`NMAC?`
+  - 其他：`AGAN?`、`ARNG?`
+- **set 命令大部分静默生效**（空响应，无 ACK），必须读回验证。
+- 连续 `RALL?` 实测吞吐 **~16.6 Hz**。
 
-手册第 7.2 节与 NetAssist 截图确认：
+### 网口（当前不适合 ODMR 主采集）
 
-- **协议**：TCP Client
-- **手册默认 IP**：`192.168.1.1`
-- **LabVIEW 驱动默认网关**：`192.168.0.1`（暗示设备默认可能是 `192.168.0.1`）
-- **固定端口**：`10001`
-- **PC 端推荐配置**：
-  - 方案 A（手册）：IP `192.168.1.10/24`，网关 `192.168.1.1`
-  - 方案 B（LabVIEW 驱动）：IP `192.168.0.10/24`，网关 `192.168.0.1`
+#### OE1301
 
-真机实测结果：
+- TCP Client 到 `192.168.1.1:10001` **可连接**；ping 可达，约 0.5 ms。
+- 文本查询（`*IDN?`、`FREQ?`、`*PLL?`）返回正常 ASCII。
+- **致命问题**：`RALL?` 和 `SNAP?` 通过 TCP 返回二进制数据（`RALL?` 可读出 32768 B，`SNAP?` 返回 4096 B），内容无意义/重复，无法解析为 37 字段 CSV。
+- 对照 LabVIEW 驱动：`Ethernet__Query_Data.vi` 按 32768 B 读取并交给 `DATA Transmit.vi` 以 **400 B/帧、8 B 小端 double、固定偏移** 解析；OE1301 的 32768 B 缓冲区按该格式解析仍得到无意义数值，且尾部残留 `*IDN?` 字符串，说明当前固件网口数据路径不可用。
+- **环境限制说明**：当前探测基于 Mac 裸 TCP socket。原厂 LabVIEW 驱动依赖 Windows NI-VISA，Mac 没有 NI-VISA 运行时；读终止符、缓冲策略可能与原厂驱动不同。要排除“Mac 环境导致”这一变量，需在 Windows + NI-VISA（C# 主栈）上复测。
+- 因此网口**不能替代串口**作为 ODMR 采集路径。
 
-- `ping 192.168.1.1` 100% 丢包；`ping 192.168.0.1` 同样 100% 丢包。
-- `nc -vz 192.168.1.1 10001` 与 `nc -vz 192.168.0.1 10001` 均连接失败。
-- ARP 对两个 IP 均显示 `(incomplete)`。
-- ARP 表显示 `(incomplete)`，设备未在数据链路层响应。
-- 通过串口发送 `NMOD 0` / `NIPA ...` / `NSMA ...` / `NGWA ...` 后，仅 `NMOD 0` 返回 `"Setting Ethernet Mode Success!"`（约 6 s）；其他网络命令在 10 s 内均无响应。
-- 原厂 LabVIEW 驱动显示网络配置命令应串接后一次性发送，并等待 **25 s**，但我们延长到 35 s 的查询仍超时。
+#### OE1351
 
-**推断**：
-
-1. 当前固件 `V1.3230310` 的网口功能可能与手册示例中的 `V1.4e-1.01-1.2.0.22A` 不同。
-2. 串口网络配置命令中**只有 `NMOD` 有响应**；`NIPA`/`NSMA`/`NGWA`/`NMAC` 均无响应，说明当前固件的网口配置命令集不完整或存在 bug。
-3. 手册第 7.2 节和 LabVIEW 驱动都假设设备已处于默认 IP 状态（`192.168.1.1` 或 `192.168.0.1`），未提供从串口启用网口的可靠流程。
+- 无论 Mac 配置 `192.168.0.0/24` 还是 `192.168.1.0/24`，设备均无 ARP/MAC 响应。
+- 串口网络配置命令中仅 `NMOD 0` 返回 `"Setting Ethernet Mode Success!"`，其余超时。
+- 第一版放弃网口。
 
 ---
 
 ## `RALL?` acquisition rule
 
-- `RALL?` 返回 **37 个 ASCII 浮点数的 CSV 字符串**，以 `\r` 结尾。
+- **串口**：返回 **37 个 ASCII 浮点数的 CSV 字符串**，以 `\r` 结束，长度约 520–560 B。
+- **网口（OE1301）**：返回固定长度二进制数据，当前固件不可解析。
 - 字段顺序：0=X, 1=Y, 2=R, 3=θ, 4=XD1, 5=YD1, 6=RD1, 7=θD1, ..., 34=Frequency, 35=AUX-IN1, 36=AUX-IN2。
 - 与 OE1022D 的 12288 B 二进制帧完全不同；**不可复用 OE1022D 的采集路径**。
 - 目前未发现类似 OE1022D `payload[12287]` 的 packet counter。若需连续性审计，需通过时间戳或序列号在应用层实现。
-- 由于串口响应慢，连续 `RALL?` 的最小周期预计 > 1 s。
+- 连续 `RALL?` 实测吞吐约 **16–18 Hz**。
 
 ---
 
 ## First-version role
 
-OE1300/OE1351 在第一版中应被视为：
+### OE1351
 
-- 中低速测量源（若仅支持串口，连续 `RALL?` 约 18 Hz）。
-- 固定配置的观察者，不参与每点复杂重配置。
+- **固定配置的只读观察者**。
+- 实验前通过前面板或 Console 软件配置参数。
+- C# runtime 只发查询命令（主要是 `RALL?`）。
+
+### OE1301
+
+- **可配置的串口采集源**。
+- Runtime 可在 point 边界下发允许的 set 命令，并读回验证。
+- 无法串口修改的参数（`RMOD`）仍需人工预配置。
 
 与 OE1022D 的关键差异：
 
-- OE1022D：二进制 `RALL?` 帧，可高速连续采集。
-- OE1300/1351：ASCII CSV `RALL?`，采集速度受串口吞吐限制，但 18 Hz 已可满足多数 ODMR 场景。
+- OE1022D：二进制 `RALL?` 帧，可高速连续采集，含 packet counter。
+- OE1300/1351：ASCII CSV `RALL?`（串口），采集速度受串口吞吐限制，但 16–18 Hz 已可满足多数 ODMR 场景。
 
 ---
 
 ## Configuration stance
 
+### OE1351
+
 当前固件串口基本只读，因此第一版**不通过 runtime 下发配置命令**。设备参数应通过前面板或 Console 软件在实验前设置好。
 
-第一版只读取固定配置面：
+### OE1301
 
-- 参考源 / 频率 (`FMOD?` / `FREQ?`)
-- 输入耦合 / 范围 (`ICPL?` / `IRNG?`)
-- 滤波器时间常数 / 陡降 / 同步滤波 (`OFLT?` / `OFSL?` / `SYNC?`)
-- 输出 / 辅助输出状态（如 `OAUX?`、`COUT?` 等）
+允许 runtime 下发的参数（set 后读回验证）：
 
-超出此范围的配置（PID、网口参数设置、扫频等）暂不入第一版。
+```text
+ISRC n
+ICPL n
+IRNG n
+FMOD n
+PHAS i,x
+RSLP n
+HARM i,j
+DMOD i,j
+DARB i,f
+SENS n
+OFLT x
+OFSL n
+SWVT n
+SLVL x
+COUT i,j
+CAUX i,x
+COFP i,x
+CEXP i,j
+FREQ f        # 仅在 FMOD=1 内部参考模式时生效
+```
+
+必须在实验前人工配置或当前固件不支持的参数：
+
+```text
+RMOD n        # 串口 set 不生效
+SYNC n        # 受 OFSL/频率限制，可能不生效
+FREQ f        # 在 FMOD≠1 时不生效
+```
+
+---
+
+## First-version command whitelist
+
+### 查询（OE1301）
+
+```text
+*IDN?   *PLL?   *PID? i,j
+ISRC?   ICPL?   IRNG?   INOV?   GNOV?
+FMOD?   FREQ?   PHAS?   PHAS? i   RSLP?   HARM?   HARM? i
+DMOD?   DMOD? i   DARB?   DARB? i
+SENS?   OFLT?   OFSL?   SYNC?
+SWVT?   SLVL?   COUT? i   CAUX?   CAUX? i   COFP?   COFP? i
+CEXP?   CEXP? i   OAUX?   OAUX? i   OUTP? i
+RALL?   SNAP? i,j   SNAP? i,j,k,l
+OVLD?   TEMP?   BAUD?
+NMOD?   NIPA?   NSMA?   NGWA?   NMAC?
+```
+
+### 禁用 / 不存在的命令
+
+```text
+*RST        # 会触发 3 s 重启
+RSET        # 同样触发重启 / Boot Loader 输出
+OUTX        # 触发 Boot Loader 输出
+BAUD set    # 改变波特率，风险高
+所有 D-后缀查询（ISRCD? / FREQD? / OFLTD? ...）
+IGND? / ILIN?              # 手册有但设备不支持
+SWPT? / SLLM? / SULM? / SSLL? / SSLG? / STLM? / SWRM?
+SVLL? / SVUL? / SVSL? / SVSG? / SVTM? / SVRM?
+SPED? / SRAT? / SLEN? / SSLE? / STRG? / SPRM? / STRD? / PAUS? / SPTS? / TRCA?
+RSTU? / INHZ? / DEQU? / SADD? / CSPE?
+EQCD? / EQCS? / FPOP? / OEXP?
+ARSV? / ASCL? / APHS?
+ALRM? / KCLK? / OVRM? / PORT? / DHCP?
+```
 
 ---
 
 ## Non-goals for first version
 
-- **不通过串口修改任何设备参数**（当前固件 set 命令无响应）。
-- 不尝试通过串口配置网口参数（已验证不可靠）。
-- 不尝试把 OE1300/1351 的所有面板功能都暴露为命令。
+- 不通过网口做 `RALL?` / `SNAP?` 采集（OE1301 TCP 返回二进制乱码）。
+- 不实现全部 D 后缀命令、扫频、示波器/FFT 相关高级命令。
+- OE1351 不通过串口修改任何设备参数。
 - 不在热路径中加入 parser、retry、deadline 等额外逻辑（保持与串口响应特性匹配即可）。
 
 ---
 
 ## Open questions
 
-1. ~~网口功能是否可以通过 `*RST` 恢复出厂默认后启用？~~ 已验证：`*RST` 会触发 Zynq 全系统重启，但重启后网口仍无响应，串口网络配置命令仍超时。
-2. ~~设备默认 IP 是否为 `192.168.0.1`（LabVIEW 驱动）而非 `192.168.1.1`（手册）？~~ 已验证：两个 IP 均无响应。
-3. 当前固件 `V1.3230310` 的网口功能是否完整？是否需要厂商升级？
-4. 在仅支持串口的情况下，18 Hz 采样率是否满足 ODMR 实验需求？
-2. 固件 `V1.3230310` 的网口功能是否完整？是否需要厂商升级？
-3. 是否存在未公开命令用于启用/保存网络参数？
-4. `RALL?` 在网口模式下是否能以更高频率返回？（当前因网口未通而无法验证。）
+1. OE1301 的 `RMOD` 是否被前面板锁定？是否存在解锁命令？
+2. OE1301 网口 `RALL?` 二进制格式含义是什么？是否与某个 LabVIEW VI 解析表对应？
+   - 已对照 `OE1311&OE1351_DATA Transmit.vi`：LabVIEW 期望 **400 B/帧、50×8 B 小端 double**，固定偏移提取 37 字段；OE1301 实际 32768 B 缓冲区不符合该格式，故不是同一协议，当前固件网口数据路径不可用。
+3. OE1351 是否可通过升级固件获得与 OE1301 类似的 set 命令支持？
