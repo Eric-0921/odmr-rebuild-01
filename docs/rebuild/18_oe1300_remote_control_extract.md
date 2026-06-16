@@ -186,3 +186,151 @@ UART 协议（文档说明）：
 - `OAUX ? i`：`i=0` AUX-IN1，`i=1` AUX-IN2，返回电压值（V）。
 - `OVLD ?`：`0` 无 ADC overload，`1` 有 overflow，建议伴随信号幅值/输入量程调整。
 - `*PLL ?`：`0` 未锁或内部参考，`1` 锁定。
+
+## 6. OE1311/OE1351 网口 `RALL` 二进制包结论（基于原厂 LabVIEW 导出）
+
+本节不是手册原文，而是基于以下材料交叉确认后的实现结论：
+
+- `reverse_application/oe1351-labview/OUTPUT-ssi_oe1351/OE1311&OE1351__Ethernet__Query_Data/*`
+- `reverse_application/oe1351-labview/OUTPUT-ssi_oe1351/OE1311&OE1351__DATA_Transmit/*`
+- `reverse_application/oe1351-labview/OUTPUT-ssi_oe1351/OE1311&OE1351__Data_Index/*`
+- `reverse_application/oe1351-labview/OUTPUT-ssi_oe1351/OE1311&OE1351__Query_PLL&Overload/*`
+- `reverse_application/oe1351-labview/OUTPUT-ssi_oe1351/OE1311&OE1351__RALL_Adressctl/*`
+- `reverse_application/oe1351-labview/OUTPUT-ssi_oe1351/Example__OE1311&OE1351_Trig_in/*`
+- `Downloads/Convert to Big-Endian.txt`
+
+### 6.1 网口查询热路径
+
+原厂 LabVIEW 的网口查询路径可概括为：
+
+- 发送 `RALL?\r`
+- 等待约 `5 ms`
+- 循环 `TCP Read 32768`
+- 缓冲长度达到 `>= 32767` 后停止
+- 把整块 buffer 交给 `OE1311&OE1351_DATA Transmit.vi`
+
+这说明：
+
+- 网口 `RALL` 不是串口那种逗号分隔 ASCII 返回；
+- 它是固定上限长度的大块二进制响应；
+- 采样热路径本身非常简单，不依赖复杂重试或逐字段查询。
+
+### 6.2 主数据区与附加状态区
+
+`OE1311&OE1351_DATA Transmit.vi` 直接显示：
+
+- 前 `29600 B` 被当作主采样数据区；
+- 该区域按 `74` 组切分；
+- 每组 `400 B`；
+- 主数据区之外，LabVIEW 还从固定偏移读取附加状态：
+  - `29990` 附近 `2 B` -> `PLL&Overload`
+  - `29997` 附近 `1 B` -> `Trig_Count`
+
+当前已确认：
+
+- `37` 个主参数全部在主数据区内；
+- `PLL/Overload` 与 `Trig_Count` 不属于这 `37` 个主参数序列，而是附加状态字段；
+- `29600 B` 之后到包尾的其余保留区暂未完全表格化，但这不阻碍主采样数据解码。
+
+### 6.3 主参数顺序与串口/手册完全对齐
+
+`OE1311&OE1351_Data Index.vi` 给出的参数顺序为：
+
+`X, Y, R, θ, XD1, YD1, RD1, θD1, XD2, YD2, RD2, θD2, XD3, YD3, RD3, θD3, XD4, YD4, RD4, θD4, XD5, YD5, RD5, θD5, XD6, YD6, RD6, θD6, XD7, YD7, RD7, θD7, X-Noise, Y-Noise, Frequency, AUX-IN1, AUX-IN2`
+
+这与手册中的串口 `RALL?` 参数表一一对应。
+
+LabVIEW 图中的命名风格略有不同，但语义相同：
+
+- `θ` = `Xita`
+- `XDn` = `Xhn`
+- `YDn` = `Yhn`
+- `RDn` = `Rhn`
+- `θDn` = `Xita hn`
+- `AUX-IN1` = `AUXADC1`
+- `AUX-IN2` = `AUXADC2`
+
+因此，对 OE1311/OE1351 来说可以认为：
+
+- 串口 `RALL?` 与网口 `RALL` 的主字段集合相同；
+- 顺序相同；
+- 区别在于封装形式不同：串口是 ASCII 单值序列，网口是二进制批量采样块；
+- 网口额外携带状态字段 `PLL&Overload` 与 `Trig_Count`。
+
+### 6.4 字节序结论
+
+`Convert to Big-Endian.vi` 的作用不是“单纯声明类型为 big-endian”，而是：
+
+- 输入 `U8[]`
+- 按标量字宽分块（`U8/U16/U32/U64`）
+- 对每个块执行字节倒序
+- 再拼回 `U8[]`
+
+结合真实抓包结果，当前可以把网口 `RALL` 采样区的字节序语义固定为：
+
+- 设备输出的 8 字节采样标量不能直接按主机 little-endian `double` 解释；
+- LabVIEW 侧会先做按 8 字节块的字节翻转；
+- 翻转后再按 `double` 解释，才能得到物理合理的采样值；
+- 在 C# 中，等价实现是直接按 big-endian `double` 读取，或先做 8 字节翻转再按 little-endian 读取。
+
+## 7. 采样率语义：`RALL?` 查询频率不等于解析后样本频率
+
+这是 OE1300 与 OE1022D 最需要分开的地方。
+
+### 7.1 OE1022D 的“采样点”定义
+
+当前仓库中，OE1022D 的事实语义已经冻结为：
+
+- collector 热路径：`write RALL? -> sleep 30ms -> exact read 12288B -> 下一轮`
+- `payload[12287]` 是 `device_packet_counter`
+- 设备内部结果窗口按约 `50 ms` 更新
+
+因此 OE1022D 里要区分：
+
+- `RALL?` 主机查询频率
+- 设备内部新窗口到达频率
+
+如果主机查询得比设备窗口更新更快，会读到重复窗口：
+
+- `device_packet_counter delta = 0`：重复窗口，不是丢包
+- `delta = 1`：新窗口连续到达
+- `delta > 1`：疑似漏设备窗口
+
+所以在 OE1022D 中，一个 point 的有效数据更接近：
+
+- `segment` 时间窗内的 `unique device windows`
+
+而不是：
+
+- 单纯的主机 `RALL?` 次数
+
+### 7.2 OE1300 的“采样点”定义
+
+OE1311/OE1351 网口 `RALL` 不同。  
+一次网口 `RALL` 返回的不是一个时刻的单值，而是一整块批量采样数据。
+
+当前基于 LabVIEW `DATA Transmit` 与实测 decode，可先固定这一点：
+
+- 一次 `RALL` 查询会返回 `37` 个参数的批量样本；
+- 因而 `RALL?` 查询频率只是“主机多久拿一块数据”；
+- 真正的每参数有效采样率应按“每块解出多少点”乘以查询频率计算。
+
+现阶段调试结论可写成：
+
+- `effective_per_parameter_sample_hz = rall_query_hz * samples_per_parameter_per_rall`
+
+在当前 LabVIEW 对齐 demo 中，已按每参数 `100` 点进行验证，因此：
+
+- 若 `RALL` 查询频率约为 `64 Hz`
+- 则每参数的解析后有效采样率约为 `6400 Hz`
+
+因此，OE1300 的 point 定义不应照搬 OE1022D 的“一个 `RALL` = 一个设备窗口”思路，而应改为：
+
+- `1 point = point segment 时间窗内的已解码参数样本序列`
+
+也就是说，对 OE1300 来说，后续 collector/demo 的重点指标应是：
+
+- 每次 `RALL` 能稳定解出多少每参数样本；
+- point 窗口内累计得到多少已解码样本；
+- 解码后样本是否连续、是否存在状态异常；
+- 主机 `RALL` 频率只作为吞吐指标，不应直接当作最终采样率。
