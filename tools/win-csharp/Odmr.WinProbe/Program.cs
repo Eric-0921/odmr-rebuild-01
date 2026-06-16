@@ -621,6 +621,7 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
     var durationSec = GetIntOption(options, "duration-sec", 0);
     var outDir = GetRequiredOption(options, "out-dir");
     var postWriteDelayMs = GetIntOption(options, "post-write-delay-ms", 5);
+    var decodeInLoop = GetBoolOption(options, "decode-in-loop", false);
 
     if (durationSec <= 0)
     {
@@ -646,6 +647,8 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
     var nextRawOffset = 0L;
     var frameSeq = 0L;
     var stats = new ProbeStats();
+    var decodeFramesOk = 0L;
+    var decodeFailures = 0L;
     string? firstFrameTs = null;
     string? lastFrameTs = null;
     ulong? firstFrameMonotonicNs = null;
@@ -681,6 +684,21 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
             firstFrameMonotonicNs ??= monotonicNs;
             lastFrameTs = ts;
             lastFrameMonotonicNs = monotonicNs;
+
+            if (decodeInLoop)
+            {
+                try
+                {
+                    _ = Oe1300Parsers.DecodeTcpRall(payload);
+                    decodeFramesOk++;
+                }
+                catch
+                {
+                    decodeFailures++;
+                    stats.ReadErrors++;
+                    continue;
+                }
+            }
 
             WriteFrameIndexRecordNoCounter(index, frameSeq, ts, monotonicNs, nextRawOffset, bytesRead);
             nextRawOffset += bytesRead;
@@ -728,6 +746,7 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
         port,
         frame_bytes = Oe1300Defaults.TcpRallExpectedBytes,
         post_write_delay_ms = postWriteDelayMs,
+        decode_in_loop = decodeInLoop,
         read_timeout_ms = Oe1300Defaults.TcpReadTimeoutMs,
         duration_sec = durationSec,
         started_at = startedAt,
@@ -738,6 +757,8 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
         read_errors = stats.ReadErrors,
         timeout_count = stats.TimeoutCount,
         raw_len_bad_count = stats.RawLenBadCount,
+        decode_frames_ok = decodeFramesOk,
+        decode_failures = decodeFailures,
         raw_bytes_written = rawBytesWritten,
         raw_size_matches_frames_ok = rawBytesWritten == stats.FramesOk * Oe1300Defaults.TcpRallExpectedBytes,
         mean_frame_ms = meanFrameMs,
@@ -905,7 +926,7 @@ static void PrintUsage()
       Odmr.WinProbe oe1300-rall --port <COMx> [--baud 115200] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
       Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
-      Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] --duration-sec 60 --out-dir <dir>
+      Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--decode-in-loop true|false] --duration-sec 60 --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
