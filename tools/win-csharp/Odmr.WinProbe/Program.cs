@@ -35,6 +35,7 @@ static int Run(string[] args)
             "oe1300-net-rall" => Oe1300NetRall(options),
             "oe1300-net-collector-demo" => Oe1300NetCollectorDemo(options),
             "oe1300-net-outp-demo" => Oe1300NetOutpDemo(options),
+            "oe1300-net-ascii-demo" => Oe1300NetAsciiDemo(options),
             "oe1300-net-raw-analyze" => Oe1300NetRawAnalyze(options),
             "smb-probe" => SmbProbe(options),
             "sweep-only-run" => SweepOnlyRunCommand(options),
@@ -1002,6 +1003,198 @@ static int Oe1300NetOutpDemo(IReadOnlyDictionary<string, string> options)
     return errors == 0 ? 0 : 2;
 }
 
+static int Oe1300NetAsciiDemo(IReadOnlyDictionary<string, string> options)
+{
+    var host = GetOption(options, "host", Oe1300Defaults.Host);
+    var port = GetIntOption(options, "port", Oe1300Defaults.TcpPort);
+    var mode = GetOption(options, "mode", "outp").Trim().ToLowerInvariant();
+    var paramIndex = GetIntOption(options, "param-index", 0);
+    var snapIndicesText = GetOption(options, "snap-indices", "0,1,2,3,34");
+    var durationSec = GetIntOption(options, "duration-sec", 0);
+    var outDir = GetRequiredOption(options, "out-dir");
+    var parseInLoop = GetBoolOption(options, "parse-in-loop", true);
+    var writeValues = GetBoolOption(options, "write-values", false);
+
+    if (durationSec <= 0)
+    {
+        return Fail("--duration-sec must be positive");
+    }
+
+    string command;
+    int expectedValueCount;
+    int[] parameterIndices;
+
+    switch (mode)
+    {
+        case "outp":
+            parameterIndices = [paramIndex];
+            expectedValueCount = 1;
+            command = Oe1300Commands.QueryOutput(paramIndex);
+            break;
+        case "snap":
+            parameterIndices = ParseIntList(snapIndicesText, "--snap-indices");
+            if (parameterIndices.Length == 0)
+            {
+                return Fail("--snap-indices must contain at least one parameter index");
+            }
+
+            expectedValueCount = parameterIndices.Length;
+            command = Oe1300Commands.QuerySnap(parameterIndices);
+            break;
+        default:
+            return Fail("--mode must be `outp` or `snap`");
+    }
+
+    Directory.CreateDirectory(outDir);
+    var valuesPath = Path.Combine(outDir, "values.csv");
+    var summaryPath = Path.Combine(outDir, "summary.json");
+    var startedAt = UtcNowString();
+    var processStart = Stopwatch.GetTimestamp();
+    var deadline = processStart + durationSec * Stopwatch.Frequency;
+    long samplesOk = 0;
+    long errors = 0;
+    long parseFailures = 0;
+    double? firstLatencyMs = null;
+    var warmLatencyMsSum = 0.0;
+    long warmLatencyCount = 0;
+    var firstValueMin = double.PositiveInfinity;
+    var firstValueMax = double.NegativeInfinity;
+    string? lastValueText = null;
+
+    using var oe = Oe1300Tcp.Open(host, port);
+    using var writer = writeValues
+        ? new StreamWriter(new FileStream(valuesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024), new UTF8Encoding(false))
+        : null;
+
+    if (writer is not null)
+    {
+        writer.Write("sample_index,monotonic_ns");
+        for (var i = 0; i < expectedValueCount; i++)
+        {
+            writer.Write(",value_");
+            writer.Write(i.ToString(CultureInfo.InvariantCulture));
+        }
+
+        writer.WriteLine();
+    }
+
+    while (Stopwatch.GetTimestamp() < deadline)
+    {
+        var readStart = Stopwatch.GetTimestamp();
+        try
+        {
+            var response = oe.QueryAsciiLine(command);
+            var latencyMs = Stopwatch.GetElapsedTime(readStart).TotalMilliseconds;
+            var monotonicNs = MonotonicNsSince(processStart);
+
+            if (firstLatencyMs is null)
+            {
+                firstLatencyMs = latencyMs;
+            }
+            else
+            {
+                warmLatencyMsSum += latencyMs;
+                warmLatencyCount++;
+            }
+
+            double[]? values = null;
+            if (parseInLoop || writer is not null)
+            {
+                values = ParseAsciiFloatList(response, expectedValueCount);
+            }
+
+            if (values is not null && values.Length > 0)
+            {
+                if (values[0] < firstValueMin)
+                {
+                    firstValueMin = values[0];
+                }
+
+                if (values[0] > firstValueMax)
+                {
+                    firstValueMax = values[0];
+                }
+            }
+
+            if (writer is not null)
+            {
+                if (values is null)
+                {
+                    values = ParseAsciiFloatList(response, expectedValueCount);
+                }
+
+                writer.Write(samplesOk.ToString(CultureInfo.InvariantCulture));
+                writer.Write(',');
+                writer.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+                foreach (var value in values)
+                {
+                    writer.Write(',');
+                    writer.Write(value.ToString("R", CultureInfo.InvariantCulture));
+                }
+
+                writer.WriteLine();
+            }
+
+            lastValueText = response;
+            samplesOk++;
+        }
+        catch (FormatException)
+        {
+            parseFailures++;
+            errors++;
+        }
+        catch (IOException)
+        {
+            errors++;
+        }
+        catch
+        {
+            errors++;
+        }
+    }
+
+    writer?.Flush();
+
+    var elapsedMs = (long)Stopwatch.GetElapsedTime(processStart).TotalMilliseconds;
+    var meanQueryMs = samplesOk > 0 ? elapsedMs / (double)samplesOk : 0.0;
+    var estimatedQueryHz = meanQueryMs > 0 ? 1000.0 / meanQueryMs : 0.0;
+    var warmMeanLatencyMs = warmLatencyCount > 0 ? warmLatencyMsSum / warmLatencyCount : firstLatencyMs ?? 0.0;
+    var warmQueryHz = warmMeanLatencyMs > 0 ? 1000.0 / warmMeanLatencyMs : 0.0;
+    var summary = new
+    {
+        command = "oe1300-net-ascii-demo",
+        transport = "tcp_ascii",
+        host,
+        port,
+        mode,
+        ascii_command = command,
+        param_index = mode == "outp" ? paramIndex : (int?)null,
+        snap_indices = mode == "snap" ? parameterIndices : null,
+        expected_value_count = expectedValueCount,
+        parse_in_loop = parseInLoop,
+        write_values = writeValues,
+        duration_sec = durationSec,
+        started_at = startedAt,
+        finished_at = UtcNowString(),
+        elapsed_ms = elapsedMs,
+        samples_ok = samplesOk,
+        errors,
+        parse_failures = parseFailures,
+        first_latency_ms = firstLatencyMs,
+        warm_mean_latency_ms = warmMeanLatencyMs,
+        warm_query_hz = warmQueryHz,
+        estimated_query_hz = estimatedQueryHz,
+        first_value_min = samplesOk > 0 && double.IsFinite(firstValueMin) ? firstValueMin : (double?)null,
+        first_value_max = samplesOk > 0 && double.IsFinite(firstValueMax) ? firstValueMax : (double?)null,
+        last_value_text = lastValueText,
+        values_path = writeValues ? PathRelative(outDir, valuesPath) : null
+    };
+
+    File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
+    Console.WriteLine($"oe1300-net-ascii-demo done: mode={mode}, samples_ok={samplesOk}, errors={errors}, warm_query_hz={warmQueryHz:0.###}, out_dir={outDir}");
+    return errors == 0 ? 0 : 2;
+}
+
 static Dictionary<string, string> ParseOptions(string[] args)
 {
     var options = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -1085,6 +1278,43 @@ static bool GetBoolOption(IReadOnlyDictionary<string, string> options, string ke
     }
 
     return parsed;
+}
+
+static int[] ParseIntList(string text, string optionName)
+{
+    if (string.IsNullOrWhiteSpace(text))
+    {
+        return [];
+    }
+
+    var parts = text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    var values = new int[parts.Length];
+    for (var i = 0; i < parts.Length; i++)
+    {
+        if (!int.TryParse(parts[i], NumberStyles.Integer, CultureInfo.InvariantCulture, out values[i]))
+        {
+            throw new ArgumentException($"{optionName} contains a non-integer value: {parts[i]}");
+        }
+    }
+
+    return values;
+}
+
+static double[] ParseAsciiFloatList(string response, int expectedCount)
+{
+    var fields = response.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+    if (fields.Length != expectedCount)
+    {
+        throw new FormatException($"ASCII response field count mismatch: expected {expectedCount}, actual={fields.Length}");
+    }
+
+    var values = new double[fields.Length];
+    for (var i = 0; i < fields.Length; i++)
+    {
+        values[i] = double.Parse(fields[i], CultureInfo.InvariantCulture);
+    }
+
+    return values;
 }
 
 static int Fail(string message)
@@ -1172,6 +1402,7 @@ static void PrintUsage()
       Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--decode-in-loop true|false] [--write-artifacts true|false] [--drain-before-write true|false] --duration-sec 60 --out-dir <dir>
       Odmr.WinProbe oe1300-net-outp-demo [--host 192.168.1.1] [--port 10001] [--param-index 0] [--write-values true|false] --duration-sec 10 --out-dir <dir>
+      Odmr.WinProbe oe1300-net-ascii-demo [--host 192.168.1.1] [--port 10001] [--mode outp|snap] [--param-index 0] [--snap-indices 0,1,2,3,34] [--parse-in-loop true|false] [--write-values true|false] --duration-sec 10 --out-dir <dir>
       Odmr.WinProbe oe1300-net-raw-analyze --raw <raw/oe1300_tcp.rall> [--frame-bytes 32768] [--max-frames 5000] [--duration-sec 60]
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>

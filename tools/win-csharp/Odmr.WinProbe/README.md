@@ -63,6 +63,8 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 0 --write-artifacts false --duration-sec 10 --out-dir runs/oe1300_net_collector_benchmark
 dotnet .\tools\win-csharp\Odmr.WinProbe\bin\Release\net8.0\Odmr.WinProbe.dll oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 0 --drain-before-write true --duration-sec 60 --out-dir D:\temp\oe1300_net_collector_release
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-outp-demo --host 192.168.1.1 --port 10001 --param-index 0 --duration-sec 10 --out-dir runs/oe1300_net_outp_demo
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-ascii-demo --host 192.168.1.1 --port 10001 --mode outp --param-index 0 --parse-in-loop true --duration-sec 10 --out-dir runs/oe1300_net_ascii_outp
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-ascii-demo --host 192.168.1.1 --port 10001 --mode snap --snap-indices 0,1,2,3,34 --parse-in-loop true --duration-sec 10 --out-dir runs/oe1300_net_ascii_snap
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-raw-analyze --raw runs/oe1300_net_collector_demo/raw/oe1300_tcp.rall --max-frames 5000 --duration-sec 60
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
@@ -117,6 +119,16 @@ ASCII float per query, and writes:
 
 This path is intentionally separate from the `RALL?` collector so device-layer
 fresh-query rate can be measured without the 32768 B binary block path.
+
+`oe1300-net-ascii-demo` is a unified TCP ASCII sampling benchmark. It supports:
+
+- `--mode outp` for single-parameter `OUTP? <index>`
+- `--mode snap` for multi-parameter `SNAP? i,j,...`
+- `--parse-in-loop true|false` to compare loop-internal parse overhead
+- `--write-values true|false` to compare CSV write overhead
+
+This is the recommended device-layer benchmark path when the goal is to reach
+or explain a 1 kHz sampling rate without involving the `RALL?` block collector.
 
 It writes:
 
