@@ -27,6 +27,7 @@ public static class Oe1300Defaults
     public const int TcpRallLabviewFramesPerParameter = 2;
     public const int TcpRallLabviewSamplesPerParameter = TcpRallLabviewSamplesPerFrame * TcpRallLabviewFramesPerParameter;
     public const int TcpRallStatusOffset = 29990;
+    public const int TcpRallStatusByteCount = 2;
     public const int TcpRallTrigCountOffset = 29997;
     public const int TcpRallAuxIn2Offset = 28432;
     public const int TcpRallAuxIn1Offset = 28656;
@@ -158,6 +159,7 @@ public sealed record Oe1300TcpRallCapture(
     [property: JsonPropertyName("total_bytes")] int TotalBytes,
     [property: JsonPropertyName("payload_bytes")] int PayloadBytes,
     [property: JsonPropertyName("frame_count")] int FrameCount,
+    [property: JsonPropertyName("status_hex")] string StatusHex,
     [property: JsonPropertyName("status_byte")] byte StatusByte,
     [property: JsonPropertyName("status_bit_0")] bool StatusBit0,
     [property: JsonPropertyName("status_bit_1")] bool StatusBit1,
@@ -196,6 +198,7 @@ public static class Oe1300Parsers
         }
 
         var statusByte = payload[Oe1300Defaults.TcpRallStatusOffset];
+        var statusHex = Convert.ToHexString(payload, Oe1300Defaults.TcpRallStatusOffset, Oe1300Defaults.TcpRallStatusByteCount).ToLowerInvariant();
         var trigCount = payload[Oe1300Defaults.TcpRallTrigCountOffset];
         var namedValues = DecodeTcpNamedValues(payload, frameSummaries);
 
@@ -203,6 +206,7 @@ public static class Oe1300Parsers
             payload.Length,
             Oe1300Defaults.TcpRallPayloadBytes,
             frameSummaries.Count,
+            statusHex,
             statusByte,
             (statusByte & 0x01) != 0,
             (statusByte & 0x02) != 0,

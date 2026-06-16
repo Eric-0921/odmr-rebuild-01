@@ -151,10 +151,13 @@ The summary reports both:
 
 It writes:
 
-- `raw/oe1300_tcp.rall`
-- `raw/oe1300_tcp.frames.idx.jsonl`
-- `segments.jsonl`
+- `parameter_values.csv` with one LabVIEW-style `Parameter Values` row per `RALL`
+- `preview_values.csv` for the selected preview parameter when `--write-values true`
 - `summary.json`
+
+For strict LabVIEW-style behavior, `--drain-before-write` now defaults to
+`false`. The pre-drain path should only be used as a socket-backlog diagnostic,
+not as the default collector behavior.
 
 `smb-probe` keeps the current Ethernet raw socket path and only sends:
 
