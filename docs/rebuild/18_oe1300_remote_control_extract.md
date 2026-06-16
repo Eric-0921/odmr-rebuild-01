@@ -215,6 +215,27 @@ UART 协议（文档说明）：
 - 它是固定上限长度的大块二进制响应；
 - 采样热路径本身非常简单，不依赖复杂重试或逐字段查询。
 
+当前在仓库中已经把这条路径收敛为 **不可改变的 collector/demo 基线**：
+
+```text
+write RALL?\r
+sleep 5 ms
+read until 32768 B
+decode current block
+append parsed values
+next round
+```
+
+这里的“不可改变”指的是：
+
+- 不加入额外的 `poll sleep`
+- 不在默认路径里做 `drain-before-write`
+- 不引入 first-byte deadline / frame deadline / zero-byte retry
+- 不拆成 `producer(raw pull) + consumer(parse)` 双线程
+- 不在默认验证路径里保留本地二进制 raw 文件
+
+原因不是代码风格，而是已经有过对比：一旦把这条路径复杂化，就会重新引入“主机查询速率高，但有效块率不清楚”的歧义，且会破坏与原厂 LabVIEW 行为的一一对应。
+
 ### 6.2 主数据区与附加状态区
 
 `OE1311&OE1351_DATA Transmit.vi` 直接显示：
@@ -273,6 +294,33 @@ LabVIEW 图中的命名风格略有不同，但语义相同：
 - 翻转后再按 `double` 解释，才能得到物理合理的采样值；
 - 在 C# 中，等价实现是直接按 big-endian `double` 读取，或先做 8 字节翻转再按 little-endian 读取。
 
+### 6.5 当前固定的解码口径
+
+当前仓库里对网口 `RALL` 的固定解码口径是：
+
+- 每块总读取长度：`32768 B`
+- 主采样区：前 `29600 B`
+- 主采样区切分：`74 x 400 B`
+- 主参数数目：`37`
+- 每参数样本数：`100`
+- 标量类型：`8 B double`
+- 字节序：按 big-endian `double` 解释
+- 附加状态：
+  - `status_hex` / `status_byte` 取自 `29990` 开始的 `2 B`
+  - `Trig_Count` 取自 `29997` 的 `1 B`
+
+当前默认落盘的不是 raw 二进制，而是两类解析后事实：
+
+- `parameter_values.csv`
+  - 每个 `RALL` 一行
+  - 保存 `status_hex`、`status_byte`、`trig_count`
+  - 以及 `37` 个参数在该块内的均值
+- `preview_values.csv`
+  - 仅在 `--write-values true` 时写出
+  - 保存选定参数在每个 `RALL` 内展开后的 `100` 个样本
+
+因此，当前验证链路是“直接处理并保存解析后原始事实”，而不是“先保留本地 raw 二进制再离线重放”。
+
 ## 7. 采样率语义：`RALL?` 查询频率不等于解析后样本频率
 
 这是 OE1300 与 OE1022D 最需要分开的地方。
@@ -319,10 +367,17 @@ OE1311/OE1351 网口 `RALL` 不同。
 
 - `effective_per_parameter_sample_hz = rall_query_hz * samples_per_parameter_per_rall`
 
-在当前 LabVIEW 对齐 demo 中，已按每参数 `100` 点进行验证，因此：
+在当前 LabVIEW 对齐 demo 中，虽然主机 `RALL` 查询频率约为 `64 Hz`，但真实抓到的大量相邻块是重复块，因此不能直接用：
 
-- 若 `RALL` 查询频率约为 `64 Hz`
-- 则每参数的解析后有效采样率约为 `6400 Hz`
+- `64 Hz * 100 samples_per_rall = 6400 Hz`
+
+来当作最终采样率真值。
+
+正确口径应改为：
+
+- `effective_per_parameter_sample_hz = unique_rall_block_hz * 100`
+
+其中 `unique_rall_block_hz` 指的是“内容真正变化的新块频率”。
 
 因此，OE1300 的 point 定义不应照搬 OE1022D 的“一个 `RALL` = 一个设备窗口”思路，而应改为：
 
@@ -334,3 +389,24 @@ OE1311/OE1351 网口 `RALL` 不同。
 - point 窗口内累计得到多少已解码样本；
 - 解码后样本是否连续、是否存在状态异常；
 - 主机 `RALL` 频率只作为吞吐指标，不应直接当作最终采样率。
+
+## 8. 当前实现边界：单线程、即时解码、不保留 raw
+
+当前 `tools/win-csharp/Odmr.WinProbe` 中保留的 `oe1300-net-labview-demo`，其真实实现边界已经固定如下：
+
+- 单线程 loop
+- 同一线程内完成：
+  - `RALL` 拉取
+  - 当前块解码
+  - 统计更新
+  - CSV 落盘
+- 不做 raw 二进制持久化
+- 不做双线程解耦
+- 不做 raw replay 路径
+
+也就是说，它和 OE1022D 当前 run-time collector 不同：
+
+- OE1022D：collector 热路径冻结为“只拉取 raw，不在 collector 线程里做字段解析”
+- OE1300 当前 demo：为了先把设备层采样事实跑通，采用“拉取后立即解析并保存解析后事实”的更直接路径
+
+这不是说双线程一定错误，而是当前阶段没有证据表明双线程能带来更高的有效采样率；相反，单线程、无 raw 持久化、直接保存解析后事实，已经能稳定复现约 `1 kHz/parameter` 的有效采样率，并且最接近原厂 LabVIEW 的设备层实现。
