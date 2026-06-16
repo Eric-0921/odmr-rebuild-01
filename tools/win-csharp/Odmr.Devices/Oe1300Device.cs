@@ -417,7 +417,9 @@ public sealed class Oe1300TcpSession : IDisposable
     private static readonly byte[] RallCommandBytes = Encoding.ASCII.GetBytes(Oe1300Commands.QueryRall + "\r");
 
     private readonly TcpClient client;
+    private readonly Socket socket;
     private readonly NetworkStream stream;
+    private readonly byte[] drainScratch = new byte[4096];
 
     public Oe1300TcpSession(string host, int port)
     {
@@ -443,6 +445,7 @@ public sealed class Oe1300TcpSession : IDisposable
             throw connectTask.Exception?.GetBaseException() ?? new IOException($"OE1300 TCP connect failed: host={host}, port={port}");
         }
 
+        socket = client.Client;
         stream = client.GetStream();
     }
 
@@ -519,11 +522,10 @@ public sealed class Oe1300TcpSession : IDisposable
     public byte[] QueryRallBinary(
         int expectedBytes = Oe1300Defaults.TcpRallExpectedBytes,
         int postWriteDelayMs = 5,
-        int idleBreakMs = 100,
-        int maxWaitMs = 1500)
+        bool drainBeforeWrite = true)
     {
         var payload = new byte[expectedBytes];
-        var bytesRead = ReadRallFrame(payload, expectedBytes, postWriteDelayMs, idleBreakMs, maxWaitMs);
+        var bytesRead = ReadRallFrame(payload, expectedBytes, postWriteDelayMs, drainBeforeWrite: drainBeforeWrite);
         if (bytesRead == payload.Length)
         {
             return payload;
@@ -536,15 +538,17 @@ public sealed class Oe1300TcpSession : IDisposable
         byte[] destination,
         int expectedBytes = Oe1300Defaults.TcpRallExpectedBytes,
         int postWriteDelayMs = 5,
-        int idleBreakMs = 100,
-        int maxWaitMs = 1500)
+        bool drainBeforeWrite = true)
     {
         if (destination.Length < expectedBytes)
         {
             throw new ArgumentException($"destination buffer too small: required={expectedBytes}, actual={destination.Length}", nameof(destination));
         }
 
-        DrainAvailable();
+        if (drainBeforeWrite)
+        {
+            DrainAvailable();
+        }
         SendRallCommand();
         if (postWriteDelayMs > 0)
         {
@@ -552,40 +556,26 @@ public sealed class Oe1300TcpSession : IDisposable
         }
 
         var bytesReadTotal = 0;
-        var started = Environment.TickCount64;
-        var lastDataAt = started;
-
-        while (Environment.TickCount64 - started < maxWaitMs)
+        while (bytesReadTotal < expectedBytes)
         {
             try
             {
-                var read = stream.Read(destination, bytesReadTotal, expectedBytes - bytesReadTotal);
-                if (read > 0)
-                {
-                    bytesReadTotal += read;
-                    lastDataAt = Environment.TickCount64;
-
-                    if (bytesReadTotal >= expectedBytes)
-                    {
-                        break;
-                    }
-
-                    continue;
-                }
-            }
-            catch (IOException)
-            {
-                if (bytesReadTotal > 0 && Environment.TickCount64 - lastDataAt >= idleBreakMs)
+                var read = socket.Receive(destination, bytesReadTotal, expectedBytes - bytesReadTotal, SocketFlags.None);
+                if (read <= 0)
                 {
                     break;
                 }
 
-                continue;
+                bytesReadTotal += read;
             }
-
-            if (bytesReadTotal > 0 && Environment.TickCount64 - lastDataAt >= idleBreakMs)
+            catch (SocketException)
             {
-                break;
+                if (bytesReadTotal > 0)
+                {
+                    break;
+                }
+
+                throw new IOException("empty OE1300 TCP RALL response");
             }
         }
 
@@ -605,15 +595,14 @@ public sealed class Oe1300TcpSession : IDisposable
 
     private void DrainAvailable()
     {
-        if (!stream.DataAvailable)
+        if (socket.Available <= 0)
         {
             return;
         }
 
-        var scratch = new byte[4096];
-        while (stream.DataAvailable)
+        while (socket.Available > 0)
         {
-            var read = stream.Read(scratch, 0, scratch.Length);
+            var read = socket.Receive(drainScratch, 0, Math.Min(drainScratch.Length, socket.Available), SocketFlags.None);
             if (read == 0)
             {
                 break;

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Ivi.Visa;
@@ -33,6 +34,7 @@ static int Run(string[] args)
             "oe1300-net-idn" => Oe1300NetIdn(options),
             "oe1300-net-rall" => Oe1300NetRall(options),
             "oe1300-net-collector-demo" => Oe1300NetCollectorDemo(options),
+            "oe1300-net-raw-analyze" => Oe1300NetRawAnalyze(options),
             "smb-probe" => SmbProbe(options),
             "sweep-only-run" => SweepOnlyRunCommand(options),
             "minimal-3point-run" => Minimal3PointRunCommand(options),
@@ -623,6 +625,7 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
     var postWriteDelayMs = GetIntOption(options, "post-write-delay-ms", 5);
     var decodeInLoop = GetBoolOption(options, "decode-in-loop", false);
     var writeArtifacts = GetBoolOption(options, "write-artifacts", true);
+    var drainBeforeWrite = GetBoolOption(options, "drain-before-write", false);
 
     if (durationSec <= 0)
     {
@@ -674,7 +677,11 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
 
         try
         {
-            var bytesRead = oe.ReadRallFrame(payload, Oe1300Defaults.TcpRallExpectedBytes, postWriteDelayMs);
+            var bytesRead = oe.ReadRallFrame(
+                payload,
+                Oe1300Defaults.TcpRallExpectedBytes,
+                postWriteDelayMs,
+                drainBeforeWrite: drainBeforeWrite);
             if (bytesRead != Oe1300Defaults.TcpRallExpectedBytes)
             {
                 stats.RawLenBadCount++;
@@ -759,6 +766,7 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
         post_write_delay_ms = postWriteDelayMs,
         decode_in_loop = decodeInLoop,
         write_artifacts = writeArtifacts,
+        drain_before_write = drainBeforeWrite,
         read_timeout_ms = Oe1300Defaults.TcpReadTimeoutMs,
         duration_sec = durationSec,
         started_at = startedAt,
@@ -783,6 +791,89 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
     File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
     Console.WriteLine($"oe1300-net-collector-demo done: frames_ok={stats.FramesOk}, timeouts={stats.TimeoutCount}, raw_len_bad={stats.RawLenBadCount}, estimated_hz={estimatedHz:0.###}, out_dir={outDir}");
     return stats.TimeoutCount == 0 && stats.RawLenBadCount == 0 ? 0 : 2;
+}
+
+static int Oe1300NetRawAnalyze(IReadOnlyDictionary<string, string> options)
+{
+    var rawPath = GetRequiredOption(options, "raw");
+    var frameBytes = GetIntOption(options, "frame-bytes", Oe1300Defaults.TcpRallExpectedBytes);
+    var maxFrames = GetIntOption(options, "max-frames", 0);
+    var durationSec = GetDoubleOption(options, "duration-sec", 0.0);
+
+    if (!File.Exists(rawPath))
+    {
+        return Fail($"raw file not found: {rawPath}");
+    }
+
+    if (frameBytes <= 0)
+    {
+        return Fail("--frame-bytes must be positive");
+    }
+
+    using var stream = new FileStream(rawPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1024 * 1024);
+    using var sha256 = SHA256.Create();
+    var payload = new byte[frameBytes];
+    string? previousHash = null;
+    long framesRead = 0;
+    long transitions = 0;
+    long adjacentUniqueRuns = 0;
+    var firstHashes = new List<string>(10);
+
+    while (true)
+    {
+        if (maxFrames > 0 && framesRead >= maxFrames)
+        {
+            break;
+        }
+
+        var bytesRead = stream.Read(payload, 0, payload.Length);
+        if (bytesRead == 0)
+        {
+            break;
+        }
+
+        if (bytesRead != payload.Length)
+        {
+            return Fail($"raw file tail is not a full OE1300 TCP frame: expected={payload.Length}, actual={bytesRead}, offset={stream.Position - bytesRead}");
+        }
+
+        framesRead++;
+        var hash = Convert.ToHexString(sha256.ComputeHash(payload));
+
+        if (firstHashes.Count < 10)
+        {
+            firstHashes.Add(hash[..16]);
+        }
+
+        if (previousHash is null)
+        {
+            adjacentUniqueRuns++;
+        }
+        else if (!string.Equals(previousHash, hash, StringComparison.Ordinal))
+        {
+            transitions++;
+            adjacentUniqueRuns++;
+        }
+
+        previousHash = hash;
+    }
+
+    var summary = new
+    {
+        command = "oe1300-net-raw-analyze",
+        raw_path = rawPath,
+        frame_bytes = frameBytes,
+        frames_read = framesRead,
+        transitions,
+        adjacent_unique_runs = adjacentUniqueRuns,
+        duration_sec = durationSec > 0 ? durationSec : (double?)null,
+        transition_hz = durationSec > 0 ? transitions / durationSec : (double?)null,
+        adjacent_unique_hz = durationSec > 0 ? adjacentUniqueRuns / durationSec : (double?)null,
+        first_hashes = firstHashes
+    };
+
+    Console.WriteLine(JsonSerializer.Serialize(summary, JsonOptions.Pretty));
+    return 0;
 }
 
 static Dictionary<string, string> ParseOptions(string[] args)
@@ -835,6 +926,21 @@ static int GetIntOption(IReadOnlyDictionary<string, string> options, string key,
     if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
     {
         throw new ArgumentException($"--{key} must be an integer");
+    }
+
+    return parsed;
+}
+
+static double GetDoubleOption(IReadOnlyDictionary<string, string> options, string key, double defaultValue)
+{
+    if (!options.TryGetValue(key, out var value))
+    {
+        return defaultValue;
+    }
+
+    if (!double.TryParse(value, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out var parsed))
+    {
+        throw new ArgumentException($"--{key} must be a number");
     }
 
     return parsed;
@@ -938,7 +1044,8 @@ static void PrintUsage()
       Odmr.WinProbe oe1300-rall --port <COMx> [--baud 115200] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
       Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
-      Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--decode-in-loop true|false] [--write-artifacts true|false] --duration-sec 60 --out-dir <dir>
+      Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--decode-in-loop true|false] [--write-artifacts true|false] [--drain-before-write true|false] --duration-sec 60 --out-dir <dir>
+      Odmr.WinProbe oe1300-net-raw-analyze --raw <raw/oe1300_tcp.rall> [--frame-bytes 32768] [--max-frames 5000] [--duration-sec 60]
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>

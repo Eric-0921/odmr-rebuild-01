@@ -61,6 +61,8 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-rall --host 19
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --duration-sec 60 --out-dir runs/oe1300_net_collector_demo
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --decode-in-loop true --duration-sec 60 --out-dir runs/oe1300_net_collector_demo_decode
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 0 --write-artifacts false --duration-sec 10 --out-dir runs/oe1300_net_collector_benchmark
+dotnet .\tools\win-csharp\Odmr.WinProbe\bin\Release\net8.0\Odmr.WinProbe.dll oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 0 --drain-before-write false --duration-sec 60 --out-dir D:\temp\oe1300_net_collector_release
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-raw-analyze --raw runs/oe1300_net_collector_demo/raw/oe1300_tcp.rall --max-frames 5000 --duration-sec 60
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
@@ -92,6 +94,14 @@ impact can be compared directly against the raw-only path.
 
 With `--write-artifacts false`, it skips raw/index/segment writes and acts as a
 transport ceiling benchmark for the current `RALL?` path.
+
+With `--drain-before-write false`, it matches the current high-rate OE1300 TCP
+demo path more closely: do not pre-drain the socket, send `RALL?\r`, then block
+until 32768 B have been read or the socket times out.
+
+`oe1300-net-raw-analyze` is a post-run diagnostic helper. It scans adjacent
+32768 B blocks in a captured raw file and reports how often the block content
+actually changes, so query rate and new-block rate can be compared explicitly.
 
 It writes:
 
