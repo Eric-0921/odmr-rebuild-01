@@ -341,4 +341,11 @@ public static class JsonOptions
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
         WriteIndented = true
     };
+
+    public static readonly JsonSerializerOptions PrettyNamedFloatingPoint = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        WriteIndented = true,
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+    };
 }

@@ -28,6 +28,10 @@ static int Run(string[] args)
             "visa-list" => VisaList(),
             "oe-idn" => OeIdn(options),
             "oe-rall" => OeRall(options),
+            "oe1300-idn" => Oe1300Idn(options),
+            "oe1300-rall" => Oe1300Rall(options),
+            "oe1300-net-idn" => Oe1300NetIdn(options),
+            "oe1300-net-rall" => Oe1300NetRall(options),
             "smb-probe" => SmbProbe(options),
             "sweep-only-run" => SweepOnlyRunCommand(options),
             "minimal-3point-run" => Minimal3PointRunCommand(options),
@@ -114,6 +118,40 @@ static int OeIdn(IReadOnlyDictionary<string, string> options)
         !idn.Contains(Oe1022dDefaults.RequiredSerial, StringComparison.Ordinal))
     {
         return Fail($"OE1022D identity mismatch: expected `{Oe1022dDefaults.RequiredIdnPrefix}` and `{Oe1022dDefaults.RequiredSerial}`");
+    }
+
+    return 0;
+}
+
+static int Oe1300Idn(IReadOnlyDictionary<string, string> options)
+{
+    var portName = GetRequiredOption(options, "port");
+    var baudRate = GetIntOption(options, "baud", Oe1300Defaults.SerialBaudRate);
+
+    using var oe = Oe1300Serial.Open(portName, baudRate);
+    var idn = oe.QueryIdn();
+    Console.WriteLine(idn);
+
+    if (!idn.Contains(Oe1300Defaults.RequiredIdnPrefix, StringComparison.Ordinal))
+    {
+        return Fail($"OE1300 identity mismatch: expected prefix `{Oe1300Defaults.RequiredIdnPrefix}`");
+    }
+
+    return 0;
+}
+
+static int Oe1300NetIdn(IReadOnlyDictionary<string, string> options)
+{
+    var host = GetOption(options, "host", Oe1300Defaults.Host);
+    var port = GetIntOption(options, "port", Oe1300Defaults.TcpPort);
+
+    using var oe = Oe1300Tcp.Open(host, port);
+    var idn = oe.QueryIdn();
+    Console.WriteLine(idn);
+
+    if (!idn.Contains(Oe1300Defaults.RequiredIdnPrefix, StringComparison.Ordinal))
+    {
+        return Fail($"OE1300 TCP identity mismatch: expected prefix `{Oe1300Defaults.RequiredIdnPrefix}`");
     }
 
     return 0;
@@ -434,6 +472,146 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     return stats.TimeoutCount == 0 && stats.RawLenBadCount == 0 && packetAudit.DeltaGt1Count == 0 ? 0 : 2;
 }
 
+static int Oe1300Rall(IReadOnlyDictionary<string, string> options)
+{
+    var portName = GetRequiredOption(options, "port");
+    var baudRate = GetIntOption(options, "baud", Oe1300Defaults.SerialBaudRate);
+    var count = GetIntOption(options, "count", 1);
+    var outDir = GetRequiredOption(options, "out-dir");
+
+    if (count <= 0)
+    {
+        return Fail("--count must be positive");
+    }
+
+    Directory.CreateDirectory(outDir);
+    using var oe = Oe1300Serial.Open(portName, baudRate);
+    var latencies = new List<double>(count);
+    var captures = new List<object>(count);
+
+    for (var i = 0; i < count; i++)
+    {
+        var started = Stopwatch.GetTimestamp();
+        var snapshot = oe.QueryRall();
+        var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        latencies.Add(elapsedMs);
+
+        var captureBase = Path.Combine(outDir, $"capture_{i:0000}.rall");
+        var rawPath = captureBase + ".txt";
+        var jsonPath = captureBase + ".json";
+        File.WriteAllText(rawPath, snapshot.RawResponse + Environment.NewLine, new UTF8Encoding(false));
+        File.WriteAllText(jsonPath, JsonSerializer.Serialize(snapshot, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
+
+        captures.Add(new
+        {
+            index = i,
+            latency_ms = elapsedMs,
+            raw_path = PathRelative(outDir, rawPath),
+            json_path = PathRelative(outDir, jsonPath),
+            field_count = snapshot.Values.Count,
+            first_values = snapshot.Values.Take(4).ToArray(),
+            last_values = snapshot.Values.Skip(Math.Max(0, snapshot.Values.Count - 3)).ToArray()
+        });
+    }
+
+    var summary = new
+    {
+        transport = "serial_ascii",
+        port = portName,
+        baud = baudRate,
+        count,
+        started_at = UtcNowString(),
+        mean_latency_ms = latencies.Average(),
+        min_latency_ms = latencies.Min(),
+        max_latency_ms = latencies.Max(),
+        estimated_hz = 1000.0 / latencies.Average(),
+        field_names = Oe1300Defaults.SerialRallFieldNames,
+        captures
+    };
+
+    var summaryPath = Path.Combine(outDir, "summary.json");
+    File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
+    Console.WriteLine($"oe1300-rall done: count={count}, mean_latency_ms={latencies.Average():0.###}, estimated_hz={1000.0 / latencies.Average():0.###}, out_dir={outDir}");
+    return 0;
+}
+
+static int Oe1300NetRall(IReadOnlyDictionary<string, string> options)
+{
+    var host = GetOption(options, "host", Oe1300Defaults.Host);
+    var port = GetIntOption(options, "port", Oe1300Defaults.TcpPort);
+    var count = GetIntOption(options, "count", 1);
+    var outDir = GetRequiredOption(options, "out-dir");
+
+    if (count <= 0)
+    {
+        return Fail("--count must be positive");
+    }
+
+    Directory.CreateDirectory(outDir);
+    using var oe = Oe1300Tcp.Open(host, port);
+    var latencies = new List<double>(count);
+    var byteCounts = new List<int>(count);
+    var captures = new List<object>(count);
+
+    for (var i = 0; i < count; i++)
+    {
+        var started = Stopwatch.GetTimestamp();
+        var payload = oe.QueryRallBinary();
+        var elapsedMs = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        latencies.Add(elapsedMs);
+        byteCounts.Add(payload.Length);
+
+        var captureBase = Path.Combine(outDir, $"capture_{i:0000}.rall");
+        var rawPath = captureBase + ".bin";
+        File.WriteAllBytes(rawPath, payload);
+
+        string? jsonPath = null;
+        Oe1300TcpRallCapture? decode = null;
+        if (payload.Length >= Oe1300Defaults.TcpRallExpectedBytes)
+        {
+            decode = Oe1300Parsers.DecodeTcpRall(payload);
+            jsonPath = captureBase + ".json";
+            File.WriteAllText(jsonPath, JsonSerializer.Serialize(decode, JsonOptions.PrettyNamedFloatingPoint) + Environment.NewLine, new UTF8Encoding(false));
+        }
+
+        captures.Add(new
+        {
+            index = i,
+            latency_ms = elapsedMs,
+            bytes = payload.Length,
+            raw_path = PathRelative(outDir, rawPath),
+            json_path = jsonPath is null ? null : PathRelative(outDir, jsonPath),
+            decoded = decode is not null,
+            head_hex = Convert.ToHexString(payload, 0, Math.Min(16, payload.Length)).ToLowerInvariant()
+        });
+    }
+
+    var summary = new
+    {
+        transport = "tcp_binary",
+        host,
+        port,
+        count,
+        started_at = UtcNowString(),
+        mean_latency_ms = latencies.Average(),
+        min_latency_ms = latencies.Min(),
+        max_latency_ms = latencies.Max(),
+        mean_bytes = byteCounts.Average(),
+        min_bytes = byteCounts.Min(),
+        max_bytes = byteCounts.Max(),
+        expected_bytes = Oe1300Defaults.TcpRallExpectedBytes,
+        labview_payload_bytes = Oe1300Defaults.TcpRallPayloadBytes,
+        labview_frame_bytes = Oe1300Defaults.TcpRallFrameBytes,
+        field_names = Oe1300Defaults.TcpRallFieldNames,
+        captures
+    };
+
+    var summaryPath = Path.Combine(outDir, "summary.json");
+    File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
+    Console.WriteLine($"oe1300-net-rall done: count={count}, mean_latency_ms={latencies.Average():0.###}, mean_bytes={byteCounts.Average():0.###}, out_dir={outDir}");
+    return 0;
+}
+
 static Dictionary<string, string> ParseOptions(string[] args)
 {
     var options = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -529,6 +707,10 @@ static void PrintUsage()
       Odmr.WinProbe visa-list
       Odmr.WinProbe oe-idn [--resource ASRL8::INSTR] [--baud 921600]
       Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
+      Odmr.WinProbe oe1300-idn --port <COMx> [--baud 115200]
+      Odmr.WinProbe oe1300-rall --port <COMx> [--baud 115200] [--count 1] --out-dir <dir>
+      Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
+      Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
