@@ -36,6 +36,7 @@ static int Run(string[] args)
             "oe1300-net-collector-demo" => Oe1300NetCollectorDemo(options),
             "oe1300-net-outp-demo" => Oe1300NetOutpDemo(options),
             "oe1300-net-ascii-demo" => Oe1300NetAsciiDemo(options),
+            "oe1300-net-labview-demo" => Oe1300NetLabviewDemo(options),
             "oe1300-net-raw-analyze" => Oe1300NetRawAnalyze(options),
             "smb-probe" => SmbProbe(options),
             "sweep-only-run" => SweepOnlyRunCommand(options),
@@ -1195,6 +1196,202 @@ static int Oe1300NetAsciiDemo(IReadOnlyDictionary<string, string> options)
     return errors == 0 ? 0 : 2;
 }
 
+static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
+{
+    var host = GetOption(options, "host", Oe1300Defaults.Host);
+    var port = GetIntOption(options, "port", Oe1300Defaults.TcpPort);
+    var durationSec = GetIntOption(options, "duration-sec", 0);
+    var outDir = GetRequiredOption(options, "out-dir");
+    var postWriteDelayMs = GetIntOption(options, "post-write-delay-ms", 5);
+    var drainBeforeWrite = GetBoolOption(options, "drain-before-write", true);
+    var writeValues = GetBoolOption(options, "write-values", false);
+    var previewParamIndex = GetIntOption(options, "preview-param-index", 0);
+
+    if (durationSec <= 0)
+    {
+        return Fail("--duration-sec must be positive");
+    }
+
+    if (previewParamIndex < 0 || previewParamIndex >= Oe1300Defaults.TcpRallLabviewParameterCount)
+    {
+        return Fail($"--preview-param-index must be between 0 and {Oe1300Defaults.TcpRallLabviewParameterCount - 1}");
+    }
+
+    Directory.CreateDirectory(outDir);
+    var valuesPath = Path.Combine(outDir, "preview_values.csv");
+    var summaryPath = Path.Combine(outDir, "summary.json");
+    var startedAt = UtcNowString();
+    var processStart = Stopwatch.GetTimestamp();
+    var deadline = processStart + durationSec * Stopwatch.Frequency;
+    var payload = new byte[Oe1300Defaults.TcpRallExpectedBytes];
+    var previewParamName = Oe1300Defaults.SerialRallFieldNames[previewParamIndex];
+
+    var stats = new ProbeStats();
+    long decodedRallsOk = 0;
+    long decodeFailures = 0;
+    long decodedSamplesPerParameter = 0;
+    long globalSampleIndex = 0;
+    long previewFiniteCount = 0;
+    long previewNonFiniteCount = 0;
+    double previewMin = double.PositiveInfinity;
+    double previewMax = double.NegativeInfinity;
+    double previewSum = 0.0;
+    byte? lastStatus = null;
+    byte? lastTrigCount = null;
+
+    using var oe = Oe1300Tcp.Open(host, port);
+    using var writer = writeValues
+        ? new StreamWriter(new FileStream(valuesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024), new UTF8Encoding(false))
+        : null;
+
+    if (writer is not null)
+    {
+        writer.WriteLine("rall_index,sample_in_rall,global_sample_index,monotonic_ns,param_index,param_name,value");
+    }
+
+    while (Stopwatch.GetTimestamp() < deadline)
+    {
+        stats.ReadAttempts++;
+        try
+        {
+            var bytesRead = oe.ReadRallFrame(
+                payload,
+                Oe1300Defaults.TcpRallExpectedBytes,
+                postWriteDelayMs,
+                drainBeforeWrite: drainBeforeWrite);
+
+            if (bytesRead != Oe1300Defaults.TcpRallExpectedBytes)
+            {
+                stats.RawLenBadCount++;
+                stats.ReadErrors++;
+                continue;
+            }
+
+            var namedSeries = Oe1300Parsers.DecodeTcpRallLabviewNamedSeries(payload);
+            var previewSeries = namedSeries[previewParamName];
+            var monotonicNs = MonotonicNsSince(processStart);
+
+            foreach (var value in previewSeries)
+            {
+                if (!double.IsFinite(value))
+                {
+                    previewNonFiniteCount++;
+                    continue;
+                }
+
+                previewFiniteCount++;
+
+                if (value < previewMin)
+                {
+                    previewMin = value;
+                }
+
+                if (value > previewMax)
+                {
+                    previewMax = value;
+                }
+
+                previewSum += value;
+            }
+
+            if (writer is not null)
+            {
+                for (var sampleIndexInRall = 0; sampleIndexInRall < previewSeries.Length; sampleIndexInRall++)
+                {
+                    writer.Write(decodedRallsOk.ToString(CultureInfo.InvariantCulture));
+                    writer.Write(',');
+                    writer.Write(sampleIndexInRall.ToString(CultureInfo.InvariantCulture));
+                    writer.Write(',');
+                    writer.Write(globalSampleIndex.ToString(CultureInfo.InvariantCulture));
+                    writer.Write(',');
+                    writer.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+                    writer.Write(',');
+                    writer.Write(previewParamIndex.ToString(CultureInfo.InvariantCulture));
+                    writer.Write(',');
+                    writer.Write(previewParamName);
+                    writer.Write(',');
+                    writer.WriteLine(previewSeries[sampleIndexInRall].ToString("R", CultureInfo.InvariantCulture));
+                    globalSampleIndex++;
+                }
+            }
+            else
+            {
+                globalSampleIndex += previewSeries.Length;
+            }
+
+            decodedSamplesPerParameter += previewSeries.Length;
+            lastStatus = payload[Oe1300Defaults.TcpRallStatusOffset];
+            lastTrigCount = payload[Oe1300Defaults.TcpRallTrigCountOffset];
+            decodedRallsOk++;
+            stats.FramesOk++;
+        }
+        catch (IOException)
+        {
+            stats.TimeoutCount++;
+            stats.ReadErrors++;
+        }
+        catch (Exception)
+        {
+            decodeFailures++;
+            stats.ReadErrors++;
+        }
+    }
+
+    writer?.Flush();
+
+    var elapsedMs = (long)Stopwatch.GetElapsedTime(processStart).TotalMilliseconds;
+    var meanRallMs = decodedRallsOk > 0 ? elapsedMs / (double)decodedRallsOk : 0.0;
+    var queryHz = meanRallMs > 0 ? 1000.0 / meanRallMs : 0.0;
+    var effectivePerParameterHz = queryHz * Oe1300Defaults.TcpRallLabviewSamplesPerParameter;
+    var effectiveTotalScalarHz = effectivePerParameterHz * Oe1300Defaults.TcpRallLabviewParameterCount;
+    var previewMean = previewFiniteCount > 0 ? previewSum / previewFiniteCount : 0.0;
+
+    var summary = new
+    {
+        command = "oe1300-net-labview-demo",
+        transport = "tcp_binary",
+        host,
+        port,
+        duration_sec = durationSec,
+        post_write_delay_ms = postWriteDelayMs,
+        drain_before_write = drainBeforeWrite,
+        write_values = writeValues,
+        preview_param_index = previewParamIndex,
+        preview_param_name = previewParamName,
+        decode_mode = "labview_37_parameters_x_100_samples_little_endian_v1",
+        rall_payload_bytes = Oe1300Defaults.TcpRallPayloadBytes,
+        rall_frame_bytes = Oe1300Defaults.TcpRallFrameBytes,
+        labview_parameter_count = Oe1300Defaults.TcpRallLabviewParameterCount,
+        labview_frames_per_parameter = Oe1300Defaults.TcpRallLabviewFramesPerParameter,
+        labview_samples_per_parameter = Oe1300Defaults.TcpRallLabviewSamplesPerParameter,
+        started_at = startedAt,
+        finished_at = UtcNowString(),
+        elapsed_ms = elapsedMs,
+        read_attempts = stats.ReadAttempts,
+        ralls_ok = decodedRallsOk,
+        read_errors = stats.ReadErrors,
+        timeout_count = stats.TimeoutCount,
+        raw_len_bad_count = stats.RawLenBadCount,
+        decode_failures = decodeFailures,
+        query_hz = queryHz,
+        decoded_samples_per_parameter_total = decodedSamplesPerParameter,
+        effective_sample_hz_per_parameter = effectivePerParameterHz,
+        effective_total_scalar_hz = effectiveTotalScalarHz,
+        preview_finite_count = previewFiniteCount,
+        preview_non_finite_count = previewNonFiniteCount,
+        preview_value_min = previewFiniteCount > 0 && double.IsFinite(previewMin) ? previewMin : (double?)null,
+        preview_value_max = previewFiniteCount > 0 && double.IsFinite(previewMax) ? previewMax : (double?)null,
+        preview_value_mean = previewFiniteCount > 0 && double.IsFinite(previewMean) ? previewMean : (double?)null,
+        last_status_byte = lastStatus,
+        last_trig_count = lastTrigCount,
+        values_path = writeValues ? PathRelative(outDir, valuesPath) : null
+    };
+
+    File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
+    Console.WriteLine($"oe1300-net-labview-demo done: ralls_ok={decodedRallsOk}, query_hz={queryHz:0.###}, effective_sample_hz_per_parameter={effectivePerParameterHz:0.###}, out_dir={outDir}");
+    return stats.TimeoutCount == 0 && stats.RawLenBadCount == 0 && decodeFailures == 0 ? 0 : 2;
+}
+
 static Dictionary<string, string> ParseOptions(string[] args)
 {
     var options = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -1403,6 +1600,7 @@ static void PrintUsage()
       Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--decode-in-loop true|false] [--write-artifacts true|false] [--drain-before-write true|false] --duration-sec 60 --out-dir <dir>
       Odmr.WinProbe oe1300-net-outp-demo [--host 192.168.1.1] [--port 10001] [--param-index 0] [--write-values true|false] --duration-sec 10 --out-dir <dir>
       Odmr.WinProbe oe1300-net-ascii-demo [--host 192.168.1.1] [--port 10001] [--mode outp|snap] [--param-index 0] [--snap-indices 0,1,2,3,34] [--parse-in-loop true|false] [--write-values true|false] --duration-sec 10 --out-dir <dir>
+      Odmr.WinProbe oe1300-net-labview-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--drain-before-write true|false] [--preview-param-index 0] [--write-values true|false] --duration-sec 10 --out-dir <dir>
       Odmr.WinProbe oe1300-net-raw-analyze --raw <raw/oe1300_tcp.rall> [--frame-bytes 32768] [--max-frames 5000] [--duration-sec 60]
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>

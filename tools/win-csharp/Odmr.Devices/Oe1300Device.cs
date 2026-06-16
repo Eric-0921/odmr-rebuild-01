@@ -22,6 +22,10 @@ public static class Oe1300Defaults
     public const int TcpRallPayloadBytes = 29600;
     public const int TcpRallFrameBytes = 400;
     public const int TcpRallFrameCount = TcpRallPayloadBytes / TcpRallFrameBytes;
+    public const int TcpRallLabviewParameterCount = SerialRallFieldCount;
+    public const int TcpRallLabviewSamplesPerFrame = TcpRallFrameBytes / sizeof(double);
+    public const int TcpRallLabviewFramesPerParameter = 2;
+    public const int TcpRallLabviewSamplesPerParameter = TcpRallLabviewSamplesPerFrame * TcpRallLabviewFramesPerParameter;
     public const int TcpRallStatusOffset = 29990;
     public const int TcpRallTrigCountOffset = 29997;
     public const int TcpRallAuxIn2Offset = 28432;
@@ -210,6 +214,22 @@ public static class Oe1300Parsers
             frameSummaries);
     }
 
+    public static IReadOnlyDictionary<string, double[]> DecodeTcpRallLabviewNamedSeries(byte[] payload)
+    {
+        if (payload.Length < Oe1300Defaults.TcpRallExpectedBytes)
+        {
+            throw new IOException($"OE1300 TCP RALL payload too short: expected >= {Oe1300Defaults.TcpRallExpectedBytes}, actual={payload.Length}");
+        }
+
+        var namedSeries = new Dictionary<string, double[]>(Oe1300Defaults.TcpRallLabviewParameterCount, StringComparer.Ordinal);
+        for (var parameterIndex = 0; parameterIndex < Oe1300Defaults.TcpRallLabviewParameterCount; parameterIndex++)
+        {
+            namedSeries[Oe1300Defaults.SerialRallFieldNames[parameterIndex]] = ReadLabviewParameterSeries(payload, parameterIndex);
+        }
+
+        return namedSeries;
+    }
+
     private static IReadOnlyList<double> ParseCsvDoubles(string response, int expectedCount)
     {
         var fields = response
@@ -285,9 +305,32 @@ public static class Oe1300Parsers
     private static double MeanFramePair(IReadOnlyList<Oe1300TcpRallFrameSummary> frameSummaries, int firstFrameIndex) =>
         (frameSummaries[firstFrameIndex].Mean + frameSummaries[firstFrameIndex + 1].Mean) / 2.0;
 
+    private static double[] ReadLabviewParameterSeries(byte[] payload, int parameterIndex)
+    {
+        if (parameterIndex < 0 || parameterIndex >= Oe1300Defaults.TcpRallLabviewParameterCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(parameterIndex));
+        }
+
+        var parameterOffset = parameterIndex * Oe1300Defaults.TcpRallLabviewSamplesPerParameter * sizeof(double);
+        var values = new double[Oe1300Defaults.TcpRallLabviewSamplesPerParameter];
+        for (var i = 0; i < values.Length; i++)
+        {
+            values[i] = ReadLittleEndianDouble(payload, parameterOffset + (i * sizeof(double)));
+        }
+
+        return values;
+    }
+
     private static double ReadBigEndianDouble(byte[] payload, int offset)
     {
         var bits = BinaryPrimitives.ReadInt64BigEndian(payload.AsSpan(offset, sizeof(long)));
+        return BitConverter.Int64BitsToDouble(bits);
+    }
+
+    private static double ReadLittleEndianDouble(byte[] payload, int offset)
+    {
+        var bits = BinaryPrimitives.ReadInt64LittleEndian(payload.AsSpan(offset, sizeof(long)));
         return BitConverter.Int64BitsToDouble(bits);
     }
 
