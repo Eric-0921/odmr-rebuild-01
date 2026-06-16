@@ -95,10 +95,12 @@
 
 | 项目 | OE1022D | OE1351（OE1300 系列） |
 |------|---------|----------------------|
-| `RALL?` 周期 | 50 ms | ~1000 ms |
+| `RALL?` 周期 | ~50 ms | **~50 ms** |
+| 连续采集吞吐 | ~20 Hz | **~18 Hz** |
 | 返回格式 | 12288B 二进制，50 点/字段 | 522B ASCII，1 点/字段 |
 | 数据吞吐 | 高 | 低 |
 | 连续性审计 | `payload[12287]` packet counter | 无 |
+| 串口参数配置 | 支持 | **基本不支持**（除 `NMOD 0` 外）|
 
 ### 4.2 开发影响
 
@@ -112,31 +114,101 @@
 
 使用 `tools/oe_rall_compare/oe1300_serial_command_probe.py` 对手册命令批量验证（结果保存于 `/tmp/oe1300_cmd_probe/oe1300_command_probe_results.jsonl`）：
 
-### 5.1 正常响应的命令
+### 5.1 完整批量验证结果
 
-`*IDN?`、`*RST`、`*PLL?`、`ISRC?`、`ICPL?`、`IRNG?`、`FMOD?`、`FREQ?`、`PHAS?`、`RSLP?`、`OFLT?`、`OFSL?`、`SYNC?`、`HARM?`、`BAUD?`、`OVLD?`、`SNAP?`、`RALL?`
+使用 `/tmp/oe1300_full_command_probe.py` 对 LabVIEW 命令枚举进行批量验证，共 126 条命令：
 
-### 5.2 超时/不支持的命令
+- **正常响应（26 条）**：均为查询命令
+- **超时（100 条）**：包括所有 set 命令、大量高级查询、全部 D 后缀命令
 
-`NMOD?`、`NIPA?`、`NSMA?`、`NGWA?`、`NMOD 0`、`NSMA ...`、`NGWA ...`、`IGND?`、`RMOD?`、`OUTP?`、`OEUT? 0`、`OEUT? 1`
+结果文件：`/tmp/oe1300_full_probe/oe1300_full_command_probe.jsonl`
 
-> 例外：`NIPA 192.168.1.5` 返回 `"Setting Ethernet Mode Success!"`，但对应的 `NIPA?` 仍超时，且重启后配置不保留。
+### 5.2 正常响应的查询命令
 
-### 5.3 `*RST` 行为
+```text
+*IDN?    -> SSI LIA-OE1351,SN:L2092228,Version:V1.3230310
+*PLL?    -> 0
+ISRC?    -> 0
+ICPL?    -> 0
+IRNG?    -> 2
+FMOD?    -> 0
+FREQ?    -> 1.023181539e-06
+PHAS?    -> 0.0000000e+00
+RSLP?    -> 0
+OFLT?    -> 1.0000000e-02
+OFSL?    -> 1
+SYNC?    -> 0
+HARM?    -> 2
+DMOD?    -> 0
+DARB?    -> 1.00000e+03
+BAUD?    -> 115200
+OVLD?    -> 0
+RALL?    -> <37 字段 CSV>
+CAUX?    -> 1.00000e+00
+SWVT?    -> 0
+SLVL?    -> 1.00000e+00
+OAUX?    -> 0.0000000e+00
+COUT?    -> 0
+COFP?    -> 0.00000e+00
+CEXP?    -> 1.00000e+00
+TEMP?    -> 55.040
+```
+
+### 5.3 超时的命令类别
+
+**基本查询超时**：`IGND?`、`RMOD?`、`INOV?`、`GNOV?`、`SNAP?`、`OUTP?`
+
+**全部 D 后缀命令**：`ISRCD?` ~ `OEXPD?`（41 条）
+
+**高级/未公开命令**：`SWPT?`、`SLLM?`、`SULM?`、`SSLL?`、`SSLG?`、`STLM?`、`SWRM?`、`SENS?`、`SVLL?`、`SVUL?`、`SVSL?`、`SVSG?`、`SVTM?`、`SVRM?`、`FPOP?`、`OEXP?`、`SSET?`、`RSET?`、`AGAN?`、`APHS?`、`ARSV?`、`ASCL?`、`EQCD?`、`EQCS?`、`SPED?`、`SRAT?`、`SLEN?`、`SSLE?`、`STRG?`、`SPRM?`、`STRD?`、`PAUS?`、`SPTS?`、`TRCA?`、`RSTU?`、`INHZ?`、`DEQU?`、`SADD?`、`ARNG?`、`CSPE?`
+
+**所有 set 命令**：`ISRC 0`、`ICPL 0`、`IGND 0`、`IRNG 2`、`FMOD 0`、`FREQ 1000`、`PHAS 0`、`RSLP 0`、`OFLT 0.01`、`OFSL 1`、`SYNC 0`、`HARM 1`、`BAUD 115200`
+
+### 5.4 关键发现：串口基本只读
+
+即使发送手册明确允许的 set 命令（如 `ISRC 0`、`FREQ 1000`），设备也**返回空响应，参数不生效**（再次查询仍为原值）。
+
+**例外**：`NMOD 0` 会返回 `"Setting Ethernet Mode Success!"`，但其他网络 set 命令（`NIPA`、`NSMA`、`NGWA`、`NMAC`）同样无响应。
+
+这说明当前固件 `V1.3230310` 的串口协议**基本处于只读模式**：可以查询状态和读取 `RALL?`，但无法通过串口修改设备参数。
+
+### 5.5 `*RST` 行为
 
 `*RST` 不是简单的参数清零，而是触发 **Xilinx Zynq 全系统重启**，返回 boot loader / PMU 信息，耗时约 3 s。
 
-### 5.4 网络接口状态
+### 5.6 网络接口状态
 
 网络查询命令在当前固件 `V1.3230310` 上基本无响应，说明**网口配置命令未实现或存在 bug**。
 
 ---
 
-## 6. 待验证问题
+## 6. 对项目的影响
 
-1. 网口通信是否比串口快？（需临时配置 Mac en5 为 192.168.1.x 网段）
-2. 1.5 秒延时是否来自设备固件，还是 USB-RS232 适配器？
-3. 是否存在未公开的命令可调整输出刷新率？
+### 6.1 可用能力
+
+- 串口连续 `RALL?` 采集：~18 Hz，37 字段 ASCII CSV。
+- 状态查询：`*PLL?`、`OVLD?`、`TEMP?` 等。
+- 默认配置读取：输入源、耦合、量程、参考源、滤波器等。
+
+### 6.2 不可用能力
+
+- **串口参数设置**：无法通过串口修改 `ISRC`、`FREQ`、`OFLT` 等运行参数。
+- **网口通信**：设备默认 IP 不可达，网络配置命令不完整。
+- **高级功能**：D 后缀命令、扫频、示波器/FFT 相关命令均超时。
+
+### 6.3 第一版实现策略
+
+OE1351 在第一版中应被视为**固定配置的只读观察者**：
+
+1. 实验前通过前面板或 Console 软件把设备配置好。
+2. C# runtime 只通过串口发送查询命令（主要是 `RALL?`）。
+3. 不尝试在运行中重配置设备参数。
+4. profile 中只保留与查询/采集相关的字段，set 命令字段标记为不可用。
+
+### 6.4 后续排查方向
+
+1. 联系厂商确认 `V1.3230310` 是否支持串口 set 命令，或是否需要升级固件。
+2. 在 Windows 上用原厂 Console/LabVIEW 软件测试 set 命令是否可用（排除 Mac/串口适配器问题）。
 4. OE1351 与 OE1300 在协议上是否完全一致？
 
 ---
