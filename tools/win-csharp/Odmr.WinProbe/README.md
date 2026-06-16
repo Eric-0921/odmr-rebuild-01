@@ -54,6 +54,11 @@ collector.
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- visa-list
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-idn --resource ASRL8::INSTR --baud 921600
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-rall --resource ASRL8::INSTR --baud 921600 --duration-sec 300 --out-dir runs/win_csharp_oe_rall_5min
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-idn --port COM8 --baud 115200
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-rall --port COM8 --baud 115200 --count 1 --out-dir runs/oe1300_serial_probe
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-idn --host 192.168.1.1 --port 10001
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-rall --host 192.168.1.1 --port 10001 --count 1 --out-dir runs/oe1300_net_probe
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-collector-demo --host 192.168.1.1 --port 10001 --duration-sec 60 --out-dir runs/oe1300_net_collector_demo
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
@@ -69,6 +74,20 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/wi
 
 - `raw/oe1022d.rall`
 - `raw/oe1022d.frames.idx.jsonl`
+- `segments.jsonl`
+- `summary.json`
+
+`oe1300-net-collector-demo` is a standalone OE1300 TCP sampling demo. It only:
+
+- writes `RALL?\r`
+- waits `5ms` by default
+- reads until `32768B`
+- appends raw frame and frame index
+
+It writes:
+
+- `raw/oe1300_tcp.rall`
+- `raw/oe1300_tcp.frames.idx.jsonl`
 - `segments.jsonl`
 - `summary.json`
 

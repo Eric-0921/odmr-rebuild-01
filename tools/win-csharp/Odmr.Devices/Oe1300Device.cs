@@ -512,12 +512,33 @@ public sealed class Oe1300TcpSession : IDisposable
         int idleBreakMs = 100,
         int maxWaitMs = 1500)
     {
+        var payload = new byte[expectedBytes];
+        var bytesRead = ReadRallFrame(payload, expectedBytes, postWriteDelayMs, idleBreakMs, maxWaitMs);
+        if (bytesRead == payload.Length)
+        {
+            return payload;
+        }
+
+        return payload[..bytesRead];
+    }
+
+    public int ReadRallFrame(
+        byte[] destination,
+        int expectedBytes = Oe1300Defaults.TcpRallExpectedBytes,
+        int postWriteDelayMs = 5,
+        int idleBreakMs = 100,
+        int maxWaitMs = 1500)
+    {
+        if (destination.Length < expectedBytes)
+        {
+            throw new ArgumentException($"destination buffer too small: required={expectedBytes}, actual={destination.Length}", nameof(destination));
+        }
+
         DrainAvailable();
         SendAsciiCommand(Oe1300Commands.QueryRall);
         Thread.Sleep(postWriteDelayMs);
 
-        var payload = new List<byte>(expectedBytes);
-        var scratch = new byte[4096];
+        var bytesReadTotal = 0;
         var started = Environment.TickCount64;
         var lastDataAt = started;
 
@@ -525,13 +546,13 @@ public sealed class Oe1300TcpSession : IDisposable
         {
             try
             {
-                var read = stream.Read(scratch, 0, Math.Min(scratch.Length, expectedBytes - payload.Count));
+                var read = stream.Read(destination, bytesReadTotal, expectedBytes - bytesReadTotal);
                 if (read > 0)
                 {
-                    payload.AddRange(scratch.AsSpan(0, read).ToArray());
+                    bytesReadTotal += read;
                     lastDataAt = Environment.TickCount64;
 
-                    if (payload.Count >= expectedBytes)
+                    if (bytesReadTotal >= expectedBytes)
                     {
                         break;
                     }
@@ -541,7 +562,7 @@ public sealed class Oe1300TcpSession : IDisposable
             }
             catch (IOException)
             {
-                if (payload.Count > 0 && Environment.TickCount64 - lastDataAt >= idleBreakMs)
+                if (bytesReadTotal > 0 && Environment.TickCount64 - lastDataAt >= idleBreakMs)
                 {
                     break;
                 }
@@ -549,18 +570,18 @@ public sealed class Oe1300TcpSession : IDisposable
                 continue;
             }
 
-            if (payload.Count > 0 && Environment.TickCount64 - lastDataAt >= idleBreakMs)
+            if (bytesReadTotal > 0 && Environment.TickCount64 - lastDataAt >= idleBreakMs)
             {
                 break;
             }
         }
 
-        if (payload.Count == 0)
+        if (bytesReadTotal == 0)
         {
             throw new IOException("empty OE1300 TCP RALL response");
         }
 
-        return payload.ToArray();
+        return bytesReadTotal;
     }
 
     public void Dispose()
