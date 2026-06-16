@@ -5,10 +5,13 @@
 > - 真机探测报告 `docs/equipment_manual/oe1300/clean/probe_reports/20260616_serial_probe.md`（OE1351）
 > - 真机探测报告 `docs/equipment_manual/oe1300/clean/probe_reports/20260616_serial_probe_oe1301.md`（OE1301 完整版）
 > - 真机探测报告 `docs/equipment_manual/oe1300/clean/probe_reports/20260616_lan_probe.md`
+> - 真机复核报告 `docs/equipment_manual/oe1300/clean/probe_reports/20260617_live_verification_oe1301.md`
 >
 > 已验证设备：
 > - `OE1351`（SN:L2092228，固件 `V1.3230310`）
 > - `OE1301`（SN:L2283261，固件 `V1.4h4-1.02-1.4.0.23B`）
+>
+> 2026-06-17 本机复核再次确认：当前在线设备身份为 `OE1301`，串口 `RALL?` 为 37 字段 ASCII CSV，TCP `RALL?` 仍为不可直接使用的 32768 B 二进制返回。
 
 ---
 
