@@ -34,6 +34,7 @@ static int Run(string[] args)
             "oe1300-net-idn" => Oe1300NetIdn(options),
             "oe1300-net-rall" => Oe1300NetRall(options),
             "oe1300-net-collector-demo" => Oe1300NetCollectorDemo(options),
+            "oe1300-net-outp-demo" => Oe1300NetOutpDemo(options),
             "oe1300-net-raw-analyze" => Oe1300NetRawAnalyze(options),
             "smb-probe" => SmbProbe(options),
             "sweep-only-run" => SweepOnlyRunCommand(options),
@@ -876,6 +877,131 @@ static int Oe1300NetRawAnalyze(IReadOnlyDictionary<string, string> options)
     return 0;
 }
 
+static int Oe1300NetOutpDemo(IReadOnlyDictionary<string, string> options)
+{
+    var host = GetOption(options, "host", Oe1300Defaults.Host);
+    var port = GetIntOption(options, "port", Oe1300Defaults.TcpPort);
+    var paramIndex = GetIntOption(options, "param-index", 0);
+    var durationSec = GetIntOption(options, "duration-sec", 0);
+    var outDir = GetRequiredOption(options, "out-dir");
+    var writeValues = GetBoolOption(options, "write-values", true);
+
+    if (durationSec <= 0)
+    {
+        return Fail("--duration-sec must be positive");
+    }
+
+    Directory.CreateDirectory(outDir);
+    var valuesPath = Path.Combine(outDir, "values.csv");
+    var summaryPath = Path.Combine(outDir, "summary.json");
+    var startedAt = UtcNowString();
+    var processStart = Stopwatch.GetTimestamp();
+    var deadline = processStart + durationSec * Stopwatch.Frequency;
+    var command = Oe1300Commands.QueryOutput(paramIndex);
+    long samplesOk = 0;
+    long errors = 0;
+    double minValue = double.PositiveInfinity;
+    double maxValue = double.NegativeInfinity;
+    string? lastValueText = null;
+    double? firstLatencyMs = null;
+    var warmLatencyMsSum = 0.0;
+    long warmLatencyCount = 0;
+
+    using var oe = Oe1300Tcp.Open(host, port);
+    using var writer = writeValues
+        ? new StreamWriter(new FileStream(valuesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024), new UTF8Encoding(false))
+        : null;
+
+    if (writer is not null)
+    {
+        writer.WriteLine("sample_index,monotonic_ns,value");
+    }
+
+    while (Stopwatch.GetTimestamp() < deadline)
+    {
+        var readStart = Stopwatch.GetTimestamp();
+        try
+        {
+            var response = oe.QueryAsciiLine(command);
+            var latencyMs = Stopwatch.GetElapsedTime(readStart).TotalMilliseconds;
+            var value = double.Parse(response, CultureInfo.InvariantCulture);
+            var monotonicNs = MonotonicNsSince(processStart);
+
+            if (firstLatencyMs is null)
+            {
+                firstLatencyMs = latencyMs;
+            }
+            else
+            {
+                warmLatencyMsSum += latencyMs;
+                warmLatencyCount++;
+            }
+
+            if (value < minValue)
+            {
+                minValue = value;
+            }
+
+            if (value > maxValue)
+            {
+                maxValue = value;
+            }
+
+            if (writer is not null)
+            {
+                writer.Write(samplesOk.ToString(CultureInfo.InvariantCulture));
+                writer.Write(',');
+                writer.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+                writer.Write(',');
+                writer.WriteLine(value.ToString("R", CultureInfo.InvariantCulture));
+            }
+
+            lastValueText = response;
+            samplesOk++;
+        }
+        catch
+        {
+            errors++;
+        }
+    }
+
+    writer?.Flush();
+
+    var elapsedMs = (long)Stopwatch.GetElapsedTime(processStart).TotalMilliseconds;
+    var meanQueryMs = samplesOk > 0 ? elapsedMs / (double)samplesOk : 0.0;
+    var estimatedQueryHz = meanQueryMs > 0 ? 1000.0 / meanQueryMs : 0.0;
+    var warmMeanLatencyMs = warmLatencyCount > 0 ? warmLatencyMsSum / warmLatencyCount : firstLatencyMs ?? 0.0;
+    var warmQueryHz = warmMeanLatencyMs > 0 ? 1000.0 / warmMeanLatencyMs : 0.0;
+    var summary = new
+    {
+        command = "oe1300-net-outp-demo",
+        transport = "tcp_ascii",
+        host,
+        port,
+        outp_command = command,
+        param_index = paramIndex,
+        duration_sec = durationSec,
+        write_values = writeValues,
+        started_at = startedAt,
+        finished_at = UtcNowString(),
+        elapsed_ms = elapsedMs,
+        samples_ok = samplesOk,
+        errors,
+        first_latency_ms = firstLatencyMs,
+        warm_mean_latency_ms = warmMeanLatencyMs,
+        warm_query_hz = warmQueryHz,
+        estimated_query_hz = estimatedQueryHz,
+        min_value = samplesOk > 0 ? minValue : (double?)null,
+        max_value = samplesOk > 0 ? maxValue : (double?)null,
+        last_value_text = lastValueText,
+        values_path = writeValues ? PathRelative(outDir, valuesPath) : null
+    };
+
+    File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
+    Console.WriteLine($"oe1300-net-outp-demo done: param_index={paramIndex}, samples_ok={samplesOk}, errors={errors}, warm_query_hz={warmQueryHz:0.###}, out_dir={outDir}");
+    return errors == 0 ? 0 : 2;
+}
+
 static Dictionary<string, string> ParseOptions(string[] args)
 {
     var options = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -1045,6 +1171,7 @@ static void PrintUsage()
       Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
       Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-collector-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--decode-in-loop true|false] [--write-artifacts true|false] [--drain-before-write true|false] --duration-sec 60 --out-dir <dir>
+      Odmr.WinProbe oe1300-net-outp-demo [--host 192.168.1.1] [--port 10001] [--param-index 0] [--write-values true|false] --duration-sec 10 --out-dir <dir>
       Odmr.WinProbe oe1300-net-raw-analyze --raw <raw/oe1300_tcp.rall> [--frame-bytes 32768] [--max-frames 5000] [--duration-sec 60]
       Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
