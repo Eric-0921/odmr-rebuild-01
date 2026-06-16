@@ -602,7 +602,8 @@ static int Oe1300NetRall(IReadOnlyDictionary<string, string> options)
         expected_bytes = Oe1300Defaults.TcpRallExpectedBytes,
         labview_payload_bytes = Oe1300Defaults.TcpRallPayloadBytes,
         labview_frame_bytes = Oe1300Defaults.TcpRallFrameBytes,
-        field_names = Oe1300Defaults.TcpRallFieldNames,
+        decode_mode = "frame_mean_big_endian_v1",
+        field_names = Oe1300Defaults.SerialRallFieldNames,
         captures
     };
 

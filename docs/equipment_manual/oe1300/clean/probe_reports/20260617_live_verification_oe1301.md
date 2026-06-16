@@ -275,18 +275,59 @@ Theta  -> 5.40492371713744E+279
 
 ---
 
+### 4.5 TCP `RALL?` 的阶段性解码结论（2026-06-17）
+
+后续继续对同一参数做了 **串口 120 点** 与 **网口 120 包** 的对照，并直接检查了单包 `32768 B` 里 `74 x 400 B` 的 frame 结构，得到下面这条新的工程事实：
+
+- **网口 `RALL?` 不是另一套语义字段。**
+- **网口 `RALL?` 也不是“串口 37 字段按顺序直接平铺成 37 个 double”。**
+- **当前最符合实测的是：`big-endian double + frame block mean`。**
+
+目前已经稳定复原出的 block 结构如下：
+
+- `frame 0-1` -> `X`
+- `frame 2-3` -> `Y`
+- `frame 4-5` -> `R`
+- `frame 6-7` -> `Theta`
+- `frame 8-9` -> `XNoise`
+- `frame 10-11` -> `YNoise`
+- `frame 12-13` -> `Frequency`
+- `frame 14-21` -> `D1` 四组：`XD1 / YD1 / RD1 / ThetaD1`
+- `frame 22-29` -> `D2` 四组：`XD2 / YD2 / RD2 / ThetaD2`
+- `frame 30-37` -> `D3` 四组：`XD3 / YD3 / RD3 / ThetaD3`
+- `frame 38-45` -> `D4` 四组：`XD4 / YD4 / RD4 / ThetaD4`
+- `frame 46-53` -> `D5` 四组：`XD5 / YD5 / RD5 / ThetaD5`
+- `frame 54-61` -> `D6` 四组：`XD6 / YD6 / RD6 / ThetaD6`
+- `frame 62-69` -> `D7` 四组：`XD7 / YD7 / RD7 / ThetaD7`
+- `AuxIn1 / AuxIn2` 当前用固定偏移 `28656 / 28432` 做阶段性恢复
+
+对应地，`Odmr.WinProbe oe1300-net-rall` 的实验性解码已经改成输出 **与串口同名的 37 个字段**，不再输出原先那版错误的“每帧线性字段表”。
+
+需要明确的是，这里解出来的是 **网口字段语义**，不是“串口数值逐点严格相等”的意思。当前实测可确认：
+
+- `Theta / ThetaD1..ThetaD7 / Frequency` 与串口高度一致
+- `X / Y / R / XDn / YDn / RDn / Noise` 在字段归属上已经对上，但数值相对串口存在稳定比例偏差
+- `AuxIn1 / AuxIn2` 已能恢复出可用数值，但偏移仍应继续压实
+
+所以当前的阻塞点已经从“网口字段完全不明”收敛为：
+
+- 主字段语义已经复原
+- 数值标定关系仍需继续验证
+- Aux 偏移仍是阶段性结论
+
 ## 5. 当前工程决策
 
 基于 **2026-06-17 本机实测**，当前设备应按下面的规则处理：
 
 1. **把这台在线设备识别为 `OE1301`，不是 `OE1351`。**
-2. **串口 `RALL?` 是当前唯一可信采集链。**
-3. **TCP 只能用于 `*IDN?` / `FREQ?` 这类文本查询，不能用于 runtime 主采集。**
+2. **串口 `RALL?` 仍然是当前最直接的事实基准。**
+3. **TCP `RALL?` 的字段语义已经可以在设备层解出来，但当前仍属于实验性解码，不应直接并入 runtime 主采集。**
 4. **`oe1300_manual_clean.md` 可以继续作为开发输入。**
 5. **`pdf_by_PaddleOCR-VL-1.6.md` 不能直接作为命令白名单真值。**
 
-如果后面要继续做 C# runtime 适配，第一步不是改 `OE1022D` 那套 frozen hot path，而是单独为 `OE1301` 新建：
+如果后面要继续做 C# runtime 适配，第一步不是改 `OE1022D` 那套 frozen hot path，而是单独为 `OE1301` 新建并继续收紧：
 
 - 串口 ASCII line reader
-- 37 字段 CSV parser
+- TCP `RALL?` 37 字段实验性 decoder
+- 串口 / 网口之间的数值标定关系
 - 无 packet counter 的连续性审计策略

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Ports;
 using System.Net.Sockets;
+using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json.Serialization;
 
@@ -23,6 +24,8 @@ public static class Oe1300Defaults
     public const int TcpRallFrameCount = TcpRallPayloadBytes / TcpRallFrameBytes;
     public const int TcpRallStatusOffset = 29990;
     public const int TcpRallTrigCountOffset = 29997;
+    public const int TcpRallAuxIn2Offset = 28432;
+    public const int TcpRallAuxIn1Offset = 28656;
     public const int SerialRallFieldCount = 37;
     public const string RequiredIdnPrefix = "SSI LIA-OE130";
 
@@ -37,32 +40,6 @@ public static class Oe1300Defaults
         "XD6", "YD6", "RD6", "ThetaD6",
         "XD7", "YD7", "RD7", "ThetaD7",
         "XNoise", "YNoise", "Frequency", "AuxIn1", "AuxIn2"
-    ];
-
-    public static readonly IReadOnlyList<string> TcpRallFieldNames =
-    [
-        "X", "Y", "R", "Theta", "XNoise", "YNoise", "Frequency",
-        "Xh1", "Yh1", "Rh1", "ThetaH1",
-        "Xh2", "Yh2", "Rh2", "ThetaH2",
-        "Xh3", "Yh3", "Rh3", "ThetaH3",
-        "Xh4", "Yh4", "Rh4", "ThetaH4",
-        "Xh5", "Yh5", "Rh5", "ThetaH5",
-        "Xh6", "Yh6", "Rh6", "ThetaH6",
-        "Xh7", "Yh7", "Rh7", "ThetaH7",
-        "AuxIn1", "AuxIn2"
-    ];
-
-    public static readonly IReadOnlyList<int> TcpRallFieldOffsets =
-    [
-        0, 8, 16, 24, 32, 40, 48,
-        56, 64, 72, 80,
-        88, 96, 104, 112,
-        120, 128, 136, 144,
-        152, 160, 168, 176,
-        184, 192, 200, 208,
-        216, 224, 232, 240,
-        248, 256, 264, 272,
-        280, 288
     ];
 }
 
@@ -167,9 +144,11 @@ public sealed record Oe1300RallSnapshot(
     [property: JsonPropertyName("values")] IReadOnlyList<double> Values,
     [property: JsonPropertyName("named_values")] IReadOnlyDictionary<string, double> NamedValues);
 
-public sealed record Oe1300TcpRallFrame(
+public sealed record Oe1300TcpRallFrameSummary(
     [property: JsonPropertyName("frame_index")] int FrameIndex,
-    [property: JsonPropertyName("named_values")] IReadOnlyDictionary<string, double> NamedValues);
+    [property: JsonPropertyName("mean")] double Mean,
+    [property: JsonPropertyName("min")] double Min,
+    [property: JsonPropertyName("max")] double Max);
 
 public sealed record Oe1300TcpRallCapture(
     [property: JsonPropertyName("total_bytes")] int TotalBytes,
@@ -181,7 +160,9 @@ public sealed record Oe1300TcpRallCapture(
     [property: JsonPropertyName("trig_count")] byte TrigCount,
     [property: JsonPropertyName("head_hex")] string HeadHex,
     [property: JsonPropertyName("tail_hex")] string TailHex,
-    [property: JsonPropertyName("frames")] IReadOnlyList<Oe1300TcpRallFrame> Frames);
+    [property: JsonPropertyName("decode_mode")] string DecodeMode,
+    [property: JsonPropertyName("named_values")] IReadOnlyDictionary<string, double> NamedValues,
+    [property: JsonPropertyName("frame_summaries")] IReadOnlyList<Oe1300TcpRallFrameSummary> FrameSummaries);
 
 public static class Oe1300Parsers
 {
@@ -198,36 +179,35 @@ public static class Oe1300Parsers
             throw new IOException($"OE1300 TCP RALL payload too short: expected >= {Oe1300Defaults.TcpRallExpectedBytes}, actual={payload.Length}");
         }
 
-        var frames = new List<Oe1300TcpRallFrame>(Oe1300Defaults.TcpRallFrameCount);
+        var frameSummaries = new List<Oe1300TcpRallFrameSummary>(Oe1300Defaults.TcpRallFrameCount);
 
         for (var frameIndex = 0; frameIndex < Oe1300Defaults.TcpRallFrameCount; frameIndex++)
         {
-            var frameOffset = frameIndex * Oe1300Defaults.TcpRallFrameBytes;
-            var namedValues = new Dictionary<string, double>(Oe1300Defaults.TcpRallFieldNames.Count, StringComparer.Ordinal);
-
-            for (var i = 0; i < Oe1300Defaults.TcpRallFieldNames.Count; i++)
-            {
-                var valueOffset = frameOffset + Oe1300Defaults.TcpRallFieldOffsets[i];
-                namedValues[Oe1300Defaults.TcpRallFieldNames[i]] = BitConverter.ToDouble(payload, valueOffset);
-            }
-
-            frames.Add(new Oe1300TcpRallFrame(frameIndex, namedValues));
+            var frameValues = ReadFrameValues(payload, frameIndex);
+            frameSummaries.Add(new Oe1300TcpRallFrameSummary(
+                frameIndex,
+                frameValues.Average(),
+                frameValues.Min(),
+                frameValues.Max()));
         }
 
         var statusByte = payload[Oe1300Defaults.TcpRallStatusOffset];
         var trigCount = payload[Oe1300Defaults.TcpRallTrigCountOffset];
+        var namedValues = DecodeTcpNamedValues(payload, frameSummaries);
 
         return new Oe1300TcpRallCapture(
             payload.Length,
             Oe1300Defaults.TcpRallPayloadBytes,
-            frames.Count,
+            frameSummaries.Count,
             statusByte,
             (statusByte & 0x01) != 0,
             (statusByte & 0x02) != 0,
             trigCount,
             ToHexPrefix(payload, 32),
             ToHexSuffix(payload, 32),
-            frames);
+            "frame_mean_big_endian_v1",
+            namedValues,
+            frameSummaries);
     }
 
     private static IReadOnlyList<double> ParseCsvDoubles(string response, int expectedCount)
@@ -258,6 +238,57 @@ public static class Oe1300Parsers
         }
 
         return map;
+    }
+
+    private static IReadOnlyDictionary<string, double> DecodeTcpNamedValues(
+        byte[] payload,
+        IReadOnlyList<Oe1300TcpRallFrameSummary> frameSummaries)
+    {
+        var namedValues = new Dictionary<string, double>(Oe1300Defaults.SerialRallFieldCount, StringComparer.Ordinal)
+        {
+            ["X"] = MeanFramePair(frameSummaries, 0),
+            ["Y"] = MeanFramePair(frameSummaries, 2),
+            ["R"] = MeanFramePair(frameSummaries, 4),
+            ["Theta"] = MeanFramePair(frameSummaries, 6),
+            ["XNoise"] = MeanFramePair(frameSummaries, 8),
+            ["YNoise"] = MeanFramePair(frameSummaries, 10),
+            ["Frequency"] = MeanFramePair(frameSummaries, 12),
+            ["AuxIn1"] = ReadBigEndianDouble(payload, Oe1300Defaults.TcpRallAuxIn1Offset),
+            ["AuxIn2"] = ReadBigEndianDouble(payload, Oe1300Defaults.TcpRallAuxIn2Offset)
+        };
+
+        for (var harmonic = 1; harmonic <= 7; harmonic++)
+        {
+            var frameBase = 14 + ((harmonic - 1) * 8);
+            namedValues[$"XD{harmonic}"] = MeanFramePair(frameSummaries, frameBase);
+            namedValues[$"YD{harmonic}"] = MeanFramePair(frameSummaries, frameBase + 2);
+            namedValues[$"RD{harmonic}"] = MeanFramePair(frameSummaries, frameBase + 4);
+            namedValues[$"ThetaD{harmonic}"] = MeanFramePair(frameSummaries, frameBase + 6);
+        }
+
+        return namedValues;
+    }
+
+    private static IReadOnlyList<double> ReadFrameValues(byte[] payload, int frameIndex)
+    {
+        var frameOffset = frameIndex * Oe1300Defaults.TcpRallFrameBytes;
+        var values = new double[Oe1300Defaults.TcpRallFrameBytes / sizeof(double)];
+
+        for (var i = 0; i < values.Length; i++)
+        {
+            values[i] = ReadBigEndianDouble(payload, frameOffset + (i * sizeof(double)));
+        }
+
+        return values;
+    }
+
+    private static double MeanFramePair(IReadOnlyList<Oe1300TcpRallFrameSummary> frameSummaries, int firstFrameIndex) =>
+        (frameSummaries[firstFrameIndex].Mean + frameSummaries[firstFrameIndex + 1].Mean) / 2.0;
+
+    private static double ReadBigEndianDouble(byte[] payload, int offset)
+    {
+        var bits = BinaryPrimitives.ReadInt64BigEndian(payload.AsSpan(offset, sizeof(long)));
+        return BitConverter.Int64BitsToDouble(bits);
     }
 
     private static string ToHexPrefix(byte[] payload, int count) =>
