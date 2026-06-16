@@ -625,7 +625,7 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
     var postWriteDelayMs = GetIntOption(options, "post-write-delay-ms", 5);
     var decodeInLoop = GetBoolOption(options, "decode-in-loop", false);
     var writeArtifacts = GetBoolOption(options, "write-artifacts", true);
-    var drainBeforeWrite = GetBoolOption(options, "drain-before-write", false);
+    var drainBeforeWrite = GetBoolOption(options, "drain-before-write", true);
 
     if (durationSec <= 0)
     {
@@ -782,14 +782,14 @@ static int Oe1300NetCollectorDemo(IReadOnlyDictionary<string, string> options)
         raw_bytes_written = rawBytesWritten,
         raw_size_matches_frames_ok = rawBytesWritten == stats.FramesOk * Oe1300Defaults.TcpRallExpectedBytes,
         mean_frame_ms = meanFrameMs,
-        estimated_hz = estimatedHz,
+        estimated_query_hz = estimatedHz,
         raw_path = writeArtifacts ? PathRelative(outDir, rawPath) : null,
         index_path = writeArtifacts ? PathRelative(outDir, indexPath) : null,
         segments_path = writeArtifacts ? PathRelative(outDir, segmentsPath) : null
     };
 
     File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
-    Console.WriteLine($"oe1300-net-collector-demo done: frames_ok={stats.FramesOk}, timeouts={stats.TimeoutCount}, raw_len_bad={stats.RawLenBadCount}, estimated_hz={estimatedHz:0.###}, out_dir={outDir}");
+    Console.WriteLine($"oe1300-net-collector-demo done: frames_ok={stats.FramesOk}, timeouts={stats.TimeoutCount}, raw_len_bad={stats.RawLenBadCount}, query_hz={estimatedHz:0.###}, out_dir={outDir}");
     return stats.TimeoutCount == 0 && stats.RawLenBadCount == 0 ? 0 : 2;
 }
 
