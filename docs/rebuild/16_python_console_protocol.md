@@ -18,6 +18,12 @@
 --emergency-stop-file <path>
 ```
 
+另有恢复入口：
+
+```text
+resume-run --previous-run <dir> --out-dir <dir> --progress-jsonl <path> --stop-request-file <path> --emergency-stop-file <path>
+```
+
 `progress-jsonl` 每行一个 JSON record，来自现有 `RunProgressEvent`：
 
 - `run_id`
@@ -43,7 +49,7 @@
 
 这些 progress record 只在 run、collector、point、cleanup 边界写出，不写逐帧数据。
 
-`stop-request-file` 出现后触发现有 cancellation token。runtime 只在 point 边界停止，不做强杀。
+`stop-request-file` 出现后触发现有 cancellation token。runtime 只在 point 边界暂停，不做强杀；terminal status 固定写为 `paused`，terminal event 固定写为 `run_paused`。
 
 `emergency-stop-file` 出现后触发独立急停 token。runtime 会尽快中断当前 point/sweep，并进入安全停机路径：SMB RF OFF、Laser OFF、M8812 cleanup、collector stop。急停不是强杀进程；terminal status 写为 `aborted`，artifact 默认保留。
 
@@ -56,10 +62,18 @@
 - 生成后直接返回 `RunBundle`
 - 调用 C# `run-resolve`
 - 调用 C# `run-execute --progress-jsonl --stop-request-file --emergency-stop-file`
+- 对可恢复 run 调用 C# `resume-run --previous-run ...`
 - 写 `control/launch_metadata.json`
 - tail `control/progress.jsonl`
-- 写 `control/stop.request` 做 point 边界停止
+- 写 `control/stop.request` 做 point 边界暂停
 - 写 `control/emergency_stop.request` 做立即安全停机
+
+恢复时 Python core 负责：
+
+- 从上一个 run 目录分配新的 sibling 输出目录，例如 `run_a__resume_01`
+- 写新的 `control/launch_metadata.json`
+- 在 metadata 中补 `resume.previous_run_dir` / `resume.resume_out_dir`
+- 继续复用相同的 progress / stop / emergency-stop 文件协议
 
 控制文件默认放在：
 
@@ -73,6 +87,7 @@
 
 - Python 不直接发 VISA、Serial、TCP 命令。
 - Python 不解析 RALL raw，不进入 OE collector。
+- resume 只支持当前 direct-decode truth run，不兼容历史 raw-truth run。
 - PySide6 已在后续 gate 落地；当前文档只记录协议层验证。
 - C# WinForms 保留为 legacy/fallback，不再作为主 UI 投入方向。
 
@@ -146,7 +161,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run <r
   - `artifact-check passed`
   - `audit-continuity verdict=continuous`
 
-结论：progress JSONL / stop-request 协议没有进入 collector 热路径；repeat 15min 满足连续性验收。第一次 15min 的单个 device counter gap 作为偶发采集异常保留记录，不在本 gate 内通过改 collector 处理。
+结论：progress JSONL / pause-request 协议没有进入 collector 热路径；repeat 15min 满足连续性验收。第一次 15min 的单个 device counter gap 作为偶发采集异常保留记录，不在本 gate 内通过改 collector 处理。
 
 ## RALL 约束
 

@@ -24,7 +24,7 @@ python3 tools/odmr-console-python/odmr_console_qt.py
 - `本次实验配置`：选择六个 JSON 和 run 输出目录，显示本地 JSON 摘要。
 - `配置生成`：生成 plan、SMB profile、OE profile、Laser profile，并自动绑定到本次实验配置。
 - `预检查 / 预计用时`：调用 C# `run-resolve`。
-- `运行监控`：调用 C# `run-execute --progress-jsonl --stop-request-file --emergency-stop-file`，只 tail progress JSONL。
+- `运行监控`：调用 C# `run-execute` / `resume-run`，只 tail progress JSONL。
 - `数据审查`：调用 C# `artifact-check` 和 `audit-continuity`。
 
 Plan 类型：
@@ -35,9 +35,25 @@ Plan 类型：
 
 ## 边界
 
-PySide6 不直接操作 VISA、Serial、TCP，也不发 SMB/OE/M8812/Laser 命令。普通 Stop 语义仍是 stop-after-current-point，只通过 stop request file 触发 C# runtime 在 point 边界退出。
+PySide6 不直接操作 VISA、Serial、TCP，也不发 SMB/OE/M8812/Laser 命令。普通 Stop 语义仍是 stop-after-current-point，只通过 stop request file 触发 C# runtime 在 point 边界暂停，并把 terminal status 写成 `paused`。
 
 急停按钮只创建 `control/emergency_stop.request`。C# runtime 收到后尽快中断当前 point/sweep，执行 SMB RF OFF、Laser OFF、M8812 cleanup、collector stop，并把 summary/manifest 写为 `aborted`。UI 收到 `run_aborted` 后询问是否保留本次数据；选择丢弃时移动到同级 `_discarded`，不直接删除。
+
+`Resume` 按钮只在真正可恢复的 terminal run 上启用：
+
+- `paused`
+- `failed`
+- `completed_with_failed_points` 且仍有剩余 point
+- 无 terminal status 但已有部分事实文件的 `process exited`
+
+以下状态不可恢复：
+
+- `completed`
+- `aborted`
+
+恢复不会覆盖旧 run。PySide6 会在同级目录分配新的输出目录，例如
+`run_a__resume_01`，然后调用 C# `resume-run --previous-run run_a --out-dir run_a__resume_01`。
+恢复判定只依赖 direct-decode truth artifact，不读取历史 raw 文件。
 
 预计进度是 UI 本地估算，不是实验真值。`run-resolve` 输出 `estimated_sweep`、`estimated_point_duration_ms`、`estimated_run_duration_ms`；运行中 progress JSONL 低频输出 `sweep_started/sweep_completed` 和 sweep 参数。PySide6 用 500 ms timer 插值显示当前 sweep 和总进度，超过预计时停在 99% 等待设备完成或 cleanup。这个机制不读取 RALL raw，不按 frame 推进，也不进入 collector。
 
@@ -142,7 +158,7 @@ git fetch origin
 git reset --hard origin/main
 ```
 
-启动完整程序的推荐入口是 PySide6 console。它负责配置组合、生成 plan/profile、调用 C# `run-execute`、tail progress JSONL、发 stop-after-current-point request，并提供 artifact 审查入口：
+启动完整程序的推荐入口是 PySide6 console。它负责配置组合、生成 plan/profile、调用 C# `run-execute` / `resume-run`、tail progress JSONL、发 pause/emergency-stop request，并提供 artifact 审查入口：
 
 ```powershell
 python tools\odmr-console-python\odmr_console_qt.py

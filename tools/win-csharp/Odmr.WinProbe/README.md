@@ -68,6 +68,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y 
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json --out-dir runs/win_csharp_run_execute_minimal
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- resume-run --previous-run runs/win_csharp_run_execute_minimal --out-dir runs/win_csharp_run_execute_minimal__resume_01
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- artifact-check --run runs/win_csharp_run_execute_minimal
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run runs/win_csharp_run_execute_minimal --out runs/win_csharp_run_execute_minimal/continuity_audit.json
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- device-command-check
@@ -193,8 +194,25 @@ not as the default collector behavior.
 - `device_state.jsonl`
 - `summary.json`
 
+`run-execute` now supports point-boundary pause through `--stop-request-file`.
+When the stop request is observed before the next point, runtime finishes
+cleanup, writes terminal status `paused`, and emits `run_paused`.
+
+`resume-run` reuses the previous run snapshots and starts from the first point
+that does not satisfy all three completed-point facts:
+
+- `points.jsonl` contains the `point_id`
+- `quality.jsonl` contains the same `point_id` with `quality_status = passed`
+- `events.jsonl` contains `point_completed`
+
+`resume-run` always writes into a new output directory and adds
+`resume_manifest.json`. It only supports the current direct-decode truth
+contract and does not read `raw/oe1022d.rall` or frame-index files.
+
 `artifact-check` is an offline run directory contract check. It reads existing
-artifacts only and does not open instruments or touch the collector.
+artifacts only and does not open instruments or touch the collector. A terminal
+`paused` run is treated as a valid partial artifact as long as the executed
+point/segment/device-state facts are self-consistent.
 
 `audit-continuity` is an offline device-packet-counter audit over
 `collector_frames.jsonl`. It does not reopen raw binary files.

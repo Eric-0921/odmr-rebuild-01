@@ -9,6 +9,7 @@ public enum RuntimeState
     CollectorRunning,
     PointRunning,
     Stopping,
+    Paused,
     Aborted,
     Completed,
     Failed,

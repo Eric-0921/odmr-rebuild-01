@@ -56,6 +56,7 @@ from odmr_console_core import (
     request_emergency_stop,
     request_stop,
     resolve_bundle,
+    start_resume,
     start_run,
     winprobe_project,
 )
@@ -1313,19 +1314,23 @@ class RunMonitorPage(QWidget):
         self.estimated_run_ms: int | None = None
         layout = QVBoxLayout(self)
         layout.addWidget(section_label("运行监控"))
-        layout.addWidget(note_label("启动 C# run-execute。进度来自 progress JSONL，stdout/stderr 只写入 control 日志，避免 pipe 阻塞。"))
+        layout.addWidget(note_label("启动 C# run-execute / resume-run。进度来自 progress JSONL，stdout/stderr 只写入 control 日志，避免 pipe 阻塞。"))
         actions = QHBoxLayout()
         self.start_button = QPushButton("启动运行")
         self.start_button.clicked.connect(self.start_run)
-        self.stop_button = QPushButton("当前点结束后停止")
+        self.stop_button = QPushButton("当前点结束后暂停")
         self.stop_button.clicked.connect(self.stop_after_point)
         self.stop_button.setEnabled(False)
+        self.resume_button = QPushButton("继续未完成 run")
+        self.resume_button.clicked.connect(self.resume_run)
+        self.resume_button.setEnabled(False)
         self.emergency_button = QPushButton("急停")
         self.emergency_button.clicked.connect(self.emergency_stop)
         self.emergency_button.setEnabled(False)
         self.emergency_button.setStyleSheet("QPushButton { color: white; background: #b00020; font-weight: 700; }")
         actions.addWidget(self.start_button)
         actions.addWidget(self.stop_button)
+        actions.addWidget(self.resume_button)
         actions.addWidget(self.emergency_button)
         actions.addStretch(1)
         layout.addLayout(actions)
@@ -1391,6 +1396,7 @@ class RunMonitorPage(QWidget):
         self.point_progress.setValue(0)
         self.table.setRowCount(0)
         self.stop_button.setEnabled(True)
+        self.resume_button.setEnabled(False)
         self.emergency_button.setEnabled(True)
         self.log.setPlainText(json.dumps(asdict(handle), indent=2, ensure_ascii=False))
         self.timer.start()
@@ -1398,6 +1404,7 @@ class RunMonitorPage(QWidget):
     def _failed(self, message: str) -> None:
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
+        self.resume_button.setEnabled(False)
         self.emergency_button.setEnabled(False)
         self.timer.stop()
         self.log.setPlainText(message)
@@ -1406,7 +1413,21 @@ class RunMonitorPage(QWidget):
         if not self.handle:
             return
         request_stop(self.handle.control_paths.stop_request_file)
-        self.log.appendPlainText(f"\nstop requested: {self.handle.control_paths.stop_request_file}")
+        self.log.appendPlainText(f"\npause requested: {self.handle.control_paths.stop_request_file}")
+
+    def resume_run(self) -> None:
+        if not self.handle:
+            return
+        previous_out_dir = self.handle.out_dir
+        self.log.appendPlainText(f"\n正在继续未完成 run：{previous_out_dir}")
+        self.start_button.setEnabled(False)
+        self.stop_button.setEnabled(False)
+        self.resume_button.setEnabled(False)
+        self.emergency_button.setEnabled(False)
+        self.worker = WorkerThread(lambda: start_resume(previous_out_dir))
+        self.worker.completed.connect(self._started)
+        self.worker.failed.connect(self._failed)
+        self.worker.start()
 
     def emergency_stop(self) -> None:
         if not self.handle:
@@ -1446,11 +1467,14 @@ class RunMonitorPage(QWidget):
                 f"timeout={latest.get('timeout_count')} raw_len_bad={latest.get('raw_len_bad_count')} delta_gt1={latest.get('delta_gt1_count')}"
             )
             self._update_estimated_progress(latest)
-            if latest.get("state") in {"Completed", "Failed", "Aborted", "CleanupFailed"}:
+            if latest.get("state") in {"Completed", "Failed", "Paused", "Aborted", "CleanupFailed"}:
                 self.timer.stop()
                 self.start_button.setEnabled(True)
                 self.stop_button.setEnabled(False)
+                self.resume_button.setEnabled(self._run_dir_is_resumable(self.handle.out_dir))
                 self.emergency_button.setEnabled(False)
+                if latest.get("state") in {"Failed", "CleanupFailed"}:
+                    self._append_backend_log_tail()
                 if latest.get("state") == "Completed":
                     self.total_progress.setValue(1000)
                     self.point_progress.setValue(1000)
@@ -1463,6 +1487,7 @@ class RunMonitorPage(QWidget):
             self.timer.stop()
             self.start_button.setEnabled(True)
             self.stop_button.setEnabled(False)
+            self.resume_button.setEnabled(self._run_dir_is_resumable(self.handle.out_dir))
             self.emergency_button.setEnabled(False)
             self.state.setText("process exited")
             stdout_tail = read_text_tail(self.handle.control_paths.stdout_log)
@@ -1525,6 +1550,119 @@ class RunMonitorPage(QWidget):
                 self.log.appendPlainText(f"\n已移动到：{target}")
             except Exception as exc:
                 QMessageBox.warning(self, "丢弃失败", str(exc))
+
+    def _run_dir_is_resumable(self, out_dir: str) -> bool:
+        required = [
+            Path(out_dir) / "station_snapshot.json",
+            Path(out_dir) / "plan_snapshot.json",
+            Path(out_dir) / "calibration_snapshot.json",
+            Path(out_dir) / "smb_profile_snapshot.json",
+            Path(out_dir) / "oe_profile_snapshot.json",
+            Path(out_dir) / "laser_profile_snapshot.json",
+            Path(out_dir) / "events.jsonl",
+        ]
+        if any(not path.exists() for path in required):
+            return False
+
+        status = self._load_run_status(out_dir)
+        if status in {"completed", "aborted"}:
+            return False
+        if status in {"failed", "paused", "completed_with_failed_points"}:
+            return self._has_remaining_points(out_dir)
+
+        has_partial_facts = any(
+            (Path(out_dir) / filename).exists()
+            for filename in ["points.jsonl", "quality.jsonl", "device_state.jsonl"]
+        )
+        return has_partial_facts and self._has_remaining_points(out_dir)
+
+    def _load_run_status(self, out_dir: str) -> str | None:
+        for filename in ["summary.json", "run_manifest.json"]:
+            path = Path(out_dir) / filename
+            if not path.exists():
+                continue
+            try:
+                status = load_json(path).get("status")
+            except Exception:
+                continue
+            if isinstance(status, str) and status.strip():
+                return status
+        return None
+
+    def _has_remaining_points(self, out_dir: str) -> bool:
+        total = self._points_total(out_dir)
+        if total <= 0:
+            return False
+        return len(self._completed_point_ids(out_dir)) < total
+
+    def _points_total(self, out_dir: str) -> int:
+        plan_snapshot = Path(out_dir) / "plan_snapshot.json"
+        if plan_snapshot.exists():
+            try:
+                resolved = load_json(plan_snapshot).get("resolved_point_count")
+                if resolved is not None:
+                    return int(resolved)
+            except Exception:
+                pass
+
+        summary = Path(out_dir) / "summary.json"
+        if summary.exists():
+            try:
+                points_total = load_json(summary).get("points_total")
+                if points_total is not None:
+                    return int(points_total)
+            except Exception:
+                pass
+
+        return 0
+
+    def _completed_point_ids(self, out_dir: str) -> set[str]:
+        points_path = Path(out_dir) / "points.jsonl"
+        quality_path = Path(out_dir) / "quality.jsonl"
+        events_path = Path(out_dir) / "events.jsonl"
+
+        point_ids = self._read_jsonl_ids(points_path, "point_id")
+        quality_ids = {
+            str(record.get("point_id"))
+            for record in self._read_jsonl(quality_path)
+            if record.get("quality_status") == "passed" and record.get("point_id")
+        }
+        completed_event_ids = {
+            str(record.get("point_id"))
+            for record in self._read_jsonl(events_path)
+            if record.get("event") == "point_completed" and record.get("point_id")
+        }
+        return point_ids & quality_ids & completed_event_ids
+
+    def _read_jsonl_ids(self, path: Path, field_name: str) -> set[str]:
+        return {
+            str(record.get(field_name))
+            for record in self._read_jsonl(path)
+            if record.get(field_name)
+        }
+
+    def _read_jsonl(self, path: Path) -> list[dict[str, Any]]:
+        if not path.exists():
+            return []
+        records: list[dict[str, Any]] = []
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if stripped:
+                    records.append(json.loads(stripped))
+        return records
+
+    def _append_backend_log_tail(self) -> None:
+        if not self.handle:
+            return
+        stdout_tail = read_text_tail(self.handle.control_paths.stdout_log)
+        stderr_tail = read_text_tail(self.handle.control_paths.stderr_log)
+        self.log.appendPlainText(
+            "\n后端日志摘要:\nSTDOUT tail:\n"
+            + (stdout_tail or "<empty>")
+            + "\n\nSTDERR tail:\n"
+            + (stderr_tail or "<empty>")
+        )
 
     def _append_record(self, record: dict[str, Any]) -> None:
         row = self.table.rowCount()

@@ -7,7 +7,7 @@ directly. Device control remains in the C# runtime and `Odmr.WinProbe` CLI.
 
 ## Boundary
 
-- Python owns config composition, process launch, progress tailing, and stop request files.
+- Python owns config composition, process launch, progress tailing, pause / resume control files, and emergency-stop request files.
 - C# owns station resolution, device control, `RALL?` collection, artifacts, audit, and cleanup.
 - `RALL?` hot path remains only in C# and is not touched by this console core.
 - PySide6 is the main UI direction; the Tk generator remains a fallback.
@@ -31,7 +31,7 @@ The UI pages are:
 - `Run Bundle`: choose station, calibration, plan, SMB profile, OE profile, laser profile, and output.
 - `Config Generator`: generate plan/profile JSON with the existing config-generator core.
 - `Resolve / Estimate`: call C# `run-resolve`.
-- `Run Monitor`: call C# `run-execute --progress-jsonl --stop-request-file`.
+- `Run Monitor`: call C# `run-execute` / `resume-run` with `progress JSONL + stop/emergency request files`.
 - `Artifact Review`: call C# `artifact-check` and `audit-continuity`.
 
 ## Commands
@@ -71,10 +71,17 @@ This writes launch control files under:
 <out-dir>/control/
   progress.jsonl
   stop.request
+  emergency_stop.request
   launch_metadata.json
   stdout.log
   stderr.log
 ```
+
+If a run stops at a point boundary, C# writes terminal status `paused`. The
+PySide6 `Resume` button then allocates a sibling output directory like
+`<run-dir>__resume_01` and launches C# `resume-run --previous-run <run-dir>`.
+Resume only supports the current direct-decode artifact contract; it does not
+reopen historical raw-truth runs.
 
 Request stop-after-current-point:
 
@@ -92,9 +99,9 @@ python3 tools/odmr-console-python/odmr_console.py read-progress \
 
 ## Progress JSONL
 
-`Odmr.WinProbe run-execute` writes progress records only at run, collector, point,
-and cleanup boundaries. It does not write per-frame progress and does not enter
-the OE collector loop.
+`Odmr.WinProbe run-execute` and `resume-run` write progress records only at run,
+collector, point, and cleanup boundaries. They do not write per-frame progress
+and do not enter the OE collector loop.
 
 Each line includes:
 

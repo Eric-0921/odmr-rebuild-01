@@ -14,12 +14,14 @@ from odmr_console_core import (  # noqa: E402
     control_paths_for_out_dir,
     demo_generator_request,
     generate_config_bundle,
+    next_resume_out_dir,
     process_is_running,
     read_progress,
     read_progress_since,
     read_text_tail,
     request_emergency_stop,
     request_stop,
+    resume_run_command,
     run_execute_command,
 )
 
@@ -48,6 +50,23 @@ class OdmrConsoleCoreTests(unittest.TestCase):
             self.assertIn(control.stop_request_file, command)
             self.assertIn("--emergency-stop-file", command)
             self.assertIn(control.emergency_stop_file, command)
+
+    def test_resume_command_and_out_dir_allocation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            previous_run = Path(tmp) / "run_a"
+            previous_run.mkdir()
+            allocated = next_resume_out_dir(previous_run)
+            self.assertEqual(allocated.name, "run_a__resume_01")
+            allocated.mkdir()
+            next_allocated = next_resume_out_dir(previous_run)
+            self.assertEqual(next_allocated.name, "run_a__resume_02")
+            control = control_paths_for_out_dir(next_allocated)
+            command = resume_run_command(previous_run, next_allocated, control, ROOT, "dotnet")
+            self.assertIn("resume-run", command)
+            self.assertIn("--previous-run", command)
+            self.assertIn(str(previous_run), command)
+            self.assertIn("--progress-jsonl", command)
+            self.assertIn(control.progress_jsonl, command)
 
     def test_stop_request_and_progress_reading(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

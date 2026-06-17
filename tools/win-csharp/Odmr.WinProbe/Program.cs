@@ -40,6 +40,7 @@ static int Run(string[] args)
             "minimal-3point-run" => Minimal3PointRunCommand(options),
             "run-resolve" => RunResolveCommand(options),
             "run-execute" => RunExecuteCommand(options),
+            "resume-run" => ResumeRunCommand(options),
             "artifact-check" => ArtifactCheckCommand(options),
             "audit-continuity" => AuditContinuityCommand(options),
             "device-command-check" => DeviceCommandCheck(),
@@ -274,7 +275,45 @@ static int RunExecuteCommand(IReadOnlyDictionary<string, string> options)
     }
 
     Console.WriteLine($"run-execute done: run_id={summary.RunId}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
-    return summary.Status is "completed" or "completed_with_failed_points" &&
+    return summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
+        summary.TimeoutCount == 0 &&
+        summary.RawLenBadCount == 0 &&
+        summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
+}
+
+static int ResumeRunCommand(IReadOnlyDictionary<string, string> options)
+{
+    var previousRunDir = GetRequiredOption(options, "previous-run");
+    var outDir = GetRequiredOption(options, "out-dir");
+    var progressPath = GetOptionalOption(options, "progress-jsonl");
+    using var progress = string.IsNullOrWhiteSpace(progressPath)
+        ? null
+        : new ProgressJsonlWriter(progressPath, Path.GetFileName(Path.GetFullPath(outDir)));
+    using var stopAfterPointCancellation = new CancellationTokenSource();
+    using var emergencyCancellation = new CancellationTokenSource();
+    using var watcherCancellation = new CancellationTokenSource();
+    var stopWatcher = StartRequestFileWatcher(GetOptionalOption(options, "stop-request-file"), stopAfterPointCancellation, watcherCancellation.Token);
+    var emergencyWatcher = StartRequestFileWatcher(GetOptionalOption(options, "emergency-stop-file"), emergencyCancellation, watcherCancellation.Token);
+
+    RunSummaryRecord summary;
+    try
+    {
+        summary = ResumeRun.Execute(
+            previousRunDir,
+            outDir,
+            progress,
+            stopAfterPointCancellation.Token,
+            emergencyCancellation.Token);
+    }
+    finally
+    {
+        watcherCancellation.Cancel();
+        WaitForWatcher(stopWatcher);
+        WaitForWatcher(emergencyWatcher);
+    }
+
+    Console.WriteLine($"resume-run done: previous_run={previousRunDir}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
+    return summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
         summary.TimeoutCount == 0 &&
         summary.RawLenBadCount == 0 &&
         summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
@@ -1403,6 +1442,7 @@ static void PrintUsage()
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--smb-resource USB::0x0AAD::0x0054::106789::INSTR] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
       Odmr.WinProbe run-resolve --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json>
       Odmr.WinProbe run-execute --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json> --out-dir <dir> [--progress-jsonl <path>] [--stop-request-file <path>] [--emergency-stop-file <path>]
+      Odmr.WinProbe resume-run --previous-run <dir> --out-dir <dir> [--progress-jsonl <path>] [--stop-request-file <path>] [--emergency-stop-file <path>]
       Odmr.WinProbe artifact-check --run <run-dir>
       Odmr.WinProbe audit-continuity --run <run-dir> --out <json>
       Odmr.WinProbe device-command-check

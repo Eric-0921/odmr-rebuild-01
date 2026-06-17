@@ -58,6 +58,13 @@ class LaunchHandle:
     metadata_path: str
 
 
+@dataclass(frozen=True)
+class ResumeHandle:
+    previous_run_dir: str
+    resume_out_dir: str
+    resume_from_run_id: str | None
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
@@ -204,6 +211,33 @@ def run_execute_command(
     return command
 
 
+def resume_run_command(
+    previous_run: str | Path,
+    out_dir: str | Path,
+    control_paths: ControlPaths,
+    repo_root: str | Path | None = None,
+    dotnet: str = "dotnet",
+) -> list[str]:
+    return [
+        dotnet,
+        "run",
+        "--project",
+        winprobe_project(repo_root),
+        "--",
+        "resume-run",
+        "--previous-run",
+        str(previous_run),
+        "--out-dir",
+        str(out_dir),
+        "--progress-jsonl",
+        control_paths.progress_jsonl,
+        "--stop-request-file",
+        control_paths.stop_request_file,
+        "--emergency-stop-file",
+        control_paths.emergency_stop_file,
+    ]
+
+
 def resolve_bundle(bundle: RunBundle, repo_root: str | Path | None = None, dotnet: str = "dotnet") -> subprocess.CompletedProcess[str]:
     repo = Path(repo_root) if repo_root else REPO_ROOT
     return subprocess.run(
@@ -265,6 +299,73 @@ def start_run(
     return handle
 
 
+def next_resume_out_dir(previous_run_dir: str | Path) -> Path:
+    source = Path(previous_run_dir)
+    parent = source.parent
+    stem = source.name
+    for index in range(1, 100):
+        candidate = parent / f"{stem}__resume_{index:02d}"
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError(f"failed to allocate resume directory for {source}")
+
+
+def start_resume(
+    previous_run_dir: str | Path,
+    repo_root: str | Path | None = None,
+    dotnet: str = "dotnet",
+) -> LaunchHandle:
+    repo = Path(repo_root) if repo_root else REPO_ROOT
+    previous_path = Path(previous_run_dir)
+    out_path = next_resume_out_dir(previous_path)
+    control_paths = control_paths_for_out_dir(out_path)
+    Path(control_paths.control_dir).mkdir(parents=True, exist_ok=True)
+    for request_file in [control_paths.stop_request_file, control_paths.emergency_stop_file]:
+        request_path = Path(request_file)
+        if request_path.exists():
+            request_path.unlink()
+
+    command = resume_run_command(previous_path, out_path, control_paths, repo, dotnet)
+    stdout = open(control_paths.stdout_log, "w", encoding="utf-8", newline="\n")
+    stderr = open(control_paths.stderr_log, "w", encoding="utf-8", newline="\n")
+    try:
+        process = subprocess.Popen(command, cwd=repo, stdout=stdout, stderr=stderr, text=True)
+    finally:
+        stdout.close()
+        stderr.close()
+
+    run_id = None
+    plan_snapshot = previous_path / "plan_snapshot.json"
+    if plan_snapshot.exists():
+        try:
+            run_id = load_json(plan_snapshot).get("run_id")
+        except Exception:
+            run_id = None
+
+    handle = LaunchHandle(
+        pid=process.pid,
+        command=command,
+        cwd=str(repo),
+        out_dir=str(out_path),
+        control_paths=control_paths,
+        metadata_path=control_paths.launch_metadata,
+    )
+    write_json(
+        control_paths.launch_metadata,
+        {
+            "schema_version": 1,
+            "started_at": utc_now(),
+            "pid": handle.pid,
+            "command": handle.command,
+            "cwd": handle.cwd,
+            "out_dir": handle.out_dir,
+            "resume": asdict(ResumeHandle(str(previous_path), str(out_path), run_id)),
+            "control_paths": asdict(control_paths),
+        },
+    )
+    return handle
+
+
 def request_stop(stop_request_file: str | Path) -> None:
     Path(stop_request_file).parent.mkdir(parents=True, exist_ok=True)
     Path(stop_request_file).write_text(f"stop requested at {utc_now()}\n", encoding="utf-8")
@@ -297,6 +398,20 @@ def read_progress(path: str | Path) -> list[dict[str, Any]]:
             if stripped:
                 records.append(json.loads(stripped))
     return records
+
+
+def read_jsonl_since(path: str | Path, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
+    target = Path(path)
+    if not target.exists():
+        return [], offset
+    records: list[dict[str, Any]] = []
+    with target.open("r", encoding="utf-8") as handle:
+        handle.seek(offset)
+        for line in handle:
+            stripped = line.strip()
+            if stripped:
+                records.append(json.loads(stripped))
+        return records, handle.tell()
 
 
 def read_progress_since(path: str | Path, offset: int = 0) -> tuple[list[dict[str, Any]], int]:

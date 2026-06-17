@@ -16,7 +16,10 @@ public sealed record ConfigDrivenRunOptions(
     string OutDir,
     IProgress<RunProgressEvent>? Progress = null,
     CancellationToken CancellationToken = default,
-    CancellationToken EmergencyStopToken = default);
+    CancellationToken EmergencyStopToken = default,
+    int StartPointIndex = 0,
+    int CompletedPointsOffset = 0,
+    long? EstimatedRunDurationMsOverride = null);
 
 internal sealed record ConfigMagAxis(
     string AxisId,
@@ -55,6 +58,18 @@ public static class ConfigDrivenRun
             options.OeProfilePath,
             options.LaserProfilePath);
 
+        return Execute(bundle, options);
+    }
+
+    public static RunSummaryRecord Execute(RunConfigBundle bundle, ConfigDrivenRunOptions options)
+    {
+        if (options.StartPointIndex < 0 || options.StartPointIndex > bundle.ResolvedPlan.Points.Count)
+        {
+            throw new InvalidOperationException($"invalid start point index: {options.StartPointIndex}");
+        }
+
+        var effectiveEstimatedRunDurationMs = options.EstimatedRunDurationMsOverride ?? bundle.ResolvedPlan.EstimatedRunDurationMs;
+
         PrepareRunDirectory(options.OutDir);
         WriteSnapshots(options.OutDir, bundle);
 
@@ -86,7 +101,7 @@ public static class ConfigDrivenRun
             bundle.LaserProfile.ProfileId,
             bundle.ResolvedPlan.SourceKind,
             bundle.ResolvedPlan.ResolvedPointCount,
-            bundle.ResolvedPlan.EstimatedRunDurationMs);
+            effectiveEstimatedRunDurationMs);
         RallArtifactWriter.WritePrettyJson(manifestPath, manifest);
 
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "run_opened", "run", null, null, new
@@ -108,7 +123,7 @@ public static class ConfigDrivenRun
             null,
             null,
             null,
-            bundle.ResolvedPlan.EstimatedRunDurationMs,
+            effectiveEstimatedRunDurationMs,
             bundle.ResolvedPlan.EstimatedPointDurationMs,
             bundle.ResolvedPlan.EstimatedSweep?.SweepDurationMs,
             bundle.ResolvedPlan.EstimatedSweep?.SweepPoints,
@@ -131,10 +146,11 @@ public static class ConfigDrivenRun
         using var smb = OpenSmbSession(resolvedConnections);
         var magAxes = bundle.ResolvedPlan.RequiresMagneticControl ? OpenMagAxes(bundle, resolvedConnections) : [];
         CniLaserSession? laser = null;
-        var pointsPassed = 0;
+        var pointsPassed = options.CompletedPointsOffset;
         var pointsFailed = 0;
         string? failure = null;
         var aborted = false;
+        var paused = false;
         var emergencyEventRecorded = false;
 
         try
@@ -182,21 +198,22 @@ public static class ConfigDrivenRun
             ApplySmbFixedProfile(smb, bundle.SmbProfile);
             ApplySmbInitialRfOutputOff(smb, bundle, eventsPath, processStart);
 
-            for (var index = 0; index < bundle.ResolvedPlan.Points.Count; index++)
+            for (var index = options.StartPointIndex; index < bundle.ResolvedPlan.Points.Count; index++)
             {
                 ThrowIfEmergencyRequested(options);
                 if (options.CancellationToken.IsCancellationRequested)
                 {
+                    paused = true;
                     var stoppingSnapshot = collector.Snapshot();
-                    AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "stop_after_current_point_requested", "run", null, null, new
+                    AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "pause_after_current_point_requested", "run", null, null, new
                     {
                         stopped_before_point_index = index
                     });
                     ReportProgress(
                         options,
                         RuntimeState.Stopping,
-                        "stop_after_current_point_requested",
-                        "Stop requested before next point",
+                        "pause_after_current_point_requested",
+                        "Pause requested before next point",
                         null,
                         index,
                         bundle.ResolvedPlan.ResolvedPointCount,
@@ -450,7 +467,9 @@ public static class ConfigDrivenRun
 
         var finalSnapshot = collector.Snapshot();
         var endedAt = UtcNowString();
-        var status = aborted
+        var status = paused
+            ? "paused"
+            : aborted
             ? "aborted"
             : failure is not null
             ? "failed"
@@ -458,6 +477,7 @@ public static class ConfigDrivenRun
 
         var terminalEvent = status switch
         {
+            "paused" => "run_paused",
             "aborted" => "run_aborted",
             "failed" => "run_failed",
             _ => "run_completed"
@@ -471,7 +491,13 @@ public static class ConfigDrivenRun
         });
         ReportProgress(
             options,
-            status == "aborted" ? RuntimeState.Aborted : status == "failed" ? RuntimeState.Failed : RuntimeState.Completed,
+            status == "paused"
+                ? RuntimeState.Paused
+                : status == "aborted"
+                ? RuntimeState.Aborted
+                : status == "failed"
+                ? RuntimeState.Failed
+                : RuntimeState.Completed,
             terminalEvent,
             $"Run {status}: {bundle.Plan.RunId}",
             null,

@@ -111,8 +111,10 @@ public static class ArtifactCheck
         var qualityStatusCounts = File.Exists(qualityPath)
             ? CountJsonlStringProperty(qualityPath, "quality_status")
             : new Dictionary<string, long>(StringComparer.Ordinal);
-        var aborted = string.Equals(summaryStatus, "aborted", StringComparison.Ordinal) ||
-            string.Equals(manifestStatus, "aborted", StringComparison.Ordinal);
+        var effectiveStatus = !string.IsNullOrWhiteSpace(summaryStatus) ? summaryStatus : manifestStatus;
+        var aborted = string.Equals(effectiveStatus, "aborted", StringComparison.Ordinal);
+        var paused = string.Equals(effectiveStatus, "paused", StringComparison.Ordinal);
+        var failed = string.Equals(effectiveStatus, "failed", StringComparison.Ordinal);
         var deviceStateIssues = ValidateDeviceState(pointsPath, segmentsPath, deviceStatePath);
         var deviceStateConsistent = deviceStateIssues.Count == 0;
         var rfExposureWindowsCovered = !deviceStateIssues.Any(issue =>
@@ -122,23 +124,36 @@ public static class ArtifactCheck
             ? DistinctJsonlStringProperty(eventsPath, "event")
             : [];
         var eventSet = eventsPresent.ToHashSet(StringComparer.Ordinal);
-        var requiredEvents = aborted
+        var partialTerminal = aborted || paused || failed;
+        var executedAnyPoint = pointsCount > 0 || segmentsCount > 0 || qualityCount > 0 || deviceStateCount > 0;
+        var requiredEvents = partialTerminal
             ? RequiredEventNames
-                .Where(eventName => eventName is
-                    "run_opened" or
-                    "collector_started" or
-                    "oe_profile_applied" or
-                    "laser_profile_applied" or
-                    "collector_stopped" or
-                    "cleanup_completed")
+                .Where(eventName =>
+                    eventName is
+                        "run_opened" or
+                        "collector_started" or
+                        "oe_profile_applied" or
+                        "laser_profile_applied" or
+                        "collector_stopped" or
+                        "cleanup_completed" ||
+                    executedAnyPoint && (
+                        eventName is
+                            "point_prepare_started" or
+                            "point_stable" or
+                            "sweep_started" or
+                            "sweep_completed" or
+                            "point_completed"))
                 .ToArray()
             : RequiredEventNames;
         var missingEvents = requiredEvents
             .Where(eventName => !eventSet.Contains(eventName))
             .ToList();
-        if (!eventSet.Contains("run_completed") && !eventSet.Contains("run_failed") && !eventSet.Contains("run_aborted"))
+        if (!eventSet.Contains("run_completed") &&
+            !eventSet.Contains("run_failed") &&
+            !eventSet.Contains("run_aborted") &&
+            !eventSet.Contains("run_paused"))
         {
-            missingEvents.Add("run_completed|run_failed|run_aborted");
+            missingEvents.Add("run_completed|run_failed|run_aborted|run_paused");
         }
 
         var collectorRowsMatchFrames = collectorFrameRows == framesTotal;

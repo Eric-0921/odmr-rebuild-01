@@ -386,6 +386,32 @@ public static class RunConfigLoader
         return new RunConfigBundle(station, calibration, plan, smbProfile, oeProfile, laserProfile, connections, resolvedPlan);
     }
 
+    public static RunConfigBundle LoadFromRunSnapshots(string runDir)
+    {
+        var station = ReadJson<StationSpec>(Path.Combine(runDir, "station_snapshot.json"));
+        var calibration = ReadJson<CalibrationProfile>(Path.Combine(runDir, "calibration_snapshot.json"));
+        var smbProfile = ReadJson<Smb100aRunProfile>(Path.Combine(runDir, "smb_profile_snapshot.json"));
+        var oeProfile = ReadJson<Oe1022dRunProfile>(Path.Combine(runDir, "oe_profile_snapshot.json"));
+        var laserProfile = ReadJson<LaserRunProfile>(Path.Combine(runDir, "laser_profile_snapshot.json"));
+        var planSnapshot = ReadJson<PlanSnapshot>(Path.Combine(runDir, "plan_snapshot.json"));
+
+        var resolvedPlan = new ResolvedRunPlan(
+            planSnapshot.SchemaVersion,
+            planSnapshot.RunId,
+            planSnapshot.SourceKind,
+            planSnapshot.DeclaredPointCount,
+            planSnapshot.ResolvedPointCount,
+            planSnapshot.FixedTotalPoints,
+            planSnapshot.CycleMode,
+            planSnapshot.EstimatedSweep,
+            planSnapshot.EstimatedPointDurationMs,
+            planSnapshot.EstimatedRunDurationMs,
+            planSnapshot.ResolvedPoints);
+        ValidateOeCollector(oeProfile);
+        var connections = ResolveConnections(station, resolvedPlan.RequiresMagneticControl);
+        return new RunConfigBundle(station, calibration, planSnapshot.SourcePlan, smbProfile, oeProfile, laserProfile, connections, resolvedPlan);
+    }
+
     public static T ReadJson<T>(string path)
     {
         var json = File.ReadAllText(path);
