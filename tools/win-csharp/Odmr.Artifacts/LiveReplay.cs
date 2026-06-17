@@ -7,6 +7,8 @@ public sealed record LiveReplaySnapshot(
     [property: JsonPropertyName("run_dir")] string RunDir,
     [property: JsonPropertyName("run_id")] string? RunId,
     [property: JsonPropertyName("status")] string? Status,
+    [property: JsonPropertyName("lockin_model")] string? LockinModel,
+    [property: JsonPropertyName("collector_contract")] string? CollectorContract,
     [property: JsonPropertyName("points_total")] long PointsTotal,
     [property: JsonPropertyName("points_completed")] long PointsCompleted,
     [property: JsonPropertyName("points_passed")] long PointsPassed,
@@ -14,9 +16,12 @@ public sealed record LiveReplaySnapshot(
     [property: JsonPropertyName("frames_total")] long FramesTotal,
     [property: JsonPropertyName("last_frame_seq")] long? LastFrameSeq,
     [property: JsonPropertyName("last_frame_ts")] string? LastFrameTs,
+    [property: JsonPropertyName("last_collector_index")] long? LastCollectorIndex,
     [property: JsonPropertyName("timeout_count")] long TimeoutCount,
     [property: JsonPropertyName("raw_len_bad_count")] long RawLenBadCount,
     [property: JsonPropertyName("delta_gt1_count")] long DeltaGt1Count,
+    [property: JsonPropertyName("decode_failures")] long DecodeFailures,
+    [property: JsonPropertyName("effective_sample_hz_per_parameter")] double? EffectiveSampleHzPerParameter,
     [property: JsonPropertyName("collector_health")] string CollectorHealth,
     [property: JsonPropertyName("event_counts")] IReadOnlyDictionary<string, long> EventCounts,
     [property: JsonPropertyName("recent_events")] IReadOnlyList<LiveReplayEvent> RecentEvents);
@@ -39,7 +44,6 @@ public static class LiveReplay
 
         var summaryPath = Path.Combine(runDir, "summary.json");
         var eventsPath = Path.Combine(runDir, "events.jsonl");
-        var collectorFramesPath = Path.Combine(runDir, "collector_frames.jsonl");
         if (!File.Exists(summaryPath))
         {
             throw new FileNotFoundException("summary missing", summaryPath);
@@ -52,6 +56,10 @@ public static class LiveReplay
 
         using var summaryDocument = JsonDocument.Parse(File.ReadAllText(summaryPath));
         var summary = summaryDocument.RootElement;
+        var lockinModel = GetString(summary, "lockin_model") ?? "oe1022d";
+        var collectorFramesPath = Path.Combine(
+            runDir,
+            lockinModel == "oe1300" ? "collector_blocks.jsonl" : "collector_frames.jsonl");
         var eventCounts = new Dictionary<string, long>(StringComparer.Ordinal);
         var recentEvents = new Queue<LiveReplayEvent>();
         long pointsCompletedFromEvents = 0;
@@ -90,34 +98,49 @@ public static class LiveReplay
             }
         }
 
-        var lastFrame = File.Exists(collectorFramesPath) ? ReadLastFrame(collectorFramesPath) : null;
+        var lastFrame = File.Exists(collectorFramesPath)
+            ? lockinModel == "oe1300"
+                ? ReadLastCollectorBlock(collectorFramesPath)
+                : ReadLastCollectorFrame(collectorFramesPath)
+            : null;
         var timeoutCount = GetInt64(summary, "timeout_count") ?? 0;
         var rawLenBadCount = GetInt64(summary, "raw_len_bad_count") ?? 0;
         var deltaGt1Count = GetNestedInt64(summary, "packet_counter", "delta_gt1_count") ?? 0;
-        var collectorHealth = timeoutCount == 0 && rawLenBadCount == 0 && deltaGt1Count == 0
-            ? "clean"
-            : "degraded";
+        var decodeFailures = GetInt64(summary, "decode_failures") ?? 0;
+        var effectiveSampleHzPerParameter = GetDouble(summary, "effective_sample_hz_per_parameter");
+        var collectorHealth = lockinModel == "oe1300"
+            ? timeoutCount == 0 && rawLenBadCount == 0 && decodeFailures == 0 && (effectiveSampleHzPerParameter ?? 0.0) >= 900.0
+                ? "clean"
+                : "degraded"
+            : timeoutCount == 0 && rawLenBadCount == 0 && deltaGt1Count == 0
+                ? "clean"
+                : "degraded";
 
         return new LiveReplaySnapshot(
             runDir,
             GetString(summary, "run_id"),
             GetString(summary, "status"),
+            lockinModel,
+            GetString(summary, "collector_contract"),
             GetInt64(summary, "points_total") ?? 0,
             pointsCompletedFromEvents,
             GetInt64(summary, "points_passed") ?? 0,
             GetInt64(summary, "points_failed") ?? 0,
             GetInt64(summary, "frames_total") ?? GetInt64(summary, "frames_ok") ?? 0,
-            lastFrame?.FrameSeq,
+            lockinModel == "oe1300" ? null : lastFrame?.FrameSeq,
             lastFrame?.Ts,
+            lastFrame?.FrameSeq,
             timeoutCount,
             rawLenBadCount,
             deltaGt1Count,
+            decodeFailures,
+            effectiveSampleHzPerParameter,
             collectorHealth,
             eventCounts,
             recentEvents.ToArray());
     }
 
-    private static CollectorFrameAuditRecord? ReadLastFrame(string collectorFramesPath)
+    private static CollectorFrameAuditRecord? ReadLastCollectorFrame(string collectorFramesPath)
     {
         string? lastLine = null;
         foreach (var line in File.ReadLines(collectorFramesPath))
@@ -131,6 +154,34 @@ public static class LiveReplay
         return lastLine is null
             ? null
             : JsonSerializer.Deserialize<CollectorFrameAuditRecord>(lastLine, JsonOptions.Default);
+    }
+
+    private static CollectorFrameAuditRecord? ReadLastCollectorBlock(string collectorBlocksPath)
+    {
+        string? lastLine = null;
+        foreach (var line in File.ReadLines(collectorBlocksPath))
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                lastLine = line;
+            }
+        }
+
+        if (lastLine is null)
+        {
+            return null;
+        }
+
+        using var document = JsonDocument.Parse(lastLine);
+        var root = document.RootElement;
+        return new CollectorFrameAuditRecord(
+            GetInt64(root, "rall_index") ?? 0,
+            GetString(root, "ts") ?? string.Empty,
+            GetUInt64(root, "monotonic_ns") ?? 0,
+            GetInt64(root, "sample_index_start") ?? 0,
+            GetInt64(root, "sample_index_end") ?? 0,
+            0,
+            0);
     }
 
     private static string? GetString(JsonElement element, string propertyName) =>
@@ -154,4 +205,18 @@ public static class LiveReplay
 
         return GetInt64(nested, propertyName);
     }
+
+    private static double? GetDouble(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) &&
+        property.ValueKind == JsonValueKind.Number &&
+        property.TryGetDouble(out var value)
+            ? value
+            : null;
+
+    private static ulong? GetUInt64(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) &&
+        property.ValueKind == JsonValueKind.Number &&
+        property.TryGetUInt64(out var value)
+            ? value
+            : null;
 }

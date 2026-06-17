@@ -19,7 +19,8 @@ public sealed record CollectorCursor(
     long NextFrameSeq,
     long NextSampleIndex,
     string Timestamp,
-    ulong MonotonicNs);
+    ulong MonotonicNs,
+    long NextUniqueFrameSeq = 0);
 
 public sealed record SweepOnlyRunSummary(
     [property: JsonPropertyName("command")] string Command,
@@ -179,7 +180,7 @@ public static class SweepOnlyRun
 
 public sealed record OeRallCollectorSnapshot(ProbeStats Stats, PacketCounterAudit PacketCounter, long SamplesWritten);
 
-public sealed class OeRallCollector : IDisposable
+public sealed class OeRallCollector : ILockinCollector
 {
     private readonly string resourceName;
     private readonly int baudRate;
@@ -216,6 +217,14 @@ public sealed class OeRallCollector : IDisposable
         lastTs = SweepOnlyRunCollectorTime.ExecuteTimestampForCollector();
     }
 
+    public string LockinModel => LockinModelNames.Oe1022d;
+
+    public string DeviceId => "oe1022d_main";
+
+    public string CollectorContract => RuntimeContracts.Oe1022dFrozenRallHotPath;
+
+    public string CollectorArtifactFileName => "collector_frames.jsonl";
+
     public void Start()
     {
         thread = new Thread(Run) { IsBackground = true, Name = "oe-rall-collector" };
@@ -237,7 +246,7 @@ public sealed class OeRallCollector : IDisposable
     {
         lock (sync)
         {
-            return new CollectorCursor(frameSeq, nextSampleIndex, lastTs, lastMonotonicNs);
+            return new CollectorCursor(frameSeq, nextSampleIndex, lastTs, lastMonotonicNs, frameSeq);
         }
     }
 
@@ -257,6 +266,23 @@ public sealed class OeRallCollector : IDisposable
                 packetAudit,
                 nextSampleIndex);
         }
+    }
+
+    LockinCollectorSnapshot ILockinCollector.Snapshot()
+    {
+        var snapshot = Snapshot();
+        return new LockinCollectorSnapshot(
+            LockinModel,
+            snapshot.Stats,
+            snapshot.SamplesWritten,
+            Cursor().MonotonicNs,
+            snapshot.PacketCounter.ToSummary(),
+            null,
+            snapshot.Stats.FramesOk,
+            0,
+            null,
+            null,
+            null);
     }
 
     public void Stop()

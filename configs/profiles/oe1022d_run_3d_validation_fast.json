@@ -1,4 +1,5 @@
 {
+  "model": "oe1022d",
   "profile_id": "oe1022d_run_3d_validation_fast",
   "command_settle_ms": 500,
   "fixed": {

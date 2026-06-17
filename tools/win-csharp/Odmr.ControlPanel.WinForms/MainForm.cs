@@ -233,7 +233,7 @@ internal sealed class MainForm : Form
             ValidatePickerJson(calibrationPicker, selection.CalibrationPath, RunConfigLoader.ReadJson<CalibrationProfile>);
             ValidatePickerJson(planPicker, selection.PlanPath, RunConfigLoader.ReadJson<AcquisitionRunPlan>);
             ValidatePickerJson(smbProfilePicker, selection.SmbProfilePath, RunConfigLoader.ReadJson<Smb100aRunProfile>);
-            ValidatePickerJson(oeProfilePicker, selection.OeProfilePath, RunConfigLoader.ReadJson<Oe1022dRunProfile>);
+            ValidatePickerJson(oeProfilePicker, selection.OeProfilePath, RunConfigLoader.ReadJson<OeRunProfile>);
             ValidatePickerJson(laserProfilePicker, selection.LaserProfilePath, RunConfigLoader.ReadJson<LaserRunProfile>);
 
             var bundle = RunConfigLoader.Load(
@@ -293,7 +293,7 @@ internal sealed class MainForm : Form
         {
             var progress = new Progress<RunLaunchSnapshot>(UpdateRunProgress);
             var summary = await launcher.RunAsync(lastSelection, lastOutDir, progress);
-            AppendLog($"run finished: {summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames={summary.FramesTotal}, timeouts={summary.TimeoutCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}");
+            AppendLog($"run finished: {summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames={summary.FramesTotal}, timeouts={summary.TimeoutCount}, delta_gt1={summary.PacketCounter?.DeltaGt1Count ?? 0}, decode={summary.DecodeFailures ?? 0}");
             stateLabel.Text = $"State: {summary.Status}";
         }
         catch (Exception ex)
@@ -409,8 +409,8 @@ internal sealed class MainForm : Form
             $"SMB: {bundle.SmbProfile.ProfileId}",
             $"RF sweep: {defaultSweep.StartHz:0} -> {defaultSweep.StopHz:0} Hz, step {defaultSweep.StepHz:0} Hz",
             $"RF power: {defaultSweep.PowerDbm:0.###} dBm, dwell {defaultSweep.DwellMs} ms",
-            $"OE: {bundle.OeProfile.ProfileId}",
-            $"RALL: {bundle.OeProfile.Collector.FrameExactBytes} bytes, {bundle.OeProfile.Collector.RallPostWriteDelayMs} ms post-write",
+            $"OE: {bundle.OeProfile.ProfileId} ({bundle.OeProfile.NormalizedModel})",
+            $"RALL: {DescribeCollector(bundle.OeProfile)}",
             $"Laser: {bundle.LaserProfile.ProfileId}, {bundle.LaserProfile.Mode}, {bundle.LaserProfile.PowerMw} mW",
             $"out_dir: {outDir}"
         });
@@ -443,8 +443,20 @@ internal sealed class MainForm : Form
         builder.AppendLine($"laser: {bundle.LaserProfile.ProfileId}");
         builder.AppendLine();
         builder.AppendLine("[RALL collector rule]");
-        builder.AppendLine(RuntimeContracts.FrozenRallHotPath);
+        builder.AppendLine(RunConfigLoader.CollectorContractFor(bundle.OeProfile.NormalizedModel));
         return builder.ToString();
+    }
+
+    private static string DescribeCollector(OeRunProfile profile)
+    {
+        if (profile.NormalizedModel == LockinModelNames.Oe1300)
+        {
+            var collector = profile.GetOe1300Collector();
+            return $"{collector.TcpExpectedBytes} bytes, {collector.RallPostWriteDelayMs} ms post-write, {collector.SamplesPerParameter} samples/parameter";
+        }
+
+        var oe1022dCollector = profile.GetOe1022dCollector();
+        return $"{oe1022dCollector.FrameExactBytes} bytes, {oe1022dCollector.RallPostWriteDelayMs} ms post-write";
     }
 
     private static string UniqueRunDirectory(string outputRoot, string runId)

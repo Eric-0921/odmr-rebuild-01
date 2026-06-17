@@ -27,8 +27,7 @@ internal sealed record ConfigMagAxis(
     M8812AxisSession Session);
 
 internal sealed record RuntimeResolvedConnections(
-    string OeResource,
-    int OeBaudRate,
+    LockinConnectionFacts Lockin,
     string SmbTransport,
     string? SmbHost,
     int? SmbPort,
@@ -68,12 +67,17 @@ public static class ConfigDrivenRun
             throw new InvalidOperationException($"invalid start point index: {options.StartPointIndex}");
         }
 
+        var lockinModel = bundle.OeProfile.NormalizedModel;
+        var collectorContract = RunConfigLoader.CollectorContractFor(lockinModel);
         var effectiveEstimatedRunDurationMs = options.EstimatedRunDurationMsOverride ?? bundle.ResolvedPlan.EstimatedRunDurationMs;
 
         PrepareRunDirectory(options.OutDir);
         WriteSnapshots(options.OutDir, bundle);
 
-        var collectorFramesPath = Path.Combine(options.OutDir, "collector_frames.jsonl");
+        var collectorFileName = lockinModel == LockinModelNames.Oe1300
+            ? "collector_blocks.jsonl"
+            : "collector_frames.jsonl";
+        var collectorFramesPath = Path.Combine(options.OutDir, collectorFileName);
         var parameterValuesPath = Path.Combine(options.OutDir, "parameter_values.csv");
         var sampleValuesPath = Path.Combine(options.OutDir, "sample_values.csv");
         var segmentsPath = Path.Combine(options.OutDir, "segments.jsonl");
@@ -93,6 +97,8 @@ public static class ConfigDrivenRun
             startedAt,
             bundle.Plan.Operator,
             bundle.Station.StationId,
+            lockinModel,
+            collectorContract,
             RuntimeVersion,
             bundle.Calibration.CalibrationId,
             "running",
@@ -105,11 +111,13 @@ public static class ConfigDrivenRun
         RallArtifactWriter.WritePrettyJson(manifestPath, manifest);
 
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "run_opened", "run", null, null, new
-        {
-            output_dir = options.OutDir,
-            plan_source_kind = bundle.ResolvedPlan.SourceKind,
-            resolved_point_count = bundle.ResolvedPlan.ResolvedPointCount
-        });
+            {
+                output_dir = options.OutDir,
+                plan_source_kind = bundle.ResolvedPlan.SourceKind,
+                resolved_point_count = bundle.ResolvedPlan.ResolvedPointCount,
+                lockin_model = lockinModel,
+                collector_contract = collectorContract
+            });
         ReportProgress(
             options,
             RuntimeState.RunOpened,
@@ -130,15 +138,17 @@ public static class ConfigDrivenRun
             null,
             null,
             null,
-            null);
+            null,
+            lockinModel: lockinModel,
+            collectorContract: collectorContract);
 
         var resolvedConnections = ResolveRuntimeConnections(bundle, eventsPath, processStart);
 
         ApplyOeFixedProfile(bundle, resolvedConnections, eventsPath, processStart);
 
-        using var collector = new OeRallCollector(
-            resolvedConnections.OeResource,
-            resolvedConnections.OeBaudRate,
+        using ILockinCollector collector = CreateLockinCollector(
+            bundle,
+            resolvedConnections,
             collectorFramesPath,
             parameterValuesPath,
             sampleValuesPath,
@@ -157,13 +167,14 @@ public static class ConfigDrivenRun
         {
             collector.Start();
             collector.WaitForFirstFrame(TimeSpan.FromSeconds(5));
-            AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "collector_started", "collector", null, "oe1022d_main", new
-            {
-                frame_exact_bytes = bundle.OeProfile.Collector.FrameExactBytes,
-                rall_post_write_delay_ms = bundle.OeProfile.Collector.RallPostWriteDelayMs,
-                ring_capacity_frames = bundle.OeProfile.Collector.RingCapacityFrames
-            });
             var collectorSnapshot = collector.Snapshot();
+            AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "collector_started", "collector", null, collector.DeviceId, new
+            {
+                collector_file = collector.CollectorArtifactFileName,
+                lockin_model = collector.LockinModel,
+                collector_contract = collector.CollectorContract,
+                read_contract = BuildCollectorStartedData(bundle)
+            });
             ReportProgress(
                 options,
                 RuntimeState.CollectorRunning,
@@ -175,8 +186,12 @@ public static class ConfigDrivenRun
                 collectorSnapshot.Stats.FramesOk,
                 collectorSnapshot.Stats.TimeoutCount,
                 collectorSnapshot.Stats.RawLenBadCount,
-                collectorSnapshot.PacketCounter.DeltaGt1Count,
-                null);
+                collectorSnapshot.PacketCounter?.DeltaGt1Count,
+                null,
+                lockinModel: lockinModel,
+                collectorContract: collectorContract,
+                decodeFailures: collectorSnapshot.DecodeFailures,
+                effectiveSampleHzPerParameter: collectorSnapshot.EffectiveSampleHzPerParameter);
 
             laser = ApplyLaserProfile(bundle, eventsPath, processStart);
             double[]? baselineCurrentA = null;
@@ -220,8 +235,12 @@ public static class ConfigDrivenRun
                         stoppingSnapshot.Stats.FramesOk,
                         stoppingSnapshot.Stats.TimeoutCount,
                         stoppingSnapshot.Stats.RawLenBadCount,
-                        stoppingSnapshot.PacketCounter.DeltaGt1Count,
-                        null);
+                        stoppingSnapshot.PacketCounter?.DeltaGt1Count,
+                        null,
+                        lockinModel: lockinModel,
+                        collectorContract: collectorContract,
+                        decodeFailures: stoppingSnapshot.DecodeFailures,
+                        effectiveSampleHzPerParameter: stoppingSnapshot.EffectiveSampleHzPerParameter);
                     break;
                 }
 
@@ -245,8 +264,12 @@ public static class ConfigDrivenRun
                     beforePointSnapshot.Stats.FramesOk,
                     beforePointSnapshot.Stats.TimeoutCount,
                     beforePointSnapshot.Stats.RawLenBadCount,
-                    beforePointSnapshot.PacketCounter.DeltaGt1Count,
-                    null);
+                    beforePointSnapshot.PacketCounter?.DeltaGt1Count,
+                    null,
+                    lockinModel: lockinModel,
+                    collectorContract: collectorContract,
+                    decodeFailures: beforePointSnapshot.DecodeFailures,
+                    effectiveSampleHzPerParameter: beforePointSnapshot.EffectiveSampleHzPerParameter);
 
                 var quality = RunPoint(
                     bundle,
@@ -288,8 +311,12 @@ public static class ConfigDrivenRun
                     afterPointSnapshot.Stats.FramesOk,
                     afterPointSnapshot.Stats.TimeoutCount,
                     afterPointSnapshot.Stats.RawLenBadCount,
-                    afterPointSnapshot.PacketCounter.DeltaGt1Count,
-                    quality.QualityStatus);
+                    afterPointSnapshot.PacketCounter?.DeltaGt1Count,
+                    quality.QualityStatus,
+                    lockinModel: lockinModel,
+                    collectorContract: collectorContract,
+                    decodeFailures: afterPointSnapshot.DecodeFailures,
+                    effectiveSampleHzPerParameter: afterPointSnapshot.EffectiveSampleHzPerParameter);
             }
         }
         catch (EmergencyStopException ex)
@@ -313,7 +340,9 @@ public static class ConfigDrivenRun
                 null,
                 null,
                 null,
-                null);
+                null,
+                lockinModel: lockinModel,
+                collectorContract: collectorContract);
         }
         catch (OperationCanceledException ex) when (options.EmergencyStopToken.IsCancellationRequested)
         {
@@ -336,7 +365,9 @@ public static class ConfigDrivenRun
                 null,
                 null,
                 null,
-                null);
+                null,
+                lockinModel: lockinModel,
+                collectorContract: collectorContract);
         }
         catch (Exception ex)
         {
@@ -354,7 +385,9 @@ public static class ConfigDrivenRun
                 null,
                 null,
                 null,
-                null);
+                null,
+                lockinModel: lockinModel,
+                collectorContract: collectorContract);
         }
         finally
         {
@@ -435,11 +468,13 @@ public static class ConfigDrivenRun
             }
 
             var snapshot = collector.Snapshot();
-            AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "collector_stopped", "collector", null, "oe1022d_main", new
+            AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "collector_stopped", "collector", null, collector.DeviceId, new
             {
                 frames_total = snapshot.Stats.FramesOk,
                 timeout_count = snapshot.Stats.TimeoutCount,
-                raw_len_bad_count = snapshot.Stats.RawLenBadCount
+                raw_len_bad_count = snapshot.Stats.RawLenBadCount,
+                decode_failures = snapshot.DecodeFailures,
+                effective_sample_hz_per_parameter = snapshot.EffectiveSampleHzPerParameter
             });
             ReportProgress(
                 options,
@@ -452,8 +487,12 @@ public static class ConfigDrivenRun
                 snapshot.Stats.FramesOk,
                 snapshot.Stats.TimeoutCount,
                 snapshot.Stats.RawLenBadCount,
-                snapshot.PacketCounter.DeltaGt1Count,
-                null);
+                snapshot.PacketCounter?.DeltaGt1Count,
+                null,
+                lockinModel: lockinModel,
+                collectorContract: collectorContract,
+                decodeFailures: snapshot.DecodeFailures,
+                effectiveSampleHzPerParameter: snapshot.EffectiveSampleHzPerParameter);
 
             if (cleanupFailure is null)
             {
@@ -506,8 +545,12 @@ public static class ConfigDrivenRun
             finalSnapshot.Stats.FramesOk,
             finalSnapshot.Stats.TimeoutCount,
             finalSnapshot.Stats.RawLenBadCount,
-            finalSnapshot.PacketCounter.DeltaGt1Count,
-            null);
+            finalSnapshot.PacketCounter?.DeltaGt1Count,
+            null,
+            lockinModel: lockinModel,
+            collectorContract: collectorContract,
+            decodeFailures: finalSnapshot.DecodeFailures,
+            effectiveSampleHzPerParameter: finalSnapshot.EffectiveSampleHzPerParameter);
 
         RallArtifactWriter.WritePrettyJson(
             manifestPath,
@@ -516,6 +559,8 @@ public static class ConfigDrivenRun
         var summary = new RunSummaryRecord(
             bundle.Plan.RunId,
             status,
+            lockinModel,
+            collectorContract,
             bundle.ResolvedPlan.ResolvedPointCount,
             pointsPassed,
             pointsFailed,
@@ -527,10 +572,15 @@ public static class ConfigDrivenRun
             finalSnapshot.Stats.ReadAttempts,
             finalSnapshot.Stats.TimeoutCount,
             finalSnapshot.Stats.RawLenBadCount,
-            PathRelative(options.OutDir, collectorFramesPath),
+            finalSnapshot.DecodeFailures,
+            lockinModel == LockinModelNames.Oe1022d ? PathRelative(options.OutDir, collectorFramesPath) : null,
+            lockinModel == LockinModelNames.Oe1300 ? PathRelative(options.OutDir, collectorFramesPath) : null,
             PathRelative(options.OutDir, parameterValuesPath),
             PathRelative(options.OutDir, sampleValuesPath),
-            finalSnapshot.PacketCounter.ToSummary());
+            finalSnapshot.PacketCounter,
+            finalSnapshot.QueryHz,
+            finalSnapshot.UniqueBlockHz,
+            finalSnapshot.EffectiveSampleHzPerParameter);
         RallArtifactWriter.WritePrettyJson(summaryPath, summary);
 
         if (status == "failed")
@@ -552,6 +602,7 @@ public static class ConfigDrivenRun
             "device_state.jsonl",
             "events.jsonl",
             "collector_frames.jsonl",
+            "collector_blocks.jsonl",
             "parameter_values.csv",
             "sample_values.csv",
             "point_fields.jsonl"
@@ -577,23 +628,39 @@ public static class ConfigDrivenRun
 
     private static RuntimeResolvedConnections ResolveRuntimeConnections(RunConfigBundle bundle, string eventsPath, long processStart)
     {
-        var oeDevice = bundle.Station.Devices.First(device => device.DeviceId == "oe1022d_main");
         var smbDevice = bundle.Station.Devices.First(device => device.DeviceId == "smb100a_main");
-        var resolvedOeResource = ResolveOeResource(oeDevice, bundle.Connections.OeBaudRate, eventsPath, processStart, bundle.Plan.RunId);
+        var lockinConnection = ResolveLockinConnection(bundle, eventsPath, processStart);
         var resolvedSmbConnection = ResolveSmbConnection(smbDevice, bundle.Connections, eventsPath, processStart, bundle.Plan.RunId);
         var magPorts = bundle.ResolvedPlan.RequiresMagneticControl
             ? ResolveMagPorts(bundle, eventsPath, processStart)
             : new Dictionary<string, string>();
 
         return new RuntimeResolvedConnections(
-            resolvedOeResource,
-            bundle.Connections.OeBaudRate,
+            lockinConnection,
             resolvedSmbConnection.Transport,
             resolvedSmbConnection.Host,
             resolvedSmbConnection.Port,
             resolvedSmbConnection.Resource,
             magPorts,
             bundle.Connections.LaserPort);
+    }
+
+    private static LockinConnectionFacts ResolveLockinConnection(RunConfigBundle bundle, string eventsPath, long processStart)
+    {
+        var lockinDevice = bundle.Station.Devices.First(device => device.DeviceId == bundle.Connections.Lockin.DeviceId);
+        return bundle.OeProfile.NormalizedModel switch
+        {
+            LockinModelNames.Oe1022d => bundle.Connections.Lockin with
+            {
+                Resource = ResolveOe1022dResource(lockinDevice, bundle.Connections.Lockin.BaudRate ?? Oe1022dDefaults.BaudRate, eventsPath, processStart, bundle.Plan.RunId)
+            },
+            LockinModelNames.Oe1300 => bundle.Connections.Lockin with
+            {
+                Host = ResolveOe1300Host(lockinDevice, bundle.Connections.Lockin.Port ?? Oe1300Defaults.TcpPort, eventsPath, processStart, bundle.Plan.RunId),
+                Port = bundle.Connections.Lockin.Port ?? Oe1300Defaults.TcpPort
+            },
+            _ => throw new InvalidOperationException($"unsupported lockin model: {bundle.OeProfile.NormalizedModel}")
+        };
     }
 
     private static List<ConfigMagAxis> OpenMagAxes(RunConfigBundle bundle, RuntimeResolvedConnections resolvedConnections)
@@ -681,25 +748,62 @@ public static class ConfigDrivenRun
 
     private static void ApplyOeFixedProfile(RunConfigBundle bundle, RuntimeResolvedConnections resolvedConnections, string eventsPath, long processStart)
     {
-        using var oe = Oe1022dVisa.Open(resolvedConnections.OeResource, resolvedConnections.OeBaudRate);
-        var commands = BuildOeFixedCommands(bundle.OeProfile.Fixed);
-        foreach (var command in commands)
+        switch (bundle.OeProfile.NormalizedModel)
         {
-            oe.SendAsciiCommand(command);
-            Thread.Sleep(bundle.OeProfile.CommandSettleMs);
-        }
+            case LockinModelNames.Oe1022d:
+            {
+                using var oe = Oe1022dVisa.Open(
+                    resolvedConnections.Lockin.Resource ?? throw new InvalidOperationException("OE1022D resource missing"),
+                    resolvedConnections.Lockin.BaudRate ?? Oe1022dDefaults.BaudRate);
+                var fixedProfile = bundle.OeProfile.GetOe1022dFixed();
+                var commands = BuildOeFixedCommands(fixedProfile);
+                foreach (var command in commands)
+                {
+                    oe.SendAsciiCommand(command);
+                    Thread.Sleep(bundle.OeProfile.CommandSettleMs);
+                }
 
-        AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "oe_profile_applied", "profile", null, "oe1022d_main", new
-        {
-            profile_id = bundle.OeProfile.ProfileId,
-            fixed_commands_sent = true,
-            command_count = commands.Length,
-            channel = bundle.OeProfile.Fixed.Channel,
-            resource = resolvedConnections.OeResource
-        });
+                AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "oe_profile_applied", "profile", null, resolvedConnections.Lockin.DeviceId, new
+                {
+                    profile_id = bundle.OeProfile.ProfileId,
+                    lockin_model = bundle.OeProfile.NormalizedModel,
+                    fixed_commands_sent = true,
+                    command_count = commands.Length,
+                    channel = fixedProfile.Channel,
+                    resource = resolvedConnections.Lockin.Resource
+                });
+                return;
+            }
+            case LockinModelNames.Oe1300:
+            {
+                using var oe = Oe1300Tcp.Open(
+                    resolvedConnections.Lockin.Host ?? throw new InvalidOperationException("OE1300 host missing"),
+                    resolvedConnections.Lockin.Port ?? Oe1300Defaults.TcpPort);
+                var fixedProfile = bundle.OeProfile.GetOe1300Fixed();
+                var commands = BuildOe1300FixedCommands(fixedProfile);
+                foreach (var command in commands)
+                {
+                    oe.SendAsciiCommand(command);
+                    Thread.Sleep(bundle.OeProfile.CommandSettleMs);
+                }
+
+                AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "oe_profile_applied", "profile", null, resolvedConnections.Lockin.DeviceId, new
+                {
+                    profile_id = bundle.OeProfile.ProfileId,
+                    lockin_model = bundle.OeProfile.NormalizedModel,
+                    fixed_commands_sent = true,
+                    command_count = commands.Length,
+                    host = resolvedConnections.Lockin.Host,
+                    port = resolvedConnections.Lockin.Port
+                });
+                return;
+            }
+            default:
+                throw new InvalidOperationException($"unsupported lockin model: {bundle.OeProfile.NormalizedModel}");
+        }
     }
 
-    private static string ResolveOeResource(StationDeviceSpec device, int baudRate, string eventsPath, long processStart, string runId)
+    private static string ResolveOe1022dResource(StationDeviceSpec device, int baudRate, string eventsPath, long processStart, string runId)
     {
         var candidates = new List<string>();
         AppendUnique(candidates, device.TransportHint.Resource);
@@ -740,6 +844,45 @@ public static class ConfigDrivenRun
         }
 
         throw new InvalidOperationException($"failed to resolve OE1022D resource for {device.DeviceId}: {string.Join(" | ", failures)}");
+    }
+
+    private static string ResolveOe1300Host(StationDeviceSpec device, int port, string eventsPath, long processStart, string runId)
+    {
+        var candidates = new List<string>();
+        AppendUnique(candidates, device.TransportHint.Host);
+        foreach (var candidate in device.TransportHint.HostCandidates ?? Array.Empty<string>())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        var failures = new List<string>();
+        foreach (var host in candidates)
+        {
+            try
+            {
+                using var oe = Oe1300Tcp.Open(host, port);
+                var idn = oe.QueryIdn();
+                if (IdentityMatches(device.Identity, idn))
+                {
+                    AppendEvent(eventsPath, processStart, runId, "device_resolved", "resolve", null, device.DeviceId, new
+                    {
+                        transport = "tcp_socket",
+                        host,
+                        port,
+                        idn
+                    });
+                    return host;
+                }
+
+                failures.Add($"{host}:{port}: identity mismatch idn={idn}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{host}:{port}: {ex.Message}");
+            }
+        }
+
+        throw new InvalidOperationException($"failed to resolve OE1300 host for {device.DeviceId}: {string.Join(" | ", failures)}");
     }
 
     private static (string Transport, string? Host, int? Port, string? Resource) ResolveSmbConnection(
@@ -837,6 +980,58 @@ public static class ConfigDrivenRun
         }
 
         throw new InvalidOperationException($"failed to resolve SMB100A VISA resource for {device.DeviceId}: {string.Join(" | ", failures)}");
+    }
+
+    private static ILockinCollector CreateLockinCollector(
+        RunConfigBundle bundle,
+        RuntimeResolvedConnections resolvedConnections,
+        string collectorPath,
+        string parameterValuesPath,
+        string sampleValuesPath,
+        long processStart)
+    {
+        return bundle.OeProfile.NormalizedModel switch
+        {
+            LockinModelNames.Oe1022d => new OeRallCollector(
+                resolvedConnections.Lockin.Resource ?? throw new InvalidOperationException("OE1022D resource missing"),
+                resolvedConnections.Lockin.BaudRate ?? Oe1022dDefaults.BaudRate,
+                collectorPath,
+                parameterValuesPath,
+                sampleValuesPath,
+                processStart),
+            LockinModelNames.Oe1300 => new Oe1300TcpCollector(
+                resolvedConnections.Lockin.Host ?? throw new InvalidOperationException("OE1300 host missing"),
+                resolvedConnections.Lockin.Port ?? Oe1300Defaults.TcpPort,
+                collectorPath,
+                parameterValuesPath,
+                sampleValuesPath,
+                processStart,
+                bundle.OeProfile.GetOe1300Collector()),
+            _ => throw new InvalidOperationException($"unsupported lockin model: {bundle.OeProfile.NormalizedModel}")
+        };
+    }
+
+    private static object BuildCollectorStartedData(RunConfigBundle bundle)
+    {
+        return bundle.OeProfile.NormalizedModel switch
+        {
+            LockinModelNames.Oe1022d => new
+            {
+                frame_exact_bytes = bundle.OeProfile.GetOe1022dCollector().FrameExactBytes,
+                rall_post_write_delay_ms = bundle.OeProfile.GetOe1022dCollector().RallPostWriteDelayMs,
+                ring_capacity_frames = bundle.OeProfile.GetOe1022dCollector().RingCapacityFrames
+            },
+            LockinModelNames.Oe1300 => new
+            {
+                tcp_expected_bytes = bundle.OeProfile.GetOe1300Collector().TcpExpectedBytes,
+                tcp_payload_bytes = bundle.OeProfile.GetOe1300Collector().TcpPayloadBytes,
+                parameter_count = bundle.OeProfile.GetOe1300Collector().ParameterCount,
+                samples_per_parameter = bundle.OeProfile.GetOe1300Collector().SamplesPerParameter,
+                rall_post_write_delay_ms = bundle.OeProfile.GetOe1300Collector().RallPostWriteDelayMs,
+                drain_before_write = bundle.OeProfile.GetOe1300Collector().DrainBeforeWrite
+            },
+            _ => throw new InvalidOperationException($"unsupported lockin model: {bundle.OeProfile.NormalizedModel}")
+        };
     }
 
     private static ISmb100aSession OpenSmbSession(RuntimeResolvedConnections resolvedConnections)
@@ -998,7 +1193,7 @@ public static class ConfigDrivenRun
         IReadOnlyList<double>? baselineCurrentA,
         IReadOnlyList<ConfigMagAxis> magAxes,
         ISmb100aSession smb,
-        OeRallCollector collector,
+        ILockinCollector collector,
         string segmentsPath,
         string pointsPath,
         string qualityPath,
@@ -1052,6 +1247,7 @@ public static class ConfigDrivenRun
 
         var segmentId = $"seg_{point.PointId}_0000";
         var timeoutsBefore = collector.Snapshot().Stats.TimeoutCount;
+        var decodeFailuresBefore = collector.Snapshot().DecodeFailures ?? 0;
 
         PrepareSmbRfForSegment(smb, bundle.SmbProfile, sweep, options.EmergencyStopToken);
         ThrowIfEmergencyRequested(options);
@@ -1097,7 +1293,9 @@ public static class ConfigDrivenRun
             sweep.StartHz,
             sweep.StopHz,
             sweep.StepHz,
-            sweep.DwellMs);
+            sweep.DwellMs,
+            lockinModel: bundle.OeProfile.NormalizedModel,
+            collectorContract: RunConfigLoader.CollectorContractFor(bundle.OeProfile.NormalizedModel));
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_exposure_started", "rf", point.PointId, "smb100a_main", new
         {
             segment_id = segmentId,
@@ -1129,7 +1327,10 @@ public static class ConfigDrivenRun
 
         var timeoutsAfter = collector.Snapshot().Stats.TimeoutCount;
         var pointTimeouts = timeoutsAfter - timeoutsBefore;
+        var decodeFailuresAfter = collector.Snapshot().DecodeFailures ?? 0;
+        var pointDecodeFailures = decodeFailuresAfter - decodeFailuresBefore;
         var framesInSegment = segmentEnd.NextFrameSeq - segmentStart.NextFrameSeq;
+        var uniqueBlocksInSegment = segmentEnd.NextUniqueFrameSeq - segmentStart.NextUniqueFrameSeq;
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "sweep_completed", "sweep", point.PointId, null, new
         {
             segment_id = segmentId,
@@ -1167,14 +1368,16 @@ public static class ConfigDrivenRun
             sweep.StartHz,
             sweep.StopHz,
             sweep.StepHz,
-            sweep.DwellMs);
+            sweep.DwellMs,
+            lockinModel: bundle.OeProfile.NormalizedModel,
+            collectorContract: RunConfigLoader.CollectorContractFor(bundle.OeProfile.NormalizedModel));
 
         var segment = new SegmentRecord(
             1,
             bundle.Plan.RunId,
             segmentId,
             point.PointId,
-            "oe1022d_main",
+            collector.DeviceId,
             segmentStartTs,
             segmentEndTs,
             segmentStartMonotonicNs,
@@ -1251,7 +1454,17 @@ public static class ConfigDrivenRun
                 bundle.LaserProfile.PowerMw,
                 bundle.OeProfile.ProfileId));
 
-        var quality = ComputeQuality(bundle, point, segmentId, framesInSegment, pointTimeouts, segmentEndMonotonicNs, segmentEnd.MonotonicNs, sweep);
+        var quality = ComputeQuality(
+            bundle,
+            point,
+            segmentId,
+            framesInSegment,
+            uniqueBlocksInSegment,
+            pointTimeouts,
+            pointDecodeFailures,
+            segmentEndMonotonicNs,
+            segmentEnd.MonotonicNs,
+            sweep);
         RallArtifactWriter.AppendJsonl(qualityPath, quality);
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "point_completed", "point", point.PointId, null, new
         {
@@ -1432,12 +1645,30 @@ public static class ConfigDrivenRun
         Oe1022dCommands.SetSineOutputVoltageVrms(fixedProfile.Channel, fixedProfile.SineOutputVoltageVrms)
     ];
 
+    private static string[] BuildOe1300FixedCommands(Oe1300FixedProfile fixedProfile) =>
+    [
+        Oe1300Commands.SetInputSource(fixedProfile.InputSource),
+        Oe1300Commands.SetInputCoupling(fixedProfile.InputCoupling),
+        Oe1300Commands.SetInputRange(fixedProfile.InputRange),
+        Oe1300Commands.SetReferenceSource(fixedProfile.ReferenceSource),
+        Oe1300Commands.SetReferenceFrequency(fixedProfile.ReferenceFrequencyHz),
+        Oe1300Commands.SetReferenceSlope(fixedProfile.ReferenceSlope),
+        Oe1300Commands.SetSensitivity(fixedProfile.SensitivityIndex),
+        Oe1300Commands.SetTimeConstant(fixedProfile.TimeConstantSeconds),
+        Oe1300Commands.SetFilterSlope(fixedProfile.FilterSlope),
+        Oe1300Commands.SetSync(fixedProfile.SyncEnabled),
+        Oe1300Commands.SetSineOutputEnabled(fixedProfile.SineOutputEnabled),
+        Oe1300Commands.SetSineOutputVoltageVrms(fixedProfile.SineOutputVoltageVrms)
+    ];
+
     private static QualityRecord ComputeQuality(
         RunConfigBundle bundle,
         RunPointPlan point,
         string segmentId,
         long framesInSegment,
+        long uniqueBlocksInSegment,
         long pointTimeouts,
+        long pointDecodeFailures,
         ulong segmentEndMonotonicNs,
         ulong lastFrameMonotonicNs,
         SmbSweepSpec sweep)
@@ -1446,19 +1677,56 @@ public static class ConfigDrivenRun
         var lastFrameAgeMs = framesInSegment > 0
             ? (long)(SaturatingSub(segmentEndMonotonicNs, lastFrameMonotonicNs) / 1_000_000)
             : long.MaxValue;
-        var estimatedFrames = bundle.OeProfile.Collector.PollIntervalMs > 0
-            ? (long)Math.Ceiling(sweep.EstimatedSweepDurationMs / (double)bundle.OeProfile.Collector.PollIntervalMs)
-            : (long?)null;
-        var frameCoverage = estimatedFrames is > 0 ? framesInSegment / (double)estimatedFrames.Value : (double?)null;
-        var collectorHealth = pointTimeouts == 0
-            ? "clean"
-            : pointTimeouts <= thresholds.MaxTimeoutCount ? "recovered_timeout" : "degraded_timeout";
-        var qualityStatus = framesInSegment == 0
-            ? "failed_no_frames"
-            : framesInSegment < thresholds.MinFrames ? "failed_min_frames"
-            : pointTimeouts > thresholds.MaxTimeoutCount ? "failed_timeout"
-            : lastFrameAgeMs > thresholds.MaxLastFrameAgeMs ? "failed_quality"
-            : "passed";
+        long? estimatedFrames = null;
+        double? frameCoverage = null;
+        long framesUnique;
+        long duplicateCount;
+        double duplicateRatio;
+        string collectorHealth;
+        string qualityStatus;
+
+        if (bundle.OeProfile.NormalizedModel == LockinModelNames.Oe1022d)
+        {
+            var collector = bundle.OeProfile.GetOe1022dCollector();
+            estimatedFrames = collector.PollIntervalMs > 0
+                ? (long)Math.Ceiling(sweep.EstimatedSweepDurationMs / (double)collector.PollIntervalMs)
+                : null;
+            frameCoverage = estimatedFrames is > 0 ? framesInSegment / (double)estimatedFrames.Value : null;
+            framesUnique = framesInSegment;
+            duplicateCount = 0;
+            duplicateRatio = 0.0;
+            collectorHealth = pointTimeouts == 0
+                ? "clean"
+                : pointTimeouts <= thresholds.MaxTimeoutCount ? "recovered_timeout" : "degraded_timeout";
+            qualityStatus = framesInSegment == 0
+                ? "failed_no_frames"
+                : framesInSegment < thresholds.MinFrames ? "failed_min_frames"
+                : pointTimeouts > thresholds.MaxTimeoutCount ? "failed_timeout"
+                : lastFrameAgeMs > thresholds.MaxLastFrameAgeMs ? "failed_quality"
+                : "passed";
+        }
+        else
+        {
+            framesUnique = Math.Max(0, uniqueBlocksInSegment);
+            duplicateCount = Math.Max(0, framesInSegment - framesUnique);
+            duplicateRatio = framesInSegment > 0 ? duplicateCount / (double)framesInSegment : 1.0;
+            collectorHealth = pointDecodeFailures > 0
+                ? "degraded_decode"
+                : pointTimeouts == 0
+                ? "clean"
+                : pointTimeouts <= thresholds.MaxTimeoutCount ? "recovered_timeout" : "degraded_timeout";
+            qualityStatus = framesInSegment == 0
+                ? "failed_no_blocks"
+                : framesUnique == 0
+                ? "failed_duplicate_only"
+                : pointTimeouts > thresholds.MaxTimeoutCount
+                ? "failed_timeout"
+                : pointDecodeFailures > 0
+                ? "failed_decode"
+                : lastFrameAgeMs > thresholds.MaxLastFrameAgeMs
+                ? "failed_quality"
+                : "passed";
+        }
 
         return new QualityRecord(
             1,
@@ -1466,9 +1734,9 @@ public static class ConfigDrivenRun
             point.PointId,
             segmentId,
             framesInSegment,
-            framesInSegment,
-            0,
-            0.0,
+            framesUnique,
+            duplicateCount,
+            duplicateRatio,
             pointTimeouts,
             lastFrameAgeMs,
             thresholds.MinFrames,
@@ -1561,7 +1829,11 @@ public static class ConfigDrivenRun
         long? startHz = null,
         long? stopHz = null,
         long? stepHz = null,
-        int? dwellMs = null)
+        int? dwellMs = null,
+        string? lockinModel = null,
+        string? collectorContract = null,
+        long? decodeFailures = null,
+        double? effectiveSampleHzPerParameter = null)
     {
         options.Progress?.Report(new RunProgressEvent(
             state,
@@ -1582,7 +1854,11 @@ public static class ConfigDrivenRun
             startHz,
             stopHz,
             stepHz,
-            dwellMs));
+            dwellMs,
+            lockinModel,
+            collectorContract,
+            decodeFailures,
+            effectiveSampleHzPerParameter));
     }
 
     private static string PathRelative(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');

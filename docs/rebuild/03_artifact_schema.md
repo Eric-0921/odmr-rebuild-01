@@ -1,8 +1,25 @@
 # Artifact Schema
 
-Artifact 是 run 的事实来源。当前正式合同已经切到 direct-decode：`collector_frames.jsonl + parameter_values.csv + sample_values.csv + segments.jsonl`。本文件后续章节仍保留部分 raw truth 历史描述，若有冲突，以当前运行时代码和本段说明为准。
+Artifact 是当前 runtime 的正式事实层。当前合同已经固定为 direct-decode，不再把 `raw/oe1022d.rall`、`frames.idx` 或任何 `raw-truth` 文件当正式主路径。
 
-## Run 目录
+## 一、正式事实层
+
+两台锁相共用同一套 run 外壳，但 collector truth 按型号分开：
+
+- `OE1022D`
+  - `collector_frames.jsonl`
+  - `parameter_values.csv`
+  - `sample_values.csv`
+  - `segments.jsonl`
+- `OE1300`
+  - `collector_blocks.jsonl`
+  - `parameter_values.csv`
+  - `sample_values.csv`
+  - `segments.jsonl`
+
+point / quality / resume / artifact-check / audit-continuity 都必须建立在这些 decoded truth 文件之上，不能回退到 raw 文件。
+
+## 二、Run 目录
 
 ```text
 runs/<run_id>/
@@ -13,67 +30,88 @@ runs/<run_id>/
   oe_profile_snapshot.json
   laser_profile_snapshot.json
   plan_snapshot.json
+  baseline_snapshot.json
   events.jsonl
   points.jsonl
-  collector_frames.jsonl
+  collector_frames.jsonl          # oe1022d
+  collector_blocks.jsonl          # oe1300
   parameter_values.csv
   sample_values.csv
   segments.jsonl
   quality.jsonl
   device_state.jsonl
   summary.json
+  continuity_audit.json           # 按需生成
+  control/                        # PySide6/console 启动时存在
+    progress.jsonl
+    stop.request
+    emergency_stop.request
+    launch_metadata.json
+    stdout.log
+    stderr.log
 ```
 
-所有 snapshot 都在 run 打开阶段落盘。`station_snapshot / calibration_snapshot / smb_profile_snapshot / oe_profile_snapshot / laser_profile_snapshot` 是输入冻结副本；`plan_snapshot` 则额外包含运行前展开后的 resolved points 与估算元信息。run 过程中不读取可变原始配置作为事实来源。
+运行时只会写当前型号对应的 collector 文件：
 
-## run_manifest.json
+- `oe1022d` 只写 `collector_frames.jsonl`
+- `oe1300` 只写 `collector_blocks.jsonl`
+
+## 三、run_manifest.json
+
+`run_manifest.json` 是本次 run 的静态索引，至少包含：
 
 ```json
 {
   "schema_version": 1,
-  "run_id": "test_001",
-  "created_at": "2026-06-10T10:00:00Z",
+  "run_id": "x_axis_1d_bounce_15min",
+  "created_at": "2026-06-18T02:33:51.0000000Z",
   "operator": "local",
   "station_id": "lab_a",
-  "calibration_id": "cal_001",
+  "lockin_model": "oe1022d",
+  "collector_contract": "write RALL? -> sleep 30ms -> exact read 12288B -> direct-decode -> append collector_frames + parameter_values + sample_values",
   "runtime_version": "0.1.0",
+  "calibration_id": "lab_a_para_xml_inverse_coil_constant",
   "status": "running",
-  "laser_profile_id": "cni_laser_run_on_background",
+  "smb_profile_id": "smb100a_run_monitor_2830_2890_-10dbm",
+  "oe_profile_id": "oe1022d_run_ch_b_observed",
+  "laser_profile_id": "cni_laser_run_off_background",
   "plan_source_kind": "cartesian_grid",
   "resolved_point_count": 104,
   "estimated_run_duration_ms": 863200
 }
 ```
 
-终态允许值：
+当前允许的终态：
 
 - `completed`
 - `completed_with_failed_points`
 - `failed`
+- `paused`
 - `aborted`
 - `cleanup_failed`
 
-## events.jsonl
+`resume-run` 只接受 direct-decode 合同下的 run，不兼容历史 raw-truth run。
 
-每行一个事件：
+## 四、Snapshot 文件
 
-```json
-{
-  "ts": "2026-06-10T10:00:01.123Z",
-  "monotonic_ns": 123456789,
-  "event": "point_stable",
-  "run_id": "test_001",
-  "point_id": "p0001",
-  "device": "mag_x",
-  "phase": "settle",
-  "data": {
-    "target_current_a": 0.0123,
-    "measured_current_a": 0.0122
-  }
-}
-```
+以下文件都是 run 打开时冻结的输入副本：
 
-必须记录的事件：
+- `station_snapshot.json`
+- `calibration_snapshot.json`
+- `smb_profile_snapshot.json`
+- `oe_profile_snapshot.json`
+- `laser_profile_snapshot.json`
+- `plan_snapshot.json`
+
+关键约束：
+
+- `oe_profile_snapshot.json` 必须带 `model`
+- `run_manifest.json`、`summary.json`、`control/progress.jsonl` 也必须带 `lockin_model`
+- station 与 oe_profile 的型号必须一致；不允许 `lab_a.json + oe1300 profile` 这种交叉组合
+
+## 五、events.jsonl
+
+每行一个 runtime 事件。当前双型号共用同一套 point 级状态机，至少会出现：
 
 - `run_opened`
 - `station_resolved`
@@ -92,26 +130,45 @@ runs/<run_id>/
 - `collector_stopped`
 - `run_completed`
 - `run_failed`
+- `run_paused`
+- `run_aborted`
 
-## raw/oe1022d.frames.parsed.jsonl
+`ResumeRun` 判定一个 point 已完成时，固定看三重交集：
 
-这是 `raw/oe1022d.rall` 的运行时结构化 companion truth，不替代 raw。  
-当前它不再是默认 artifact，而是 `run execute --artifact-mode debug` 才会额外写出的重型调试产物。
+- `points.jsonl` 中存在该 `point_id`
+- `quality.jsonl` 中该点 `quality_status == passed`
+- `events.jsonl` 中存在 `point_completed`
 
-每行至少包含：
+## 六、points.jsonl
+
+`points.jsonl` 记录 point 的实验上下文，不保存原始样本数组。每行至少包含：
+
+- `point_id`
+- `index`
+- `point_kind`
+- `magnetic_mode`
+- `m8812_commanded`
+- `target_b_nt`
+- `baseline_current_a`
+- `calibrated_delta_current_a`
+- `target_current_a`
+- `rf`
+- `settle`
+
+point 是否真正成功，不看 `points.jsonl` 单文件，而看 `points + quality + events` 的交叉结果。
+
+## 七、Collector Truth
+
+### 1. OE1022D: collector_frames.jsonl
+
+每行对应一个 `12288 B` 设备帧，至少包含：
 
 - `frame_seq`
 - `ts`
 - `monotonic_ns`
-- `raw_offset`
-- `raw_len`
-- `transport_status`
-- `parse_status`
-- `padding_status`
-- `duplicate_hint`
-- `measurement_field_order`
-- `measurement_matrix`
-- `scalar_fields`
+- `sample_index_start/end`
+- `samples_per_frame`
+- `device_packet_counter`
 - `b_ref_source_code`
 - `b_ref_slope_code`
 - `b_ref_current_freq_hz`
@@ -119,281 +176,204 @@ runs/<run_id>/
 - `b_gain_overload`
 - `b_pll_locked`
 
-当前工程结论：
+冻结热路径：
 
-- `raw + frames.idx + segments` 仍是 point 真值层
-- `frames.parsed` 负责把每帧按手册表格直接整理成结构化 debug sidecar
-- 默认轻量模式下，point 聚合和 continuity audit 直接从 `raw + frames.idx` 现算，不依赖 `frames.parsed`
-
-## plan_snapshot.json
-
-`plan_snapshot.json` 不再只是原始输入副本，它必须同时表达：
-
-- 原始 plan 是显式 `points` 还是高层 `cartesian_grid`
-- 展开后的 resolved point 总数
-- 若是 `cartesian_grid`，当前 cycle mode / fixed total points / 估算 sweep 时长
-
-示例：
-
-```json
-{
-  "schema_version": 1,
-  "run_id": "x_axis_1d_bounce_15min",
-  "source_kind": "cartesian_grid",
-  "declared_point_count": 8,
-  "resolved_point_count": 104,
-  "fixed_total_points": 104,
-  "cycle_mode": "bounce_1d_x",
-  "estimated_sweep": {
-    "sweep_points": 26,
-    "sweep_duration_ms": 1300
-  },
-  "estimated_point_duration_ms": 8300,
-  "estimated_run_duration_ms": 863200
-}
+```text
+write RALL?
+sleep 30ms
+exact read 12288B
+direct-decode
+append collector_frames + parameter_values + sample_values
 ```
 
-## points.jsonl
+连续性审计仍以 `device_packet_counter` 为核心：
 
-每个 point 一行，表达实验语义：
+- `delta0 = 重复窗口`
+- `delta1 = 正常新窗口`
+- `delta_gt1 = 疑似漏窗口`
 
-```json
-{
-  "schema_version": 1,
-  "run_id": "test_001",
-  "point_id": "p0001",
-  "index": 0,
-  "target_b_nt": [10.0, 0.0, 0.0],
-  "baseline_current_a": [0.0020, -0.0010, 0.0005],
-  "calibrated_delta_current_a": [0.0103, 0.0001, -0.0002],
-  "target_current_a": [0.0123, 0.0000, 0.0000],
-  "rf": {
-    "start_hz": 2800000000,
-    "stop_hz": 2900000000,
-    "step_hz": 1000000,
-    "dwell_ms": 300,
-    "power_dbm": -30.0
-  },
-  "settle": {
-    "policy": "fixed_delay_with_readback",
-    "started_at": "2026-06-10T10:00:05.000Z",
-    "settled_at": "2026-06-10T10:00:08.000Z",
-    "status": "passed"
-  }
-}
+### 2. OE1300: collector_blocks.jsonl
+
+每行对应一个 `32768 B` 网口 `RALL` 块，至少包含：
+
+- `rall_index`
+- `ts`
+- `monotonic_ns`
+- `sample_index_start/end`
+- `samples_per_parameter`
+- `parameter_count`
+- `status_hex`
+- `status_byte`
+- `trig_count`
+- `payload_sha256`
+- `status_zone_sha256`
+- `status_zone_hex`
+- `unique_block`
+- `unique_block_index`
+
+冻结热路径：
+
+```text
+write RALL?\r
+sleep 5ms
+read until 32768B
+decode 37 x 100 big-endian double
+append collector_blocks + parameter_values + sample_values
 ```
 
-point record 不保存 raw 数据本体，只保存该点的上下文。
+当前 OE1300 连续性不依赖 packet counter，而依赖：
 
-## baseline_snapshot.json
+- `rall_index` 连续
+- `unique_block` 去重
+- `timeout_count == 0`
+- `raw_len_bad_count == 0`
+- `decode_failures == 0`
+- `effective_sample_hz_per_parameter >= 900`
 
-当前 baseline snapshot 实际表达的是旧系统兼容的“零偏电流锁定”：
+## 八、parameter_values.csv
 
-```json
-{
-  "schema_version": 1,
-  "mode": "legacy_zero_offset_lock",
-  "baseline_locked_at": "2026-06-11T10:00:00Z",
-  "settle_ms": 1000,
-  "readback_samples": 3,
-  "settle_tolerance_a": 0.002,
-  "axes": [
-    {
-      "axis": "mag_x",
-      "zero_offset_setpoint_a": 0.0,
-      "zero_offset_measured_samples_a": [0.00007, 0.00007, 0.00006],
-      "locked_zero_offset_current_a": 0.0000667
-    }
-  ]
-}
-```
+这是块级 / 帧级摘要表：
 
-这里的 `locked_zero_offset_current_a` 是后续 point 叠加 `delta_current_a` 的基线，而不是物理零磁场已经被证明。
+- `OE1022D`：每帧一行，主字段均值 + 关键状态
+- `OE1300`：每块一行，`37` 个参数均值 + 状态区结构化字段
 
-## point_fields.jsonl
+它是快速审阅表，不替代样本级真值。
 
-每个 point 一行，表达 point 窗口里已经解析出的轻量 metadata：
+## 九、sample_values.csv
 
-```json
-{
-  "schema_version": 1,
-  "run_id": "test_001",
-  "point_id": "p0001",
-  "segment_id": "seg_p0001_0000",
-  "frames_parsed": 104,
-  "samples_total": 5200,
-  "samples_per_frame": 50,
-  "matrix_shape": [20, 5200],
-  "measurement_field_order": [
-    "A-X", "A-Y", "A-Freq", "A-Noise", "A-Xh1", "A-Yh1", "A-Xh2", "A-Yh2",
-    "B-X", "B-Y", "B-Freq", "B-Noise", "B-Xh1", "B-Yh1", "B-Xh2", "B-Yh2",
-    "AUXADC1", "AUXADC2", "AUXADC3", "AUXADC4"
-  ],
-  "measurement_field_keys": [
-    "a_x", "a_y", "a_freq", "a_noise", "a_xh1", "a_yh1", "a_xh2", "a_yh2",
-    "b_x", "b_y", "b_freq", "b_noise", "b_xh1", "b_yh1", "b_xh2", "b_yh2",
-    "auxadc1", "auxadc2", "auxadc3", "auxadc4"
-  ],
-  "field_summaries": [
-    { "field_name": "B-X", "npz_key": "b_x", "mean": 0.000000017 },
-    { "field_name": "B-Freq", "npz_key": "b_freq", "mean": 499.9990 }
-  ],
-  "b_pll_locked_ratio": 1.0,
-  "b_input_overload_ratio": 0.0,
-  "b_gain_overload_ratio": 0.0,
-  "last_b_ref_source_code": 0,
-  "last_b_ref_slope_code": 2,
-  "last_b_ref_current_freq_hz": 499.9990,
-  "sidecar": {
-    "format": "npz",
-    "schema_version": 1,
-    "relative_path": "point_fields/seg_p0001_0000.npz",
-    "manifest_relative_path": "point_fields/seg_p0001_0000.manifest.json",
-    "measurement_field_keys": ["a_x", "a_y", "a_freq", "a_noise"],
-    "status_keys": [
-      "frame_seq",
-      "duplicate_hint",
-      "b_ref_source_code",
-      "b_ref_slope_code",
-      "b_ref_current_freq_hz",
-      "b_input_overload",
-      "b_gain_overload",
-      "b_pll_locked"
-    ]
-  }
-}
-```
+这是样本级 decoded truth：
 
-这不是完整科学分析，只是 point 级轻量 metadata。  
-完整 20 字段数组和必要状态数组默认进入每个 point 的 `NPZ` sidecar。  
-与之配对的 `manifest.json` 会把 point 级背景一次性钉死，包括：
+- `OE1022D`：每 `1 ms` 样本一行，`20` 个主字段展开
+- `OE1300`：每 `1 ms` 样本一行，`37` 个参数展开
 
-- `SMB` profile id、fixed 配置、point 级 `rf sweep`
-- `Mag` 的 `target_b_nt / baseline_current_a / target_current_a / measured_current_a`
-- `OE` profile id、fixed 配置、collector 配置
-- `Laser` profile id、mode、power、settle
+point 级离线后处理默认直接读取：
 
-最终事实层是：
-
-- `raw/oe1022d.rall`
-- `raw/oe1022d.frames.idx.jsonl`
+- `sample_values.csv`
 - `segments.jsonl`
 
-当前默认策略：
+不再要求“先保存 raw 才能分析”。
 
-- 默认不再把完整数组内联进 `point_fields.jsonl`
-- 默认不再写 `frames.parsed`
-- 长时 run 目录大小主要由 `raw/oe1022d.rall` 决定，而不是 JSON sidecar
+## 十、segments.jsonl
 
-## segments.jsonl
+`segments.jsonl` 负责把 point 绑定到 decoded truth 窗口。每行至少包含：
 
-每个 segment 一行，表达连续流中的归属窗口：
+- `segment_id`
+- `point_id`
+- `source`
+- `start_ts/end_ts`
+- `start_monotonic_ns/end_monotonic_ns`
+- `source_file`
+- `block_seq_start/end`
+- `sample_index_start/end`
 
-```json
-{
-  "schema_version": 1,
-  "run_id": "test_001",
-  "segment_id": "seg_p0001_0000",
-  "point_id": "p0001",
-  "source": "oe1022d_main",
-  "start_ts": "2026-06-10T10:00:08.100Z",
-  "end_ts": "2026-06-10T10:00:38.100Z",
-  "start_monotonic_ns": 1000000000,
-  "end_monotonic_ns": 31000000000,
-  "raw_file": "raw/oe1022d.rall",
-  "raw_offset_start": 1048576,
-  "raw_offset_end": 2097152,
-  "frame_seq_start": 120,
-  "frame_seq_end": 745
-}
-```
+关键变化：
 
-segment 是 point 和 raw 的连接层。没有 segment 的 point 不能进入有效数据集。
+- 不再保存 `raw_file/raw_offset_start/raw_offset_end`
+- 统一按 decoded collector 的序号和 sample index 绑定
+- `source_file` 对 `OE1022D` 是 `collector_frames.jsonl`，对 `OE1300` 是 `collector_blocks.jsonl`
 
-在 sweep-driven runtime 中，segment 的 `start_ts/end_ts` 必须对应这次 point 的 `sweep_started/sweep_completed` 窗口，而不是固定 sleep。
+## 十一、quality.jsonl
 
-## quality.jsonl
+每个 point 至少一行质量摘要。字段对两型号尽量同构，但判定逻辑按 collector 语义分支。
 
-每个 point 至少一行质量摘要：
+共同字段包括：
 
-```json
-{
-  "schema_version": 1,
-  "run_id": "test_001",
-  "point_id": "p0001",
-  "segment_id": "seg_p0001_0000",
-  "frames_total": 626,
-  "frames_unique": 620,
-  "duplicate_count": 6,
-  "duplicate_ratio": 0.0096,
-  "timeout_count": 0,
-  "last_frame_age_ms": 42,
-  "min_frames": 500,
-  "estimated_frames_expected": 757,
-  "frame_coverage_ratio": 0.8269,
-  "collector_health": "clean",
-  "timeout_budget_remaining": 2,
-  "quality_status": "passed"
-}
-```
+- `point_id`
+- `segment_id`
+- `frames_total`
+- `frames_unique`
+- `duplicate_count`
+- `duplicate_ratio`
+- `timeout_count`
+- `min_frames`
+- `collector_health`
+- `quality_status`
 
-这里的 `estimated_frames_expected / frame_coverage_ratio` 只用于诊断：
-
-- 它们帮助区分“真实采样空洞”和“缓存截断”
-- 当前不会直接改变 `quality_status` 规则
-
-允许的 `quality_status`：
+当前正式 `quality_status`：
 
 - `passed`
 - `failed_no_frames`
 - `failed_min_frames`
 - `failed_timeout`
+- `failed_decode`
+- `failed_duplicate_only`
 
-`collector_health` 用来区分“point 可用性”和“collector 健康状态”：
+解释：
 
-- `clean`
-- `recovered_timeout`
-- `degraded_timeout`
+- `OE1022D` 的 `frames_total/unique` 是帧语义
+- `OE1300` 的 `frames_total/unique` 实际是块语义，但字段名暂时保持不变，避免打散 point/quality 主链
 
-## raw/oe1022d.rall
+## 十二、device_state.jsonl
 
-连续 raw 文件是 OE1022D 原始帧事实来源。第一版不要求格式复杂，但必须满足：
+每个 point 一行，钉住当次实验设备背景和 segment 绑定，至少包含：
 
-- append-only。
-- frame 顺序和 collector sequence 一致。
-- 不按 point 切碎。
-- 可通过 index 定位 frame 范围。
+- point 基本信息
+- `target_b_nt / target_current_a / measured_current_a`
+- `smb_profile_id`
+- `smb_sweep`
+- `smb_sweep_execution`
+- `rf_exposure`
+- `segment`
+- `laser_profile_id`
+- `laser_mode`
+- `laser_power_mw`
+- `oe_profile_id`
 
-## raw/oe1022d.frames.idx.jsonl
+这里的 `segment` 只引用 decoded truth 的窗口范围，不引用 raw 偏移。
 
-每个 frame 一行 index：
+## 十三、summary.json
 
-```json
-{
-  "frame_seq": 120,
-  "ts": "2026-06-10T10:00:08.112Z",
-  "monotonic_ns": 1012000000,
-  "raw_offset": 1048576,
-  "raw_len": 12288,
-  "parse_status": "ok",
-  "duplicate_of": null
-}
-```
+`summary.json` 是 run 级概览，不替代事实层，但必须把 collector 健康指标显式带出来。当前至少包含：
 
-## summary.json
+- `run_id`
+- `status`
+- `lockin_model`
+- `collector_contract`
+- `points_total`
+- `points_passed`
+- `points_failed`
+- `frames_total`
+- `samples_total`
+- `started_at`
+- `ended_at`
+- `failure`
+- `read_attempts`
+- `timeout_count`
+- `raw_len_bad_count`
+- `decode_failures`
+- `collector_frames_path`
+- `collector_blocks_path`
+- `parameter_values_path`
+- `sample_values_path`
+- `packet_counter`
+- `query_hz`
+- `unique_block_hz`
+- `effective_sample_hz_per_parameter`
 
-```json
-{
-  "run_id": "test_001",
-  "status": "completed_with_failed_points",
-  "points_total": 15,
-  "points_passed": 14,
-  "points_failed": 1,
-  "frames_total": 9400,
-  "started_at": "2026-06-10T10:00:00Z",
-  "ended_at": "2026-06-10T10:12:00Z",
-  "failure": null
-}
-```
+解释：
 
-`summary.json` 是索引和概览，不是事实替代。分析应以 JSONL 和 raw 为准。
+- `packet_counter` 只对 `OE1022D` 有意义
+- `unique_block_hz`、`effective_sample_hz_per_parameter` 只对 `OE1300` 有意义
+- `collector_frames_path` 与 `collector_blocks_path` 二选一
+
+## 十四、Artifact Check 与 Audit
+
+`artifact-check` 当前只承认 decoded truth 合同：
+
+- `oe1022d` 要求 `collector_frames.jsonl`
+- `oe1300` 要求 `collector_blocks.jsonl`
+
+它不再要求：
+
+- `raw/oe1022d.rall`
+- `raw/oe1022d.frames.idx.jsonl`
+- 任何 raw replay 伴生产物
+
+`audit-continuity` 也按型号分支：
+
+- `oe1022d`：packet counter 连续性
+- `oe1300`：块序连续性 + 去重后有效采样率
+
+## 十五、历史说明
+
+仓库里仍可能保留一些早期文档，描述 `raw/oe1022d.rall + frames.idx` 为正式真值层。那是旧合同，当前一律作历史参考，不再作为实现依据或验收口径。

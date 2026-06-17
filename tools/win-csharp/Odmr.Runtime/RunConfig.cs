@@ -30,14 +30,28 @@ public sealed record StationIdentity(
     [property: JsonPropertyName("contains_all")] IReadOnlyList<string>? ContainsAll,
     [property: JsonPropertyName("contains_any")] IReadOnlyList<string>? ContainsAny);
 
+public static class LockinModelNames
+{
+    public const string Oe1022d = "oe1022d";
+    public const string Oe1300 = "oe1300";
+}
+
+public sealed record LockinConnectionFacts(
+    string DeviceId,
+    string Model,
+    string Transport,
+    string? Host,
+    int? Port,
+    string? Resource,
+    int? BaudRate);
+
 public sealed record StationConnectionFacts(
     string StationId,
     string SmbTransport,
     string? SmbHost,
     int? SmbPort,
     string? SmbResource,
-    string OeResource,
-    int OeBaudRate,
+    LockinConnectionFacts Lockin,
     string? XPort,
     string? YPort,
     string? ZPort,
@@ -162,11 +176,35 @@ public sealed record SmbSweepOverride(
     [property: JsonPropertyName("output_voltage_stop_v")] double? OutputVoltageStopV,
     [property: JsonPropertyName("rf_output_enabled")] bool? RfOutputEnabled);
 
-public sealed record Oe1022dRunProfile(
+public sealed record OeRunProfile(
+    [property: JsonPropertyName("model")] string Model,
     [property: JsonPropertyName("profile_id")] string ProfileId,
     [property: JsonPropertyName("command_settle_ms")] int CommandSettleMs,
-    [property: JsonPropertyName("fixed")] Oe1022dFixedProfile Fixed,
-    [property: JsonPropertyName("collector")] OeCollectorConfig Collector);
+    [property: JsonPropertyName("fixed")] JsonElement Fixed,
+    [property: JsonPropertyName("collector")] JsonElement Collector)
+{
+    [JsonIgnore]
+    public string NormalizedModel => RunConfigLoader.NormalizeLockinModel(Model);
+
+    public Oe1022dFixedProfile GetOe1022dFixed() => DeserializeNested<Oe1022dFixedProfile>(Fixed, "fixed");
+
+    public OeCollectorConfig GetOe1022dCollector() => DeserializeNested<OeCollectorConfig>(Collector, "collector");
+
+    public Oe1300FixedProfile GetOe1300Fixed() => DeserializeNested<Oe1300FixedProfile>(Fixed, "fixed");
+
+    public Oe1300CollectorConfig GetOe1300Collector() => DeserializeNested<Oe1300CollectorConfig>(Collector, "collector");
+
+    private T DeserializeNested<T>(JsonElement element, string name)
+    {
+        if (element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            throw new InvalidOperationException($"oe_profile.{name} missing for model {NormalizedModel}");
+        }
+
+        return JsonSerializer.Deserialize<T>(element.GetRawText(), RunConfigLoader.ReadOptions) ??
+            throw new InvalidOperationException($"failed to parse oe_profile.{name} for model {NormalizedModel}");
+    }
+}
 
 public sealed record Oe1022dFixedProfile(
     [property: JsonPropertyName("channel")] int Channel,
@@ -194,6 +232,28 @@ public sealed record OeCollectorConfig(
     [property: JsonPropertyName("ring_capacity_frames")] int RingCapacityFrames,
     [property: JsonPropertyName("guard_margin_ms")] int GuardMarginMs,
     [property: JsonPropertyName("rall_post_write_delay_ms")] int RallPostWriteDelayMs);
+
+public sealed record Oe1300FixedProfile(
+    [property: JsonPropertyName("input_source")] int InputSource,
+    [property: JsonPropertyName("input_coupling")] int InputCoupling,
+    [property: JsonPropertyName("input_range")] int InputRange,
+    [property: JsonPropertyName("reference_source")] int ReferenceSource,
+    [property: JsonPropertyName("reference_frequency_hz")] double ReferenceFrequencyHz,
+    [property: JsonPropertyName("reference_slope")] int ReferenceSlope,
+    [property: JsonPropertyName("sensitivity_index")] int SensitivityIndex,
+    [property: JsonPropertyName("time_constant_seconds")] double TimeConstantSeconds,
+    [property: JsonPropertyName("filter_slope")] int FilterSlope,
+    [property: JsonPropertyName("sync_enabled")] bool SyncEnabled,
+    [property: JsonPropertyName("sine_output_enabled")] bool SineOutputEnabled,
+    [property: JsonPropertyName("sine_output_voltage_vrms")] double SineOutputVoltageVrms);
+
+public sealed record Oe1300CollectorConfig(
+    [property: JsonPropertyName("tcp_expected_bytes")] int TcpExpectedBytes,
+    [property: JsonPropertyName("tcp_payload_bytes")] int TcpPayloadBytes,
+    [property: JsonPropertyName("parameter_count")] int ParameterCount,
+    [property: JsonPropertyName("samples_per_parameter")] int SamplesPerParameter,
+    [property: JsonPropertyName("rall_post_write_delay_ms")] int RallPostWriteDelayMs,
+    [property: JsonPropertyName("drain_before_write")] bool DrainBeforeWrite);
 
 public sealed record LaserRunProfile(
     [property: JsonPropertyName("profile_id")] string ProfileId,
@@ -300,6 +360,7 @@ public sealed record PlanSnapshot(
 public sealed record ConfigResolutionSummary(
     [property: JsonPropertyName("station_id")] string StationId,
     [property: JsonPropertyName("run_id")] string RunId,
+    [property: JsonPropertyName("lockin_model")] string LockinModel,
     [property: JsonPropertyName("source_kind")] string SourceKind,
     [property: JsonPropertyName("declared_point_count")] int DeclaredPointCount,
     [property: JsonPropertyName("resolved_point_count")] int ResolvedPointCount,
@@ -319,7 +380,7 @@ public sealed record RunConfigBundle(
     CalibrationProfile Calibration,
     AcquisitionRunPlan Plan,
     Smb100aRunProfile SmbProfile,
-    Oe1022dRunProfile OeProfile,
+    OeRunProfile OeProfile,
     LaserRunProfile LaserProfile,
     StationConnectionFacts Connections,
     ResolvedRunPlan ResolvedPlan)
@@ -343,6 +404,7 @@ public sealed record RunConfigBundle(
         new(
             Station.StationId,
             Plan.RunId,
+            OeProfile.NormalizedModel,
             ResolvedPlan.SourceKind,
             ResolvedPlan.DeclaredPointCount,
             ResolvedPlan.ResolvedPointCount,
@@ -360,7 +422,7 @@ public sealed record RunConfigBundle(
 
 public static class RunConfigLoader
 {
-    private static readonly JsonSerializerOptions ReadOptions = new()
+    internal static readonly JsonSerializerOptions ReadOptions = new()
     {
         PropertyNameCaseInsensitive = false
     };
@@ -377,12 +439,12 @@ public static class RunConfigLoader
         var calibration = ReadJson<CalibrationProfile>(calibrationPath);
         var plan = ReadJson<AcquisitionRunPlan>(planPath);
         var smbProfile = ReadJson<Smb100aRunProfile>(smbProfilePath);
-        var oeProfile = ReadJson<Oe1022dRunProfile>(oeProfilePath);
+        var oeProfile = ReadJson<OeRunProfile>(oeProfilePath);
         var laserProfile = ReadJson<LaserRunProfile>(laserProfilePath);
 
         var resolvedPlan = ResolvePlan(plan, smbProfile);
         ValidateOeCollector(oeProfile);
-        var connections = ResolveConnections(station, resolvedPlan.RequiresMagneticControl);
+        var connections = ResolveConnections(station, oeProfile.NormalizedModel, resolvedPlan.RequiresMagneticControl);
         return new RunConfigBundle(station, calibration, plan, smbProfile, oeProfile, laserProfile, connections, resolvedPlan);
     }
 
@@ -391,7 +453,7 @@ public static class RunConfigLoader
         var station = ReadJson<StationSpec>(Path.Combine(runDir, "station_snapshot.json"));
         var calibration = ReadJson<CalibrationProfile>(Path.Combine(runDir, "calibration_snapshot.json"));
         var smbProfile = ReadJson<Smb100aRunProfile>(Path.Combine(runDir, "smb_profile_snapshot.json"));
-        var oeProfile = ReadJson<Oe1022dRunProfile>(Path.Combine(runDir, "oe_profile_snapshot.json"));
+        var oeProfile = ReadJson<OeRunProfile>(Path.Combine(runDir, "oe_profile_snapshot.json"));
         var laserProfile = ReadJson<LaserRunProfile>(Path.Combine(runDir, "laser_profile_snapshot.json"));
         var planSnapshot = ReadJson<PlanSnapshot>(Path.Combine(runDir, "plan_snapshot.json"));
 
@@ -408,7 +470,7 @@ public static class RunConfigLoader
             planSnapshot.EstimatedRunDurationMs,
             planSnapshot.ResolvedPoints);
         ValidateOeCollector(oeProfile);
-        var connections = ResolveConnections(station, resolvedPlan.RequiresMagneticControl);
+        var connections = ResolveConnections(station, oeProfile.NormalizedModel, resolvedPlan.RequiresMagneticControl);
         return new RunConfigBundle(station, calibration, planSnapshot.SourcePlan, smbProfile, oeProfile, laserProfile, connections, resolvedPlan);
     }
 
@@ -505,10 +567,21 @@ public static class RunConfigLoader
         return sweep.EstimatedSweepDurationMs + plan.PointSettleMs + smbProfile.EstimatedPointConfigurationMs;
     }
 
-    public static StationConnectionFacts ResolveConnections(StationSpec station, bool requireMagAxes)
+    public static string NormalizeLockinModel(string? model)
+    {
+        var normalized = model?.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            LockinModelNames.Oe1022d => LockinModelNames.Oe1022d,
+            LockinModelNames.Oe1300 => LockinModelNames.Oe1300,
+            _ => throw new InvalidOperationException($"unsupported oe_profile.model: {model}")
+        };
+    }
+
+    public static StationConnectionFacts ResolveConnections(StationSpec station, string lockinModel, bool requireMagAxes)
     {
         var smb = RequiredDevice(station, "smb100a", "smb100a_main");
-        var oe = RequiredDevice(station, "oe1022d", "oe1022d_main");
+        var lockin = ResolveLockinDevice(station, lockinModel);
         var x = requireMagAxes ? RequiredDevice(station, "m8812", "mag_x") : OptionalDevice(station, "m8812", "mag_x");
         var y = requireMagAxes ? RequiredDevice(station, "m8812", "mag_y") : OptionalDevice(station, "m8812", "mag_y");
         var z = requireMagAxes ? RequiredDevice(station, "m8812", "mag_z") : OptionalDevice(station, "m8812", "mag_z");
@@ -520,26 +593,80 @@ public static class RunConfigLoader
             smb.TransportHint.Host,
             smb.TransportHint.Port,
             smb.TransportHint.Resource,
-            Required(oe.TransportHint.Resource, "OE resource"),
-            oe.TransportHint.BaudRate ?? Oe1022dDefaults.BaudRate,
+            new LockinConnectionFacts(
+                lockin.DeviceId,
+                lockin.Kind,
+                lockin.TransportHint.Transport,
+                lockin.TransportHint.Host,
+                lockin.TransportHint.Port,
+                lockin.TransportHint.Resource,
+                lockin.TransportHint.BaudRate),
             x is null ? null : Required(x.TransportHint.PortPath, "mag_x port"),
             y is null ? null : Required(y.TransportHint.PortPath, "mag_y port"),
             z is null ? null : Required(z.TransportHint.PortPath, "mag_z port"),
             laser?.TransportHint.PortPath);
     }
 
-    public static void ValidateOeCollector(Oe1022dRunProfile profile)
+    public static void ValidateOeCollector(OeRunProfile profile)
     {
-        if (profile.Collector.FrameExactBytes != Oe1022dDefaults.RallFrameBytes)
+        if (profile.NormalizedModel == LockinModelNames.Oe1022d)
         {
-            throw new InvalidOperationException($"oe_profile.collector.frame_exact_bytes must be {Oe1022dDefaults.RallFrameBytes}");
+            var collector = profile.GetOe1022dCollector();
+            if (collector.FrameExactBytes != Oe1022dDefaults.RallFrameBytes)
+            {
+                throw new InvalidOperationException($"oe_profile.collector.frame_exact_bytes must be {Oe1022dDefaults.RallFrameBytes}");
+            }
+
+            if (collector.RallPostWriteDelayMs != Oe1022dDefaults.RallPostWriteDelayMs)
+            {
+                throw new InvalidOperationException($"oe_profile.collector.rall_post_write_delay_ms must be {Oe1022dDefaults.RallPostWriteDelayMs}");
+            }
+
+            return;
         }
 
-        if (profile.Collector.RallPostWriteDelayMs != Oe1022dDefaults.RallPostWriteDelayMs)
+        var oe1300Collector = profile.GetOe1300Collector();
+        if (oe1300Collector.TcpExpectedBytes != Oe1300Defaults.TcpRallExpectedBytes)
         {
-            throw new InvalidOperationException($"oe_profile.collector.rall_post_write_delay_ms must be {Oe1022dDefaults.RallPostWriteDelayMs}");
+            throw new InvalidOperationException($"oe_profile.collector.tcp_expected_bytes must be {Oe1300Defaults.TcpRallExpectedBytes}");
+        }
+
+        if (oe1300Collector.TcpPayloadBytes != Oe1300Defaults.TcpRallPayloadBytes)
+        {
+            throw new InvalidOperationException($"oe_profile.collector.tcp_payload_bytes must be {Oe1300Defaults.TcpRallPayloadBytes}");
+        }
+
+        if (oe1300Collector.ParameterCount != Oe1300Defaults.TcpRallLabviewParameterCount)
+        {
+            throw new InvalidOperationException($"oe_profile.collector.parameter_count must be {Oe1300Defaults.TcpRallLabviewParameterCount}");
+        }
+
+        if (oe1300Collector.SamplesPerParameter != Oe1300Defaults.TcpRallLabviewSamplesPerParameter)
+        {
+            throw new InvalidOperationException($"oe_profile.collector.samples_per_parameter must be {Oe1300Defaults.TcpRallLabviewSamplesPerParameter}");
+        }
+
+        if (oe1300Collector.RallPostWriteDelayMs != 5)
+        {
+            throw new InvalidOperationException("oe_profile.collector.rall_post_write_delay_ms must be 5");
         }
     }
+
+    public static string CollectorContractFor(string lockinModel) =>
+        NormalizeLockinModel(lockinModel) switch
+        {
+            LockinModelNames.Oe1022d => RuntimeContracts.Oe1022dFrozenRallHotPath,
+            LockinModelNames.Oe1300 => RuntimeContracts.Oe1300FrozenRallHotPath,
+            _ => throw new InvalidOperationException($"unsupported lockin model: {lockinModel}")
+        };
+
+    private static StationDeviceSpec ResolveLockinDevice(StationSpec station, string lockinModel) =>
+        NormalizeLockinModel(lockinModel) switch
+        {
+            LockinModelNames.Oe1022d => RequiredDevice(station, LockinModelNames.Oe1022d, "oe1022d_main"),
+            LockinModelNames.Oe1300 => RequiredDevice(station, LockinModelNames.Oe1300, "oe1300_main"),
+            _ => throw new InvalidOperationException($"unsupported lockin model: {lockinModel}")
+        };
 
     private static StationDeviceSpec RequiredDevice(StationSpec station, string kind, string deviceId)
     {

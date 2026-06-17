@@ -6,17 +6,24 @@ namespace Odmr.Artifacts;
 public sealed record ContinuityAuditReport(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
     [property: JsonPropertyName("run_dir")] string RunDir,
-    [property: JsonPropertyName("collector_frames_file")] string CollectorFramesFile,
+    [property: JsonPropertyName("lockin_model")] string LockinModel,
+    [property: JsonPropertyName("collector_file")] string CollectorFile,
     [property: JsonPropertyName("segments_file")] string SegmentsFile,
     [property: JsonPropertyName("frames_total")] long FramesTotal,
     [property: JsonPropertyName("frames_usable")] long FramesUsable,
     [property: JsonPropertyName("frames_unique")] long FramesUnique,
     [property: JsonPropertyName("segments_total")] long SegmentsTotal,
     [property: JsonPropertyName("segments_audited")] long SegmentsAudited,
-    [property: JsonPropertyName("device_packet_counter")] DevicePacketCounterAuditReport DevicePacketCounter,
+    [property: JsonPropertyName("device_packet_counter")] DevicePacketCounterAuditReport? DevicePacketCounter,
     [property: JsonPropertyName("suspected_missing_boundaries")] long SuspectedMissingBoundaries,
     [property: JsonPropertyName("suspected_content_boundaries")] long SuspectedContentBoundaries,
     [property: JsonPropertyName("max_observed_gap_ms")] double MaxObservedGapMs,
+    [property: JsonPropertyName("timeout_count")] long TimeoutCount,
+    [property: JsonPropertyName("raw_len_bad_count")] long RawLenBadCount,
+    [property: JsonPropertyName("decode_failures")] long DecodeFailures,
+    [property: JsonPropertyName("query_hz")] double? QueryHz,
+    [property: JsonPropertyName("unique_block_hz")] double? UniqueBlockHz,
+    [property: JsonPropertyName("effective_sample_hz_per_parameter")] double? EffectiveSampleHzPerParameter,
     [property: JsonPropertyName("verdict")] string Verdict,
     [property: JsonPropertyName("segment_reports")] IReadOnlyList<ContinuitySegmentReport> SegmentReports);
 
@@ -72,9 +79,37 @@ public sealed record CollectorFrameAuditRecord(
     [property: JsonPropertyName("samples_per_frame")] int SamplesPerFrame,
     [property: JsonPropertyName("device_packet_counter")] byte DevicePacketCounter);
 
+internal sealed record CollectorBlockAuditRecord(
+    [property: JsonPropertyName("rall_index")] long RallIndex,
+    [property: JsonPropertyName("ts")] string Ts,
+    [property: JsonPropertyName("monotonic_ns")] ulong MonotonicNs,
+    [property: JsonPropertyName("sample_index_start")] long SampleIndexStart,
+    [property: JsonPropertyName("sample_index_end")] long SampleIndexEnd,
+    [property: JsonPropertyName("unique_block")] bool UniqueBlock,
+    [property: JsonPropertyName("payload_sha256")] string PayloadSha256);
+
 public static class ContinuityAudit
 {
     public static ContinuityAuditReport Audit(string runDir)
+    {
+        var lockinModel = DetectLockinModel(runDir);
+        return lockinModel == "oe1300"
+            ? AuditOe1300(runDir)
+            : AuditOe1022d(runDir);
+    }
+
+    public static void WriteReport(string outPath, ContinuityAuditReport report)
+    {
+        var directory = Path.GetDirectoryName(outPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        RallArtifactWriter.WritePrettyJson(outPath, report);
+    }
+
+    private static ContinuityAuditReport AuditOe1022d(string runDir)
     {
         var collectorFramesPath = Path.Combine(runDir, "collector_frames.jsonl");
         var segmentsPath = Path.Combine(runDir, "segments.jsonl");
@@ -90,13 +125,19 @@ public static class ContinuityAudit
 
         var frames = ReadJsonl<CollectorFrameAuditRecord>(collectorFramesPath);
         var segments = ReadJsonl<SegmentRecord>(segmentsPath);
+        var summary = ReadSummary(runDir);
         var counterAudit = AuditDevicePacketCounters(frames);
         var segmentReports = segments.Select(BuildSegmentReport).ToArray();
-        var verdict = counterAudit.DeltaGt1Count == 0 ? "continuous" : "device_counter_missing_windows";
+        var verdict = counterAudit.DeltaGt1Count == 0 &&
+            (summary.TimeoutCount == 0) &&
+            (summary.RawLenBadCount == 0)
+            ? "continuous"
+            : "device_counter_missing_windows";
 
         return new ContinuityAuditReport(
             1,
             runDir,
+            "oe1022d",
             "collector_frames.jsonl",
             "segments.jsonl",
             frames.Count,
@@ -108,8 +149,87 @@ public static class ContinuityAudit
             counterAudit.DeltaGt1Count,
             counterAudit.Delta0Count,
             MaxObservedGapMs(frames),
+            summary.TimeoutCount,
+            summary.RawLenBadCount,
+            summary.DecodeFailures,
+            null,
+            null,
+            null,
             verdict,
             segmentReports);
+    }
+
+    private static ContinuityAuditReport AuditOe1300(string runDir)
+    {
+        var collectorBlocksPath = Path.Combine(runDir, "collector_blocks.jsonl");
+        var segmentsPath = Path.Combine(runDir, "segments.jsonl");
+        if (!File.Exists(collectorBlocksPath))
+        {
+            throw new FileNotFoundException("collector blocks missing", collectorBlocksPath);
+        }
+
+        if (!File.Exists(segmentsPath))
+        {
+            throw new FileNotFoundException("segments file missing", segmentsPath);
+        }
+
+        var blocks = ReadJsonl<CollectorBlockAuditRecord>(collectorBlocksPath);
+        var segments = ReadJsonl<SegmentRecord>(segmentsPath);
+        var summary = ReadSummary(runDir);
+        var indexGapCount = CountIndexGaps(blocks);
+        var uniqueBlocks = blocks.Count(block => block.UniqueBlock);
+        var maxGapMs = MaxObservedGapMs(blocks.Select(ToFrameRecord).ToArray());
+        var elapsedSeconds = ElapsedSeconds(blocks.Select(ToFrameRecord).ToArray());
+        var queryHz = elapsedSeconds > 0 ? blocks.Count / elapsedSeconds : summary.QueryHz;
+        var uniqueBlockHz = elapsedSeconds > 0 ? uniqueBlocks / elapsedSeconds : summary.UniqueBlockHz;
+        var effectiveSampleHzPerParameter = uniqueBlockHz.HasValue
+            ? uniqueBlockHz.Value * 100.0
+            : summary.EffectiveSampleHzPerParameter;
+        var verdict = summary.TimeoutCount == 0 &&
+            summary.RawLenBadCount == 0 &&
+            summary.DecodeFailures == 0 &&
+            indexGapCount == 0 &&
+            (effectiveSampleHzPerParameter ?? 0.0) >= 900.0
+            ? "continuous"
+            : "degraded";
+
+        return new ContinuityAuditReport(
+            1,
+            runDir,
+            "oe1300",
+            "collector_blocks.jsonl",
+            "segments.jsonl",
+            blocks.Count,
+            blocks.Count,
+            uniqueBlocks,
+            segments.Count,
+            segments.Count,
+            null,
+            indexGapCount,
+            blocks.Count - uniqueBlocks,
+            maxGapMs,
+            summary.TimeoutCount,
+            summary.RawLenBadCount,
+            summary.DecodeFailures,
+            queryHz,
+            uniqueBlockHz,
+            effectiveSampleHzPerParameter,
+            verdict,
+            segments.Select(BuildSegmentReport).ToArray());
+    }
+
+    private static int CountIndexGaps(IReadOnlyList<CollectorBlockAuditRecord> blocks)
+    {
+        var gaps = 0;
+        for (var index = 1; index < blocks.Count; index++)
+        {
+            if (blocks[index].RallIndex != blocks[index - 1].RallIndex + 1)
+            {
+                gaps++;
+            }
+        }
+
+        return gaps;
     }
 
     private static DevicePacketCounterAuditReport AuditDevicePacketCounters(IReadOnlyList<CollectorFrameAuditRecord> frames)
@@ -203,16 +323,15 @@ public static class ContinuityAudit
             []);
     }
 
-    public static void WriteReport(string outPath, ContinuityAuditReport report)
-    {
-        var directory = Path.GetDirectoryName(outPath);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        RallArtifactWriter.WritePrettyJson(outPath, report);
-    }
+    private static CollectorFrameAuditRecord ToFrameRecord(CollectorBlockAuditRecord block) =>
+        new(
+            block.RallIndex,
+            block.Ts,
+            block.MonotonicNs,
+            block.SampleIndexStart,
+            block.SampleIndexEnd,
+            0,
+            0);
 
     private static double GapMs(CollectorFrameAuditRecord previous, CollectorFrameAuditRecord current)
     {
@@ -234,6 +353,81 @@ public static class ContinuityAudit
 
         return maxGapMs;
     }
+
+    private static double ElapsedSeconds(IReadOnlyList<CollectorFrameAuditRecord> frames)
+    {
+        if (frames.Count < 2 || frames[^1].MonotonicNs <= frames[0].MonotonicNs)
+        {
+            return 0.0;
+        }
+
+        return (frames[^1].MonotonicNs - frames[0].MonotonicNs) / 1_000_000_000.0;
+    }
+
+    private static (long TimeoutCount, long RawLenBadCount, long DecodeFailures, double? QueryHz, double? UniqueBlockHz, double? EffectiveSampleHzPerParameter) ReadSummary(string runDir)
+    {
+        var summaryPath = Path.Combine(runDir, "summary.json");
+        if (!File.Exists(summaryPath))
+        {
+            return (0, 0, 0, null, null, null);
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(summaryPath));
+        var root = document.RootElement;
+        return (
+            GetInt64(root, "timeout_count") ?? 0,
+            GetInt64(root, "raw_len_bad_count") ?? 0,
+            GetInt64(root, "decode_failures") ?? 0,
+            GetDouble(root, "query_hz"),
+            GetDouble(root, "unique_block_hz"),
+            GetDouble(root, "effective_sample_hz_per_parameter"));
+    }
+
+    private static string DetectLockinModel(string runDir)
+    {
+        var oeProfilePath = Path.Combine(runDir, "oe_profile_snapshot.json");
+        if (File.Exists(oeProfilePath))
+        {
+            using var profile = JsonDocument.Parse(File.ReadAllText(oeProfilePath));
+            var model = GetString(profile.RootElement, "model");
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                return model!;
+            }
+        }
+
+        var summaryPath = Path.Combine(runDir, "summary.json");
+        if (File.Exists(summaryPath))
+        {
+            using var summary = JsonDocument.Parse(File.ReadAllText(summaryPath));
+            var model = GetString(summary.RootElement, "lockin_model");
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                return model!;
+            }
+        }
+
+        return "oe1022d";
+    }
+
+    private static string? GetString(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+
+    private static long? GetInt64(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) &&
+        property.ValueKind == JsonValueKind.Number &&
+        property.TryGetInt64(out var value)
+            ? value
+            : null;
+
+    private static double? GetDouble(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) &&
+        property.ValueKind == JsonValueKind.Number &&
+        property.TryGetDouble(out var value)
+            ? value
+            : null;
 
     private static List<T> ReadJsonl<T>(string path)
     {

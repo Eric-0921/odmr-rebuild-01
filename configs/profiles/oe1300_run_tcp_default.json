@@ -1,0 +1,27 @@
+{
+  "model": "oe1300",
+  "profile_id": "oe1300_run_tcp_default",
+  "command_settle_ms": 200,
+  "fixed": {
+    "input_source": 0,
+    "input_coupling": 0,
+    "input_range": 0,
+    "reference_source": 0,
+    "reference_frequency_hz": 1000.0,
+    "reference_slope": 0,
+    "sensitivity_index": 24,
+    "time_constant_seconds": 0.1,
+    "filter_slope": 1,
+    "sync_enabled": false,
+    "sine_output_enabled": false,
+    "sine_output_voltage_vrms": 1.0
+  },
+  "collector": {
+    "tcp_expected_bytes": 32768,
+    "tcp_payload_bytes": 29600,
+    "parameter_count": 37,
+    "samples_per_parameter": 100,
+    "rall_post_write_delay_ms": 5,
+    "drain_before_write": true
+  }
+}

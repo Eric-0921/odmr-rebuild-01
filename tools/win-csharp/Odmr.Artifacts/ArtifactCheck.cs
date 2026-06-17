@@ -6,10 +6,12 @@ namespace Odmr.Artifacts;
 public sealed record ArtifactCheckReport(
     [property: JsonPropertyName("run_dir")] string RunDir,
     [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("lockin_model")] string LockinModel,
     [property: JsonPropertyName("run_id")] string? RunId,
     [property: JsonPropertyName("frames_total")] long FramesTotal,
     [property: JsonPropertyName("samples_total")] long SamplesTotal,
-    [property: JsonPropertyName("collector_frame_rows")] long CollectorFrameRows,
+    [property: JsonPropertyName("collector_file")] string CollectorFile,
+    [property: JsonPropertyName("collector_rows")] long CollectorRows,
     [property: JsonPropertyName("collector_rows_match_frames")] bool CollectorRowsMatchFrames,
     [property: JsonPropertyName("parameter_rows")] long ParameterRows,
     [property: JsonPropertyName("parameter_rows_match_frames")] bool ParameterRowsMatchFrames,
@@ -35,20 +37,6 @@ public sealed record ArtifactCheckReport(
 
 public static class ArtifactCheck
 {
-    private static readonly string[] RequiredRuntimeFiles =
-    [
-        "summary.json",
-        "run_manifest.json",
-        "events.jsonl",
-        "collector_frames.jsonl",
-        "parameter_values.csv",
-        "sample_values.csv",
-        "segments.jsonl",
-        "points.jsonl",
-        "quality.jsonl",
-        "device_state.jsonl"
-    ];
-
     private static readonly string[] SnapshotFiles =
     [
         "station_snapshot.json",
@@ -76,7 +64,12 @@ public static class ArtifactCheck
 
     public static ArtifactCheckReport Check(string runDir)
     {
-        var missingFiles = RequiredRuntimeFiles
+        var lockinModel = DetectLockinModel(runDir);
+        var collectorFileName = lockinModel == "oe1300"
+            ? "collector_blocks.jsonl"
+            : "collector_frames.jsonl";
+        var requiredRuntimeFiles = RequiredRuntimeFiles(lockinModel);
+        var missingFiles = requiredRuntimeFiles
             .Where(path => !File.Exists(Path.Combine(runDir, path)))
             .ToArray();
         var missingSnapshots = SnapshotFiles
@@ -85,7 +78,7 @@ public static class ArtifactCheck
 
         var summaryPath = Path.Combine(runDir, "summary.json");
         var manifestPath = Path.Combine(runDir, "run_manifest.json");
-        var collectorFramesPath = Path.Combine(runDir, "collector_frames.jsonl");
+        var collectorFramesPath = Path.Combine(runDir, collectorFileName);
         var parameterValuesPath = Path.Combine(runDir, "parameter_values.csv");
         var sampleValuesPath = Path.Combine(runDir, "sample_values.csv");
         var segmentsPath = Path.Combine(runDir, "segments.jsonl");
@@ -101,7 +94,7 @@ public static class ArtifactCheck
         var runId = GetString(summary, "run_id");
         var summaryStatus = GetString(summary, "status");
         var manifestStatus = GetString(manifest, "status");
-        var collectorFrameRows = File.Exists(collectorFramesPath) ? CountLines(collectorFramesPath) : 0;
+        var collectorRows = File.Exists(collectorFramesPath) ? CountLines(collectorFramesPath) : 0;
         var parameterRows = File.Exists(parameterValuesPath) ? CountCsvDataRows(parameterValuesPath) : 0;
         var sampleRows = File.Exists(sampleValuesPath) ? CountCsvDataRows(sampleValuesPath) : 0;
         var segmentsCount = File.Exists(segmentsPath) ? CountLines(segmentsPath) : 0;
@@ -156,7 +149,7 @@ public static class ArtifactCheck
             missingEvents.Add("run_completed|run_failed|run_aborted|run_paused");
         }
 
-        var collectorRowsMatchFrames = collectorFrameRows == framesTotal;
+        var collectorRowsMatchFrames = collectorRows == framesTotal;
         var parameterRowsMatchFrames = parameterRows == framesTotal;
         var sampleRowsMatchTotal = sampleRows == samplesTotal;
         var recordCountsConsistent = aborted
@@ -183,10 +176,12 @@ public static class ArtifactCheck
         return new ArtifactCheckReport(
             runDir,
             passed ? "passed" : "failed",
+            lockinModel,
             runId,
             framesTotal,
             samplesTotal,
-            collectorFrameRows,
+            collectorFileName,
+            collectorRows,
             collectorRowsMatchFrames,
             parameterRows,
             parameterRowsMatchFrames,
@@ -210,6 +205,20 @@ public static class ArtifactCheck
             missingSnapshots,
             passed);
     }
+
+    private static string[] RequiredRuntimeFiles(string lockinModel) =>
+    [
+        "summary.json",
+        "run_manifest.json",
+        "events.jsonl",
+        lockinModel == "oe1300" ? "collector_blocks.jsonl" : "collector_frames.jsonl",
+        "parameter_values.csv",
+        "sample_values.csv",
+        "segments.jsonl",
+        "points.jsonl",
+        "quality.jsonl",
+        "device_state.jsonl"
+    ];
 
     private sealed record PointIndex(string PointId, int? Index, string? MagneticMode, bool? M8812Commanded);
 
@@ -556,6 +565,33 @@ public static class ArtifactCheck
         {
             issues.Add($"device_state point_id {pointId} segment {propertyName} {actual?.ToString() ?? "null"} != segments {expected?.ToString() ?? "null"}");
         }
+    }
+
+    private static string DetectLockinModel(string runDir)
+    {
+        var oeProfilePath = Path.Combine(runDir, "oe_profile_snapshot.json");
+        if (File.Exists(oeProfilePath))
+        {
+            var profile = ReadObject(oeProfilePath);
+            var model = GetString(profile, "model");
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                return model!;
+            }
+        }
+
+        var summaryPath = Path.Combine(runDir, "summary.json");
+        if (File.Exists(summaryPath))
+        {
+            var summary = ReadObject(summaryPath);
+            var model = GetString(summary, "lockin_model");
+            if (!string.IsNullOrWhiteSpace(model))
+            {
+                return model!;
+            }
+        }
+
+        return "oe1022d";
     }
 
     private static JsonElement? ReadObject(string path)

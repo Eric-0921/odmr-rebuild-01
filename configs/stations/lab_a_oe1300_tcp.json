@@ -1,0 +1,108 @@
+{
+  "station_id": "lab_a_oe1300_tcp",
+  "devices": [
+    {
+      "device_id": "smb100a_main",
+      "kind": "smb100a",
+      "required": true,
+      "transport_hint": {
+        "transport": "visa_resource",
+        "resource": "USB::0x0AAD::0x0054::106789::INSTR",
+        "resource_candidates": [
+          "USB::0x0AAD::0x0054::101623::INSTR"
+        ]
+      },
+      "identity": {
+        "contains_all": [
+          "Rohde&Schwarz",
+          "SMB100A"
+        ],
+        "contains_any": [
+          "1406.6000k02/101623",
+          "1406.6000k02/106789"
+        ]
+      }
+    },
+    {
+      "device_id": "oe1300_main",
+      "kind": "oe1300",
+      "required": true,
+      "transport_hint": {
+        "transport": "tcp_socket",
+        "host": "192.168.1.1",
+        "port": 10001,
+        "host_candidates": []
+      },
+      "identity": {
+        "contains_all": [
+          "SSI LIA-OE130"
+        ]
+      }
+    },
+    {
+      "device_id": "mag_x",
+      "kind": "m8812",
+      "required": true,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "COM4",
+        "baud_rate": 9600,
+        "port_candidates": []
+      },
+      "identity": {
+        "contains_all": [
+          "MAYNUO",
+          "M8812",
+          "080020960220402020"
+        ]
+      }
+    },
+    {
+      "device_id": "mag_y",
+      "kind": "m8812",
+      "required": true,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "COM6",
+        "baud_rate": 9600,
+        "port_candidates": []
+      },
+      "identity": {
+        "contains_all": [
+          "MAYNUO",
+          "M8812",
+          "080020960220402022"
+        ]
+      }
+    },
+    {
+      "device_id": "mag_z",
+      "kind": "m8812",
+      "required": true,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "COM3",
+        "baud_rate": 9600,
+        "port_candidates": []
+      },
+      "identity": {
+        "contains_all": [
+          "MAYNUO",
+          "M8812",
+          "080020960220402003"
+        ]
+      }
+    },
+    {
+      "device_id": "cni_laser_main",
+      "kind": "cni_laser",
+      "required": false,
+      "transport_hint": {
+        "transport": "serial_port",
+        "port_path": "COM9",
+        "baud_rate": 9600,
+        "port_candidates": []
+      }
+    }
+  ]
+}

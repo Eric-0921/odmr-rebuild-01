@@ -370,7 +370,10 @@ static int AuditContinuityCommand(IReadOnlyDictionary<string, string> options)
     var outPath = GetRequiredOption(options, "out");
     var report = ContinuityAudit.Audit(runDir);
     ContinuityAudit.WriteReport(outPath, report);
-    Console.WriteLine($"continuity audit done: verdict={report.Verdict}, frames={report.FramesTotal}, delta_gt1={report.DevicePacketCounter.DeltaGt1Count}, out={outPath}");
+    var continuityMetric = report.LockinModel == "oe1300"
+        ? $"effective_sample_hz_per_parameter={report.EffectiveSampleHzPerParameter:0.###}"
+        : $"delta_gt1={report.DevicePacketCounter?.DeltaGt1Count ?? 0}";
+    Console.WriteLine($"continuity audit done: verdict={report.Verdict}, frames={report.FramesTotal}, {continuityMetric}, out={outPath}");
     return report.Verdict == "continuous" ? 0 : 2;
 }
 
@@ -1556,7 +1559,11 @@ sealed class ProgressJsonlWriter : IProgress<RunProgressEvent>, IDisposable
                 start_hz = value.StartHz,
                 stop_hz = value.StopHz,
                 step_hz = value.StepHz,
-                dwell_ms = value.DwellMs
+                dwell_ms = value.DwellMs,
+                lockin_model = value.LockinModel,
+                collector_contract = value.CollectorContract,
+                decode_failures = value.DecodeFailures,
+                effective_sample_hz_per_parameter = value.EffectiveSampleHzPerParameter
             };
 
             lock (gate)

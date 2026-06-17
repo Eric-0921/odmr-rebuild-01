@@ -119,6 +119,25 @@ public sealed record CollectorFrameRecord(
     [property: JsonPropertyName("b_gain_overload")] byte BGainOverload,
     [property: JsonPropertyName("b_pll_locked")] byte BPllLocked);
 
+public sealed record CollectorBlockRecord(
+    [property: JsonPropertyName("schema_version")] int SchemaVersion,
+    [property: JsonPropertyName("source")] string Source,
+    [property: JsonPropertyName("rall_index")] long RallIndex,
+    [property: JsonPropertyName("ts")] string Ts,
+    [property: JsonPropertyName("monotonic_ns")] ulong MonotonicNs,
+    [property: JsonPropertyName("sample_index_start")] long SampleIndexStart,
+    [property: JsonPropertyName("sample_index_end")] long SampleIndexEnd,
+    [property: JsonPropertyName("samples_per_parameter")] int SamplesPerParameter,
+    [property: JsonPropertyName("parameter_count")] int ParameterCount,
+    [property: JsonPropertyName("status_hex")] string StatusHex,
+    [property: JsonPropertyName("status_byte")] byte StatusByte,
+    [property: JsonPropertyName("trig_count")] byte TrigCount,
+    [property: JsonPropertyName("payload_sha256")] string PayloadSha256,
+    [property: JsonPropertyName("status_zone_sha256")] string StatusZoneSha256,
+    [property: JsonPropertyName("status_zone_hex")] string StatusZoneHex,
+    [property: JsonPropertyName("unique_block")] bool UniqueBlock,
+    [property: JsonPropertyName("unique_block_index")] long UniqueBlockIndex);
+
 public sealed record BaselineAxisSnapshot(
     [property: JsonPropertyName("axis")] string Axis,
     [property: JsonPropertyName("zero_offset_setpoint_a")] double ZeroOffsetSetpointA,
@@ -237,6 +256,8 @@ public sealed record RunManifestRecord(
     [property: JsonPropertyName("created_at")] string CreatedAt,
     [property: JsonPropertyName("operator")] string Operator,
     [property: JsonPropertyName("station_id")] string StationId,
+    [property: JsonPropertyName("lockin_model")] string LockinModel,
+    [property: JsonPropertyName("collector_contract")] string CollectorContract,
     [property: JsonPropertyName("runtime_version")] string RuntimeVersion,
     [property: JsonPropertyName("calibration_id")] string CalibrationId,
     [property: JsonPropertyName("status")] string Status,
@@ -250,6 +271,8 @@ public sealed record RunManifestRecord(
 public sealed record RunSummaryRecord(
     [property: JsonPropertyName("run_id")] string RunId,
     [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("lockin_model")] string LockinModel,
+    [property: JsonPropertyName("collector_contract")] string CollectorContract,
     [property: JsonPropertyName("points_total")] int PointsTotal,
     [property: JsonPropertyName("points_passed")] int PointsPassed,
     [property: JsonPropertyName("points_failed")] int PointsFailed,
@@ -261,10 +284,15 @@ public sealed record RunSummaryRecord(
     [property: JsonPropertyName("read_attempts")] long ReadAttempts,
     [property: JsonPropertyName("timeout_count")] long TimeoutCount,
     [property: JsonPropertyName("raw_len_bad_count")] long RawLenBadCount,
-    [property: JsonPropertyName("collector_frames_path")] string CollectorFramesPath,
+    [property: JsonPropertyName("decode_failures")] long? DecodeFailures,
+    [property: JsonPropertyName("collector_frames_path")] string? CollectorFramesPath,
+    [property: JsonPropertyName("collector_blocks_path")] string? CollectorBlocksPath,
     [property: JsonPropertyName("parameter_values_path")] string ParameterValuesPath,
     [property: JsonPropertyName("sample_values_path")] string SampleValuesPath,
-    [property: JsonPropertyName("packet_counter")] PacketCounterSummary PacketCounter);
+    [property: JsonPropertyName("packet_counter")] PacketCounterSummary? PacketCounter,
+    [property: JsonPropertyName("query_hz")] double? QueryHz,
+    [property: JsonPropertyName("unique_block_hz")] double? UniqueBlockHz,
+    [property: JsonPropertyName("effective_sample_hz_per_parameter")] double? EffectiveSampleHzPerParameter);
 
 public sealed record EventRecord(
     [property: JsonPropertyName("ts")] string Ts,
@@ -311,6 +339,11 @@ public static class RallArtifactWriter
     public static void AppendCollectorFrameRecord(string collectorFramesPath, CollectorFrameRecord record)
     {
         AppendJsonl(collectorFramesPath, record);
+    }
+
+    public static void AppendCollectorBlockRecord(string collectorBlocksPath, CollectorBlockRecord record)
+    {
+        AppendJsonl(collectorBlocksPath, record);
     }
 
     public static void WriteWholeProbeSegment(
