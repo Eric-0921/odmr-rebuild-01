@@ -97,6 +97,7 @@ SMB_SWEEP_MODE_CHOICES = ["AUTO", "MAN", "STEP"]
 SMB_SWEEP_SPACING_CHOICES = ["LIN", "LOG"]
 SMB_SWEEP_SHAPE_CHOICES = ["SAWT", "TRI"]
 SMB_TRIGGER_SOURCE_CHOICES = ["AUTO", "SING", "EXT"]
+LOCKIN_MODEL_CHOICES = ["oe1022d", "oe1300"]
 
 
 def code_choice(code: int, label: str) -> str:
@@ -289,6 +290,16 @@ def note_label(text: str) -> QLabel:
     return label
 
 
+def detect_station_lockin_model(station: dict[str, Any]) -> str | None:
+    devices = station.get("devices")
+    if not isinstance(devices, list):
+        return None
+    models = [device.get("kind") for device in devices if isinstance(device, dict) and device.get("kind") in LOCKIN_MODEL_CHOICES]
+    if len(models) != 1:
+        return None
+    return str(models[0])
+
+
 class WorkerThread(QThread):
     completed = Signal(object)
     failed = Signal(str)
@@ -434,7 +445,7 @@ class RunBundlePage(QWidget):
         self.calibration = self._selector("磁场校准", "calibrations", self.default.calibration_path)
         self.plan = self._selector("实验计划", "plans", self.default.plan_path)
         self.smb = self._selector("SMB100A 配置", "profiles", self.default.smb_profile_path)
-        self.oe = self._selector("OE1022D 配置", "profiles", self.default.oe_profile_path)
+        self.oe = self._selector("OE 配置（oe_profile）", "profiles", self.default.oe_profile_path)
         self.laser = self._selector("Laser 配置", "profiles", self.default.laser_profile_path)
         for selector in [self.station, self.calibration, self.plan, self.smb, self.oe, self.laser]:
             selector.changed.connect(self.bundle_changed.emit)
@@ -521,6 +532,8 @@ class RunBundlePage(QWidget):
     def validate_local(self) -> bool:
         rows = []
         ok = True
+        station_data: dict[str, Any] | None = None
+        oe_data: dict[str, Any] | None = None
         for selector, title in [
             (self.station, "station"),
             (self.calibration, "calibration"),
@@ -534,7 +547,9 @@ class RunBundlePage(QWidget):
                 selector.set_status("ok", True)
                 rows.append(f"{title}: ok  {selector.path()}")
                 if title == "station":
+                    station_data = value
                     rows.append(f"  station_id={value.get('station_id', '<missing>')}")
+                    rows.append(f"  station_lockin_model={detect_station_lockin_model(value) or '<invalid>'}")
                 elif title == "calibration":
                     rows.append(f"  calibration_id={value.get('calibration_id', '<missing>')}")
                 elif title == "plan":
@@ -544,9 +559,22 @@ class RunBundlePage(QWidget):
                     rows.append(f"  points={len(points) if isinstance(points, list) else 'point_source' if point_source else '<missing>'}")
                 else:
                     rows.append(f"  profile_id={value.get('profile_id', '<missing>')}")
+                    if title == "oe_profile":
+                        oe_data = value
+                        rows.append(f"  lockin_model={value.get('model', '<missing>')}")
             except Exception as exc:
                 selector.set_status("invalid", False)
                 rows.append(f"{title}: invalid  {exc}")
+                ok = False
+        if station_data is not None and oe_data is not None:
+            station_model = detect_station_lockin_model(station_data)
+            profile_model = str(oe_data.get("model", "")).strip().lower()
+            if station_model and profile_model and station_model == profile_model:
+                rows.append(f"station/profile match: ok  {station_model}")
+            else:
+                rows.append(f"station/profile match: invalid  station={station_model or '<missing>'} profile={profile_model or '<missing>'}")
+                self.station.set_status("mismatch", False)
+                self.oe.set_status("mismatch", False)
                 ok = False
         out_dir = self.out_dir.text().strip()
         rows.append(f"out_dir: {out_dir}")
@@ -579,7 +607,7 @@ class ConfigGeneratorPage(QWidget):
             ("实验计划", self.mag_page),
             ("计划策略", self.policy_page),
             ("SMB100A", self.smb_page),
-            ("OE1022D", self.oe_page),
+            ("锁相放大器", self.oe_page),
             ("CNI Laser", self.laser_page),
             ("生成", self.generate_page),
         ]:
@@ -839,11 +867,24 @@ class ConfigGeneratorPage(QWidget):
 
     def _build_oe(self) -> None:
         layout = QVBoxLayout(self.oe_page)
-        layout.addWidget(note_label("OE1022D 固定配置只写入 profile snapshot。RALL collector 锁定为 12288B + 30ms，不由此页面修改。"))
-        group = QGroupBox("OE1022D 固定配置")
-        grid = QGridLayout(group)
+        layout.addWidget(note_label("锁相配置沿用同一个 oe_profile 文件名，但内容必须显式带 model，并和 station 内 active lock-in 一致。"))
+        header = QGroupBox("通用信息")
+        header_grid = QGridLayout(header)
+        self.oe_model = combo(LOCKIN_MODEL_CHOICES, "oe1022d")
         self.oe_profile_id = QLineEdit()
         self.oe_command_settle = NumberUnitInput(500, TIME_UNITS, "ms")
+        add_form_row(header_grid, 0, 0, "型号", self.oe_model)
+        add_form_row(header_grid, 0, 1, "配置 ID", self.oe_profile_id)
+        add_form_row(header_grid, 1, 0, "命令等待时间", self.oe_command_settle)
+        layout.addWidget(header)
+
+        self.oe_stack = QStackedWidget()
+
+        oe1022d_page = QWidget()
+        oe1022d_layout = QVBoxLayout(oe1022d_page)
+        oe1022d_layout.addWidget(note_label("OE1022D collector 固定为 12288B exact read + 30ms delay。"))
+        group = QGroupBox("OE1022D 固定配置")
+        grid = QGridLayout(group)
         self.oe_fields: dict[str, QWidget] = {
             "channel": combo(OE_CHOICES["channel"], find_choice_by_code("channel", 2)),
             "input_source": combo(OE_CHOICES["input_source"], find_choice_by_code("input_source", 0)),
@@ -886,7 +927,73 @@ class ConfigGeneratorPage(QWidget):
         ]
         for index, (label, widget) in enumerate(rows):
             add_form_row(grid, index // 2, index % 2, label, widget)
-        layout.addWidget(group)
+        oe1022d_layout.addWidget(group)
+
+        oe1300_page = QWidget()
+        oe1300_layout = QVBoxLayout(oe1300_page)
+        oe1300_layout.addWidget(note_label("OE1300 collector 固定为 TCP `RALL?\\r` -> 32768B -> 37 x 100 big-endian double。"))
+        fixed_group = QGroupBox("OE1300 固定配置")
+        fixed_grid = QGridLayout(fixed_group)
+        self.oe1300_fixed_fields: dict[str, QWidget] = {
+            "input_source": QLineEdit("0"),
+            "input_coupling": QLineEdit("0"),
+            "input_range": QLineEdit("0"),
+            "reference_source": QLineEdit("0"),
+            "reference_frequency_hz": NumberUnitInput(1000, LOW_FREQUENCY_UNITS, "Hz"),
+            "reference_slope": QLineEdit("0"),
+            "sensitivity_index": QLineEdit("24"),
+            "time_constant_seconds": NumberUnitInput(0.1, TIME_UNITS, "s"),
+            "filter_slope": QLineEdit("1"),
+            "sync_enabled": QCheckBox("enabled"),
+            "sine_output_enabled": QCheckBox("enabled"),
+            "sine_output_voltage_vrms": NumberUnitInput(1.0, None, "Vrms"),
+        }
+        oe1300_rows = [
+            ("输入源", self.oe1300_fixed_fields["input_source"]),
+            ("输入耦合", self.oe1300_fixed_fields["input_coupling"]),
+            ("输入量程", self.oe1300_fixed_fields["input_range"]),
+            ("参考源", self.oe1300_fixed_fields["reference_source"]),
+            ("参考频率", self.oe1300_fixed_fields["reference_frequency_hz"]),
+            ("参考斜率", self.oe1300_fixed_fields["reference_slope"]),
+            ("灵敏度索引", self.oe1300_fixed_fields["sensitivity_index"]),
+            ("时间常数", self.oe1300_fixed_fields["time_constant_seconds"]),
+            ("滤波器陡降", self.oe1300_fixed_fields["filter_slope"]),
+            ("同步滤波", self.oe1300_fixed_fields["sync_enabled"]),
+            ("正弦输出使能", self.oe1300_fixed_fields["sine_output_enabled"]),
+            ("正弦输出幅值", self.oe1300_fixed_fields["sine_output_voltage_vrms"]),
+        ]
+        for index, (label, widget) in enumerate(oe1300_rows):
+            add_form_row(fixed_grid, index // 2, index % 2, label, widget)
+        oe1300_layout.addWidget(fixed_group)
+
+        collector_group = QGroupBox("OE1300 Collector 合同")
+        collector_grid = QGridLayout(collector_group)
+        self.oe1300_collector_fields: dict[str, QWidget] = {
+            "tcp_expected_bytes": QLineEdit("32768"),
+            "tcp_payload_bytes": QLineEdit("29600"),
+            "parameter_count": QLineEdit("37"),
+            "samples_per_parameter": QLineEdit("100"),
+            "rall_post_write_delay_ms": NumberUnitInput(5, TIME_UNITS, "ms"),
+            "drain_before_write": QCheckBox("enabled"),
+        }
+        self.oe1300_collector_fields["drain_before_write"].setChecked(True)
+        oe1300_collector_rows = [
+            ("TCP 总字节数", self.oe1300_collector_fields["tcp_expected_bytes"]),
+            ("主采样区字节数", self.oe1300_collector_fields["tcp_payload_bytes"]),
+            ("参数数", self.oe1300_collector_fields["parameter_count"]),
+            ("每参数样本数", self.oe1300_collector_fields["samples_per_parameter"]),
+            ("RALL 写后等待", self.oe1300_collector_fields["rall_post_write_delay_ms"]),
+            ("写前 drain socket", self.oe1300_collector_fields["drain_before_write"]),
+        ]
+        for index, (label, widget) in enumerate(oe1300_collector_rows):
+            add_form_row(collector_grid, index // 2, index % 2, label, widget)
+        oe1300_layout.addWidget(collector_group)
+
+        self.oe_stack.addWidget(oe1022d_page)
+        self.oe_stack.addWidget(oe1300_page)
+        layout.addWidget(self.oe_stack)
+        self.oe_model.currentTextChanged.connect(self._sync_oe_model_view)
+        self._sync_oe_model_view(self.oe_model.currentText())
         layout.addStretch(1)
 
     def _build_laser(self) -> None:
@@ -1003,10 +1110,40 @@ class ConfigGeneratorPage(QWidget):
         self.smb_voltage_stop.set_text(sweep.get("output_voltage_stop_v", 3))
         self.smb_rf_output.setChecked(bool(sweep.get("rf_output_enabled", True)))
 
+    def _sync_oe_model_view(self, model: str) -> None:
+        self.oe_stack.setCurrentIndex(0 if model == "oe1022d" else 1)
+
     def _set_oe_values(self, oe: dict[str, Any]) -> None:
+        model = str(oe.get("model", "oe1022d")).strip().lower()
+        self.oe_model.setCurrentText(model)
+        self._sync_oe_model_view(model)
         fixed = oe.get("fixed", {})
+        collector = oe.get("collector", {})
         self.oe_profile_id.setText(f"{oe.get('profile_id', 'oe1022d')}_generated")
         self.oe_command_settle.set_canonical(oe.get("command_settle_ms", 500), "time_ms")
+        if model == "oe1300":
+            for key, widget in self.oe1300_fixed_fields.items():
+                value = fixed.get(key)
+                if value is None:
+                    continue
+                if isinstance(widget, QCheckBox):
+                    widget.setChecked(bool(value))
+                elif isinstance(widget, NumberUnitInput):
+                    widget.set_text(value)
+                elif isinstance(widget, QLineEdit):
+                    widget.setText(str(value))
+            for key, widget in self.oe1300_collector_fields.items():
+                value = collector.get(key)
+                if value is None:
+                    continue
+                if isinstance(widget, QCheckBox):
+                    widget.setChecked(bool(value))
+                elif isinstance(widget, NumberUnitInput):
+                    widget.set_text(value)
+                elif isinstance(widget, QLineEdit):
+                    widget.setText(str(value))
+            return
+
         for key, widget in self.oe_fields.items():
             value = fixed.get(key)
             if value is None:
@@ -1179,15 +1316,37 @@ class ConfigGeneratorPage(QWidget):
                 "output_voltage_stop_v": self.smb_voltage_stop.value(),
                 "rf_output_enabled": self.smb_rf_output.isChecked(),
             },
+            oe_model=self.oe_model.currentText(),
             oe_profile_id=self.oe_profile_id.text().strip(),
             oe_command_settle_ms=int(round(self.oe_command_settle.canonical("time_ms"))),
-            oe_fixed={
-                key: choice_code(widget.currentText()) if key in OE_CHOICE_KEYS and isinstance(widget, QComboBox)
-                else widget.value() if isinstance(widget, NumberUnitInput)
-                else int(widget.text()) if isinstance(widget, QLineEdit) and key.startswith("harmonic")
-                else widget.text()
-                for key, widget in self.oe_fields.items()
-            },
+            oe_fixed=(
+                {
+                    key: choice_code(widget.currentText()) if key in OE_CHOICE_KEYS and isinstance(widget, QComboBox)
+                    else widget.value() if isinstance(widget, NumberUnitInput)
+                    else int(widget.text()) if isinstance(widget, QLineEdit) and (key.startswith("harmonic") or key.endswith("_index") or key == "channel")
+                    else widget.text()
+                    for key, widget in self.oe_fields.items()
+                }
+                if self.oe_model.currentText() == "oe1022d"
+                else {
+                    key: widget.isChecked() if isinstance(widget, QCheckBox)
+                    else widget.canonical("frequency_hz") if key == "reference_frequency_hz" and isinstance(widget, NumberUnitInput)
+                    else widget.canonical("time_ms") / 1000.0 if key == "time_constant_seconds" and isinstance(widget, NumberUnitInput)
+                    else widget.value() if isinstance(widget, NumberUnitInput)
+                    else int(widget.text())
+                    for key, widget in self.oe1300_fixed_fields.items()
+                }
+            ),
+            oe_collector=(
+                {}
+                if self.oe_model.currentText() == "oe1022d"
+                else {
+                    key: widget.isChecked() if isinstance(widget, QCheckBox)
+                    else int(round(widget.canonical("time_ms"))) if key == "rall_post_write_delay_ms" and isinstance(widget, NumberUnitInput)
+                    else int(widget.text())
+                    for key, widget in self.oe1300_collector_fields.items()
+                }
+            ),
             laser_profile_id=self.laser_profile_id.text().strip(),
             laser_mode=LASER_MODE_TOKEN_BY_LABEL.get(self.laser_mode.currentText(), "off_background"),
             laser_power_mw=int(round(self.laser_power.canonical("power_mw"))),
@@ -1337,17 +1496,25 @@ class RunMonitorPage(QWidget):
         status = QGroupBox("运行状态")
         status_layout = QGridLayout(status)
         self.state = QLabel("idle")
+        self.station_id_label = QLabel("-")
+        self.lockin_model_label = QLabel("-")
+        self.collector_contract_label = QLabel("-")
+        self.terminal_status_label = QLabel("-")
         self.point = QLabel("-")
         self.frames = QLabel("-")
         self.counts = QLabel("-")
         self.elapsed = QLabel("-")
         self.remaining = QLabel("-")
         add_display_row(status_layout, 0, "状态", self.state)
-        add_display_row(status_layout, 1, "Point", self.point)
-        add_display_row(status_layout, 2, "Frames", self.frames)
-        add_display_row(status_layout, 3, "计数", self.counts)
-        add_display_row(status_layout, 4, "已用时间", self.elapsed)
-        add_display_row(status_layout, 5, "预计剩余", self.remaining)
+        add_display_row(status_layout, 1, "Station", self.station_id_label)
+        add_display_row(status_layout, 2, "Lock-in", self.lockin_model_label)
+        add_display_row(status_layout, 3, "Collector", self.collector_contract_label)
+        add_display_row(status_layout, 4, "Terminal", self.terminal_status_label)
+        add_display_row(status_layout, 5, "Point", self.point)
+        add_display_row(status_layout, 6, "Frames", self.frames)
+        add_display_row(status_layout, 7, "计数", self.counts)
+        add_display_row(status_layout, 8, "已用时间", self.elapsed)
+        add_display_row(status_layout, 9, "预计剩余", self.remaining)
         layout.addWidget(status)
         progress_group = QGroupBox("预计进度")
         progress_layout = QGridLayout(progress_group)
@@ -1395,6 +1562,10 @@ class RunMonitorPage(QWidget):
         self.total_progress.setValue(0)
         self.point_progress.setValue(0)
         self.table.setRowCount(0)
+        self.station_id_label.setText("-")
+        self.lockin_model_label.setText("-")
+        self.collector_contract_label.setText("-")
+        self.terminal_status_label.setText("-")
         self.stop_button.setEnabled(True)
         self.resume_button.setEnabled(False)
         self.emergency_button.setEnabled(True)
@@ -1461,10 +1632,14 @@ class RunMonitorPage(QWidget):
         if self.latest_progress:
             latest = self.latest_progress
             self.state.setText(str(latest.get("state", "-")))
+            self.station_id_label.setText(self._load_station_id(self.handle.out_dir) if self.handle else "-")
+            self.lockin_model_label.setText(str(latest.get("lockin_model") or self._load_run_field(self.handle.out_dir, "lockin_model") or "-"))
+            self.collector_contract_label.setText(str(latest.get("collector_contract") or self._load_run_field(self.handle.out_dir, "collector_contract") or "-"))
+            self.terminal_status_label.setText(self._load_run_status(self.handle.out_dir) or "-")
             self.point.setText(f"{latest.get('point_id') or '-'}  {latest.get('point_index') or '-'} / {latest.get('points_total') or '-'}")
             self.frames.setText(str(latest.get("frames_total") or "-"))
             self.counts.setText(
-                f"timeout={latest.get('timeout_count')} raw_len_bad={latest.get('raw_len_bad_count')} delta_gt1={latest.get('delta_gt1_count')}"
+                f"timeout={latest.get('timeout_count')} raw_len_bad={latest.get('raw_len_bad_count')} delta_gt1={latest.get('delta_gt1_count')} decode={latest.get('decode_failures')}"
             )
             self._update_estimated_progress(latest)
             if latest.get("state") in {"Completed", "Failed", "Paused", "Aborted", "CleanupFailed"}:
@@ -1490,6 +1665,7 @@ class RunMonitorPage(QWidget):
             self.resume_button.setEnabled(self._run_dir_is_resumable(self.handle.out_dir))
             self.emergency_button.setEnabled(False)
             self.state.setText("process exited")
+            self.terminal_status_label.setText(self._load_run_status(self.handle.out_dir) or "process_exited")
             stdout_tail = read_text_tail(self.handle.control_paths.stdout_log)
             stderr_tail = read_text_tail(self.handle.control_paths.stderr_log)
             self.log.appendPlainText(
@@ -1588,6 +1764,30 @@ class RunMonitorPage(QWidget):
             if isinstance(status, str) and status.strip():
                 return status
         return None
+
+    def _load_run_field(self, out_dir: str, field: str) -> str | None:
+        for filename in ["summary.json", "run_manifest.json"]:
+            path = Path(out_dir) / filename
+            if not path.exists():
+                continue
+            try:
+                value = load_json(path).get(field)
+            except Exception:
+                continue
+            if isinstance(value, str) and value.strip():
+                return value
+        return None
+
+    def _load_station_id(self, out_dir: str) -> str:
+        station_snapshot = Path(out_dir) / "station_snapshot.json"
+        if station_snapshot.exists():
+            try:
+                station_id = load_json(station_snapshot).get("station_id")
+                if isinstance(station_id, str) and station_id.strip():
+                    return station_id
+            except Exception:
+                pass
+        return "-"
 
     def _has_remaining_points(self, out_dir: str) -> bool:
         total = self._points_total(out_dir)
@@ -1780,8 +1980,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("ODMR PySide6 Console")
-        self.resize(1380, 900)
-        self.setMinimumSize(1180, 760)
+        self.resize(1480, 920)
+        self.setMinimumSize(1260, 780)
         central = QWidget()
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)

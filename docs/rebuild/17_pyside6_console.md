@@ -1,17 +1,20 @@
 # PySide6 Console Gate
 
-本阶段把 Python 前端从无 GUI core 推进到 PySide6 控制台 v1。
+当前 PySide6 console 是 Windows C# runtime 的前端外壳，不直接连接设备。它现在必须同时服务两种锁相：
 
-## 开发原则
+- `oe1022d`
+- `oe1300`
+
+两者共用同一套页面、同一套按钮语义、同一套 pause/resume 主链。
+
+## 一、边界
 
 - C# 仍是唯一设备控制和采集 runtime。
-- PySide6 只做配置生成、Run Bundle 组合、C# CLI 启动、progress JSONL 监控和 artifact 审查。
-- 不新增 runtime schema；一次 run 仍由 station、calibration、plan、SMB profile、OE profile、laser profile 六个 JSON 组成。
-- 配置生成复用 `tools/config-generator/odmr_config_core.py`，不复制 JSON 生成逻辑。
-- 不做常驻 RALL live collector，不解析 RALL raw，不触碰 OE `RALL?` collector 热路径。
-- `point` 的运行语义是一次采集 step；磁场只是 point 的可选上下文。
+- PySide6 只做配置生成、bundle 组合、CLI 启动、progress 监控和 artifact 审查。
+- 不引入新的 bundle schema；输入仍然固定为六个 JSON。
+- 不直接读取 raw，不进入 collector 线程，不做设备恢复逻辑。
 
-## UI 结构
+## 二、页面结构
 
 入口：
 
@@ -21,175 +24,182 @@ python3 tools/odmr-console-python/odmr_console_qt.py
 
 页面：
 
-- `本次实验配置`：选择六个 JSON 和 run 输出目录，显示本地 JSON 摘要。
-- `配置生成`：生成 plan、SMB profile、OE profile、Laser profile，并自动绑定到本次实验配置。
-- `预检查 / 预计用时`：调用 C# `run-resolve`。
-- `运行监控`：调用 C# `run-execute` / `resume-run`，只 tail progress JSONL。
-- `数据审查`：调用 C# `artifact-check` 和 `audit-continuity`。
+- `本次实验配置`
+- `配置生成`
+- `预检查 / 预计用时`
+- `运行监控`
+- `数据审查`
 
-Plan 类型：
+## 三、本次实验配置
 
-- `无磁场控制`：生成 `magnetic_mode=none` acquisition step，不指挥 M8812，不做 baseline lock，也不把它伪装成 `[0,0,0]`。
-- `零场 / 恒定磁场`：生成一个 `magnetic_mode=controlled` point，默认 `[0,0,0]`，按现有 baseline/current/readback 链路执行。
-- `磁场扫描`：生成多个 `magnetic_mode=controlled` point；默认扫描方向为单向 `raster`，往返仅作为 X 轴 1D 可选模式。
+`Run Bundle` 页保持六个输入选择器：
 
-## 边界
+- `硬件站配置`
+- `磁场校准`
+- `实验计划`
+- `SMB100A 配置`
+- `OE 配置（oe_profile）`
+- `Laser 配置`
 
-PySide6 不直接操作 VISA、Serial、TCP，也不发 SMB/OE/M8812/Laser 命令。普通 Stop 语义仍是 stop-after-current-point，只通过 stop request file 触发 C# runtime 在 point 边界暂停，并把 terminal status 写成 `paused`。
+新增本地校验：
 
-急停按钮只创建 `control/emergency_stop.request`。C# runtime 收到后尽快中断当前 point/sweep，执行 SMB RF OFF、Laser OFF、M8812 cleanup、collector stop，并把 summary/manifest 写为 `aborted`。UI 收到 `run_aborted` 后询问是否保留本次数据；选择丢弃时移动到同级 `_discarded`，不直接删除。
+- 读取 `oe_profile.model`
+- 从 `station.devices[].kind` 推断当前锁相型号
+- 在摘要中同时显示：
+  - `station_id`
+  - `station_lockin_model`
+  - `lockin_model`
+- 如果 station/profile 型号不一致，直接标成 `mismatch`，禁止继续启动 run
+
+## 四、配置生成
+
+配置生成器仍然只输出 C# runtime 能直接读取的 `plan/profile JSON`。
+
+当前锁相页已经改成“锁相放大器”，内部按 `model` 切换：
+
+- `oe1022d`
+  - 显示原有固定配置表单
+  - 生成 `model = "oe1022d"` 的 profile
+- `oe1300`
+  - 显示 TCP `RALL` collector/fixed 参数表单
+  - 生成 `model = "oe1300"` 的 profile
+
+生成后的文件名约定：
+
+- `oe1022d_*_generated.json`
+- `oe1300_*_generated.json`
+
+但回填路径仍然是同一个 `oe_profile_path`。
+
+## 五、运行监控
+
+Run Monitor 当前必须显示：
+
+- `station_id`
+- `lockin_model`
+- `collector_contract`
+- `terminal_status`
+
+同时继续显示运行计数：
+
+- `points_done / total`
+- `frames_total`
+- `samples_total`
+- `timeout_count`
+- `raw_len_bad_count`
+- `decode_failures`
+
+当前按钮语义：
+
+- `Start`
+- `Pause`
+- `Emergency Stop`
+- `Resume`
+
+其中：
+
+- `Pause` 通过 `stop.request` 触发 point 边界暂停
+- `Emergency Stop` 通过 `emergency_stop.request` 触发中断
+- `Resume` 调用 `resume-run`
+
+## 六、Resume 启用规则
 
 `Resume` 按钮只在真正可恢复的 terminal run 上启用：
 
 - `paused`
 - `failed`
 - `completed_with_failed_points` 且仍有剩余 point
-- 无 terminal status 但已有部分事实文件的 `process exited`
+- 无 terminal status 但已有部分 artifact 的 `process exited`
 
-以下状态不可恢复：
+以下状态禁用：
 
 - `completed`
 - `aborted`
 
-恢复不会覆盖旧 run。PySide6 会在同级目录分配新的输出目录，例如
-`run_a__resume_01`，然后调用 C# `resume-run --previous-run run_a --out-dir run_a__resume_01`。
-恢复判定只依赖 direct-decode truth artifact，不读取历史 raw 文件。
+恢复输出目录必须是新目录，例如：
 
-预计进度是 UI 本地估算，不是实验真值。`run-resolve` 输出 `estimated_sweep`、`estimated_point_duration_ms`、`estimated_run_duration_ms`；运行中 progress JSONL 低频输出 `sweep_started/sweep_completed` 和 sweep 参数。PySide6 用 500 ms timer 插值显示当前 sweep 和总进度，超过预计时停在 99% 等待设备完成或 cleanup。这个机制不读取 RALL raw，不按 frame 推进，也不进入 collector。
+```text
+runs/demo_run__resume_01
+```
 
-配置生成器中的磁场输入固定为 `nT`；其余仍支持单位选择的数值输入只影响显示，写入 JSON 前统一转换到 C# runtime 使用的 canonical unit。
+不覆盖旧 run。
 
-Windows 日常工作区以 `D:\git-zbw\odmr-rebuild-01` 为准。曾经存在的 `C:\Users\Piwei Tseng\odmr-rebuild-01` 只作为旧 clone，不作为 Visual Studio / PySide6 日常入口。2026-06-14 已修复 D 盘 clone 的 `remote.origin.fetch`，并强制同步到 `origin/main`。
+## 七、Artifact Review
 
-## 验证
+审查页继续只调用：
 
-基础检查：
+- `artifact-check`
+- `audit-continuity`
+
+两者都按 `lockin_model` 自动分支：
+
+- `oe1022d` 审 `collector_frames.jsonl`
+- `oe1300` 审 `collector_blocks.jsonl`
+
+PySide6 不自行解释 collector 细节，只展示 CLI 输出和 JSON 摘要。
+
+## 八、截图验收口径
+
+当前 UI 验收不靠口头描述，靠截图。
+
+至少要覆盖：
+
+- `Run Bundle`：`OE1022D`
+- `Run Bundle`：`OE1300`
+- `Config Generator`：`OE1022D`
+- `Config Generator`：`OE1300`
+- `Run Monitor`：运行中
+- `Run Monitor`：`paused`
+- `Run Monitor`：`resumed/completed`
+- `Artifact Review`
+
+出现以下任一情况，都算未通过：
+
+- 控件重叠
+- 文本截断
+- 按钮被裁切
+- 状态标签与真实 run 不一致
+- `Resume` 启用逻辑错误
+
+## 九、当前实现原则
+
+本轮 UI 明确不做：
+
+- 不做复杂前端抽象
+- 不做单 station 内双锁相切换
+- 不做自动资源调度
+- 不做直接设备控制
+- 不为 `oe1300` 单独再造一套 run 入口
+
+实现重点只有两个：
+
+- 把双型号真实接入同一条主链
+- 把运行状态和合同信息直观暴露给操作者
+
+## 十、最低验证
+
+本地：
 
 ```bash
-python3 -m py_compile tools/odmr-console-python/odmr_console_core.py tools/odmr-console-python/odmr_console.py tools/odmr-console-python/odmr_console_qt.py
+python3 -m py_compile tools/odmr-console-python/odmr_console_core.py tools/odmr-console-python/odmr_console_qt.py
 python3 tools/odmr-console-python/tests/test_odmr_console_core.py
 python3 tools/config-generator/tests/test_config_core.py
 ```
 
-Windows 真机检查：
-
-```bash
-dotnet build tools/win-csharp/Odmr.Win.sln
-python tools/odmr-console-python/odmr_console_qt.py
-```
-
-通过 UI 执行：
-
-- 生成 3-point bundle
-- `run-resolve`
-- minimal 3-point run
-- 15min laser background run
-- `artifact-check`
-- `audit-continuity`
-
-验收仍看：
-
-- `timeout=0`
-- `raw_len_bad=0`
-- `delta_gt1=0`
-- `audit-continuity verdict=continuous`
-
-## 2026-06-14 验证记录
-
-Mac 本机：
-
-- 已安装 `PySide6 6.11.1`。
-- `py_compile` 通过。
-- `tools/odmr-console-python/tests/test_odmr_console_core.py` 通过。
-- `tools/config-generator/tests/test_config_core.py` 通过。
-- PySide6 界面已实际启动并截图检查：Run Bundle、Config Generator、Magnetic Plan、SMB100A、OE1022D、Run Monitor、Artifact Review 页面没有明显文字挤压；单位控件位于数值输入右侧。
-
-Windows 真机：
-
-- 仓库同步到 `dadb4f1 Add PySide6 ODMR console`。
-- 已安装 `PySide6 6.11.1`。
-- `py_compile` 通过。
-- Python console core 测试通过。
-- config generator core 测试通过。
-- `dotnet build tools/win-csharp/Odmr.Win.sln` 通过，`0 warnings / 0 errors`。
-- PySide6 headless smoke 通过：UI 类生成临时 JSON、绑定 Run Bundle，并调用 C# `run-resolve`，`resolved_point_count = 8`。
-- PySide6 Run Monitor 路径启动 minimal 3-point：
-  - run dir: `runs/pyside6_ui_minimal_20260614_084932`
-  - `points = 3/3`
-  - `frames_total = 4733`
-  - `timeout = 0`
-  - `raw_len_bad = 0`
-  - `delta_gt1 = 0`
-  - `artifact-check passed`
-  - `audit-continuity verdict = continuous`
-- PySide6 Run Monitor 路径启动 15min laser background：
-  - run dir: `runs/pyside6_ui_15min_laser_20260614_085303`
-  - elapsed: `973.7s`
-  - `points = 21/21`
-  - `frames_total = 30482`
-  - `timeout = 0`
-  - `raw_len_bad = 0`
-  - `delta_gt1 = 0`
-  - `artifact-check passed`
-  - `quality_status_counts.passed = 21`
-  - `audit-continuity verdict = continuous`
-
-## 长时间运行 UI 外壳校对
-
-- Run Monitor 只按文件 offset 增量 tail `progress.jsonl`，不读 RALL raw，不进入 collector。
-- stdout/stderr 继续写入 `<out-dir>/control/stdout.log` 和 `stderr.log`，避免 pipe 阻塞。
-- 预计进度只依赖 SMB sweep 参数和 UI 本地时钟，不作为 artifact、quality 或审计依据。
-- 急停路径由 C# runtime 做安全停机；Python/PySide6 不直接向设备发命令。
-- 如果 C# `dotnet run` 进程在 terminal progress event 前退出，Run Monitor 会停止计时器并显示 stdout/stderr 尾部，避免 UI 一直停留在 running。
-- Config Generator 当前扫描块校验失败时会阻止 Generate，避免用户界面显示的新扫描参数未写入 JSON 而实际运行旧 block。
-- Artifact Review 运行 `artifact-check` / `audit-continuity` 时会禁用审查按钮，避免重复点击造成输出混乱。
-## 完整程序启动（Windows 日常入口）
-
-Windows 实验机的日常工作区固定使用：
+Windows：
 
 ```powershell
-cd D:\git-zbw\odmr-rebuild-01
-```
-
-每次从 Mac 侧同步新 commit 后，Windows 侧先更新仓库：
-
-```powershell
-git fetch origin
-git reset --hard origin/main
-```
-
-启动完整程序的推荐入口是 PySide6 console。它负责配置组合、生成 plan/profile、调用 C# `run-execute` / `resume-run`、tail progress JSONL、发 pause/emergency-stop request，并提供 artifact 审查入口：
-
-```powershell
+dotnet build tools/win-csharp/Odmr.Win.sln -c Release
 python tools\odmr-console-python\odmr_console_qt.py
 ```
 
-如果 Python 环境缺少 PySide6，先安装 UI 依赖：
+通过 UI 至少验证：
 
-```powershell
-python -m pip install -r tools\odmr-console-python\requirements-pyside6.txt
-```
+- `run-resolve`
+- `run-execute`
+- `pause`
+- `resume`
+- `artifact-check`
+- `audit-continuity`
 
-GUI 里完整实验路径：
-
-1. 在 `本次实验配置` 页选择 `station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`。
-2. 如需新点表或 profile，在 `配置生成` 页生成并保存 JSON。
-3. 在 `预检查 / 预计用时` 页调用 `run-resolve`。
-4. 在 `运行监控` 页选择输出目录并启动；该入口实际调用 C# `Odmr.WinProbe run-execute`。
-5. 实验结束后，在 `数据审查` 页运行 `artifact-check` 和 `audit-continuity`。
-
-不走 GUI 时，等价的最小 CLI 启动链路是：
-
-```powershell
-dotnet build tools\win-csharp\Odmr.Win.sln
-dotnet run --project tools\win-csharp\Odmr.WinProbe -- run-resolve --station configs\stations\lab_a.json --calibration configs\calibrations\main.json --plan configs\plans\minimal_3point_runtime.json --smb-profile configs\profiles\smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs\profiles\oe1022d_run_ch_b_observed.json --laser-profile configs\profiles\cni_laser_run_off_background.json
-dotnet run --project tools\win-csharp\Odmr.WinProbe -- run-execute --station configs\stations\lab_a.json --calibration configs\calibrations\main.json --plan configs\plans\minimal_3point_runtime.json --smb-profile configs\profiles\smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs\profiles\oe1022d_run_ch_b_observed.json --laser-profile configs\profiles\cni_laser_run_off_background.json --out-dir runs\win_csharp_manual_minimal
-dotnet run --project tools\win-csharp\Odmr.WinProbe -- artifact-check --run runs\win_csharp_manual_minimal
-dotnet run --project tools\win-csharp\Odmr.WinProbe -- audit-continuity --run runs\win_csharp_manual_minimal --out runs\win_csharp_manual_minimal\continuity_audit.json
-```
-
-边界：
-
-- Python/PySide6 console 是当前完整程序入口，但不直接控制设备。
-- 设备控制仍只由 Windows C# `Odmr.WinProbe` 执行。
-- `artifact-check` 和 `audit-continuity` 是只读审查，不碰设备。
+而且这条链路必须对 `oe1022d` 和 `oe1300` 都成立。

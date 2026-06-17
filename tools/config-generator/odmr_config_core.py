@@ -56,9 +56,11 @@ class GeneratorRequest:
     smb_error_check_after_write: bool = True
     smb_fixed: dict[str, Any] = field(default_factory=dict)
     smb_sweep: dict[str, Any] = field(default_factory=dict)
+    oe_model: str = "oe1022d"
     oe_profile_id: str = "oe1022d_generated"
     oe_command_settle_ms: int = 500
     oe_fixed: dict[str, Any] = field(default_factory=dict)
+    oe_collector: dict[str, Any] = field(default_factory=dict)
     laser_profile_id: str = "cni_laser_generated"
     laser_mode: str = "off_background"
     laser_power_mw: int = 0
@@ -120,10 +122,23 @@ def build_smb_profile(template: dict[str, Any], request: GeneratorRequest) -> di
 
 def build_oe_profile(template: dict[str, Any], request: GeneratorRequest) -> dict[str, Any]:
     profile = copy.deepcopy(template)
+    model = str(profile.get("model") or request.oe_model or "oe1022d").strip().lower()
+    profile["model"] = model
     profile["profile_id"] = sanitize_id(request.oe_profile_id)
     profile["command_settle_ms"] = non_negative_int(request.oe_command_settle_ms, "oe_command_settle_ms")
     fixed = profile.setdefault("fixed", {})
-    fixed.update(normalize_oe_fixed(request.oe_fixed))
+    collector = profile.setdefault("collector", {})
+    if model == "oe1300":
+        fixed.update(normalize_oe1300_fixed(request.oe_fixed))
+        collector.update(normalize_oe1300_collector(request.oe_collector or collector))
+        if collector.get("tcp_expected_bytes") != 32768:
+            raise ValueError("oe1300 collector tcp_expected_bytes must remain 32768")
+        if collector.get("rall_post_write_delay_ms") != 5:
+            raise ValueError("oe1300 collector rall_post_write_delay_ms must remain 5")
+        return profile
+
+    fixed.update(normalize_oe1022d_fixed(request.oe_fixed))
+    collector.update(normalize_oe1022d_collector(request.oe_collector or collector))
     collector = profile.get("collector", {})
     if collector.get("frame_exact_bytes") != 12288:
         raise ValueError("oe collector frame_exact_bytes must remain 12288")
@@ -356,7 +371,7 @@ def normalize_smb_sweep(values: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def normalize_oe_fixed(values: dict[str, Any]) -> dict[str, Any]:
+def normalize_oe1022d_fixed(values: dict[str, Any]) -> dict[str, Any]:
     return {
         "channel": non_negative_int(values.get("channel", 2), "oe.channel"),
         "input_source": non_negative_int(values.get("input_source", 0), "oe.input_source"),
@@ -375,6 +390,45 @@ def normalize_oe_fixed(values: dict[str, Any]) -> dict[str, Any]:
         "sync_filter": non_negative_int(values.get("sync_filter", 0), "oe.sync_filter"),
         "sine_output_mode": non_negative_int(values.get("sine_output_mode", 0), "oe.sine_output_mode"),
         "sine_output_voltage_vrms": float(values.get("sine_output_voltage_vrms", 1.0)),
+    }
+
+
+def normalize_oe1022d_collector(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "poll_interval_ms": non_negative_int(values.get("poll_interval_ms", 48), "oe.poll_interval_ms"),
+        "frame_exact_bytes": non_negative_int(values.get("frame_exact_bytes", 12288), "oe.frame_exact_bytes"),
+        "frame_max_bytes": non_negative_int(values.get("frame_max_bytes", 16384), "oe.frame_max_bytes"),
+        "ring_capacity_frames": non_negative_int(values.get("ring_capacity_frames", 512), "oe.ring_capacity_frames"),
+        "guard_margin_ms": non_negative_int(values.get("guard_margin_ms", 3000), "oe.guard_margin_ms"),
+        "rall_post_write_delay_ms": non_negative_int(values.get("rall_post_write_delay_ms", 30), "oe.rall_post_write_delay_ms"),
+    }
+
+
+def normalize_oe1300_fixed(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "input_source": non_negative_int(values.get("input_source", 0), "oe1300.input_source"),
+        "input_coupling": non_negative_int(values.get("input_coupling", 0), "oe1300.input_coupling"),
+        "input_range": non_negative_int(values.get("input_range", 0), "oe1300.input_range"),
+        "reference_source": non_negative_int(values.get("reference_source", 0), "oe1300.reference_source"),
+        "reference_frequency_hz": float(values.get("reference_frequency_hz", 1000.0)),
+        "reference_slope": non_negative_int(values.get("reference_slope", 0), "oe1300.reference_slope"),
+        "sensitivity_index": non_negative_int(values.get("sensitivity_index", 24), "oe1300.sensitivity_index"),
+        "time_constant_seconds": float(values.get("time_constant_seconds", 0.1)),
+        "filter_slope": non_negative_int(values.get("filter_slope", 1), "oe1300.filter_slope"),
+        "sync_enabled": bool(values.get("sync_enabled", False)),
+        "sine_output_enabled": bool(values.get("sine_output_enabled", False)),
+        "sine_output_voltage_vrms": float(values.get("sine_output_voltage_vrms", 1.0)),
+    }
+
+
+def normalize_oe1300_collector(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "tcp_expected_bytes": non_negative_int(values.get("tcp_expected_bytes", 32768), "oe1300.tcp_expected_bytes"),
+        "tcp_payload_bytes": non_negative_int(values.get("tcp_payload_bytes", 29600), "oe1300.tcp_payload_bytes"),
+        "parameter_count": non_negative_int(values.get("parameter_count", 37), "oe1300.parameter_count"),
+        "samples_per_parameter": non_negative_int(values.get("samples_per_parameter", 100), "oe1300.samples_per_parameter"),
+        "rall_post_write_delay_ms": non_negative_int(values.get("rall_post_write_delay_ms", 5), "oe1300.rall_post_write_delay_ms"),
+        "drain_before_write": bool(values.get("drain_before_write", True)),
     }
 
 
