@@ -55,6 +55,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- visa-list
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-idn --resource ASRL8::INSTR --baud 921600
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-rall --resource ASRL8::INSTR --baud 921600 --duration-sec 300 --out-dir runs/win_csharp_oe_rall_5min
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-rall --resource ASRL8::INSTR --baud 921600 --in-thread-process-mode measurement-means --duration-sec 300 --out-dir runs/win_csharp_oe_rall_5min_processed
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-rall --resource ASRL8::INSTR --baud 921600 --in-thread-process-mode field-decode-csv --write-raw false --preview-field-index 8 --write-values true --duration-sec 300 --out-dir runs/win_csharp_oe_rall_5min_decoded
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-idn --port COM8 --baud 115200
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-rall --port COM8 --baud 115200 --count 1 --out-dir runs/oe1300_serial_probe
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-idn --host 192.168.1.1 --port 10001
@@ -71,11 +72,12 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- device-command-check
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/win_csharp_run_execute_minimal
 ```
 
-`oe-rall` writes:
+`oe-rall` baseline writes:
 
 - `raw/oe1022d.rall`
 - `raw/oe1022d.frames.idx.jsonl`
 - `segments.jsonl`
+- `collector_frames.jsonl`
 - `summary.json`
 
 `oe-rall --in-thread-process-mode measurement-means` is a controlled collector
@@ -87,6 +89,47 @@ in `summary.json`.
 This mode exists only to compare collector-thread overhead against the frozen
 baseline. It is not the default runtime contract, and it must not be treated as
 permission to move general parsing into the OE1022D run-time collector.
+
+`oe-rall --in-thread-process-mode field-decode-csv` is the second-stage direct
+decode experiment for OE1022D. It still keeps the same single-thread hot path,
+but after each `12288 B` exact read it immediately:
+
+- decodes the first `8000 B` as `20 x 50` big-endian `double`
+- extracts `B`-channel status bytes from fixed offsets
+- writes one frame-level row into `parameter_values.csv`
+- optionally writes one selected field into `preview_values.csv`
+
+This mode is intentionally probe-only. It exists to answer a narrower question:
+whether OE1022D can move from “store unreadable `raw/rall` first” to “decode and
+persist directly usable CSV/JSON in the collector thread” without materially
+harming continuity.
+
+When `--write-raw false`, this mode does not keep the binary `raw/oe1022d.rall`
+file. The direct-decode probe output is:
+
+- `collector_frames.jsonl`
+- `parameter_values.csv`
+- `preview_values.csv` when `--write-values true`
+- `summary.json`
+
+Current verified OE1022D direct-decode layout is:
+
+- frame bytes: `12288`
+- measurement payload: first `8000 B`
+- field count: `20`
+- samples per field per frame: `50`
+- byte order: big-endian `double`
+- field order:
+  - `A-X`, `A-Y`, `A-Freq`, `A-Noise`, `A-Xh1`, `A-Yh1`, `A-Xh2`, `A-Yh2`
+  - `B-X`, `B-Y`, `B-Freq`, `B-Noise`, `B-Xh1`, `B-Yh1`, `B-Xh2`, `B-Yh2`
+  - `AUXADC1`, `AUXADC2`, `AUXADC3`, `AUXADC4`
+- fixed-offset status:
+  - `b_ref_source_code @ 8504`
+  - `b_ref_current_freq_hz @ 8505..8512`
+  - `b_ref_slope_code @ 8521`
+  - `b_input_overload @ 8779`
+  - `b_gain_overload @ 8780`
+  - `b_pll_locked @ 8781`
 
 `oe1300-net-labview-demo` is the LabVIEW-style `RALL?` decode benchmark. It
 keeps the same TCP binary hot path:
@@ -106,11 +149,8 @@ The summary reports both:
 - `query_hz` for host-side `RALL?` loops
 - `effective_sample_hz_per_parameter` under the LabVIEW-style `37 x 100` decode assumption
 
-It also writes:
+It writes:
 
-- `raw/oe1300_tcp.rall`
-- `raw/oe1300_tcp.frames.idx.jsonl`
-- `segments.jsonl`
 - `summary.json`
 - `parameter_values.csv`
 - `preview_values.csv` when `--write-values true`

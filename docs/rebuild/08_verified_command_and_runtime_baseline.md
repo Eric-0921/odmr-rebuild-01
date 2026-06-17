@@ -641,6 +641,49 @@ run 结束后额外只读核验：
 - 这次验证的只是一个轻量、固定、可控的原始数据扫描步骤；
 - 当前 runtime 主链仍维持“collector 只拉 raw，不在采集线程做字段级解析”的冻结合同，除非后续有新的独立 gate 和长跑验证来支持变更。
 
+## 2026-06-17：OE1022D 第二档 direct-decode 实验设计
+
+在 `measurement-means` 已经证明“轻量处理本身几乎不伤连续性”之后，第二档实验不再停留在“扫描前 `8000 B` 一遍”，而是把 probe 层直接推进到可用数据落盘：
+
+- 新模式：`oe-rall --in-thread-process-mode field-decode-csv`
+- 保持 collector 次序不变：`write RALL? -> sleep 30ms -> exact read 12288B -> 下一轮`
+- 但在每次 `exact read` 成功后，立即在线程内完成以下动作：
+  - 按 `20 x 50` 字段表解析前 `8000 B`
+  - 按固定偏移提取 `B` 通道关键状态位
+  - 直接写 `parameter_values.csv`
+  - 按需写 `preview_values.csv`
+  - 同时写轻量 `collector_frames.jsonl`
+
+当前 direct-decode 字段表固定为：
+
+- `20` 个测量字段
+- 每字段 `50` 个样本
+- 每样本 `8 B`
+- 字节序按当前已验证路径锁定为 `big-endian double`
+- 字段顺序：
+  - `A-X`, `A-Y`, `A-Freq`, `A-Noise`, `A-Xh1`, `A-Yh1`, `A-Xh2`, `A-Yh2`
+  - `B-X`, `B-Y`, `B-Freq`, `B-Noise`, `B-Xh1`, `B-Yh1`, `B-Xh2`, `B-Yh2`
+  - `AUXADC1`, `AUXADC2`, `AUXADC3`, `AUXADC4`
+
+当前 direct-decode 状态偏移固定为：
+
+- `b_ref_source_code @ 8504`
+- `b_ref_current_freq_hz @ 8505..8512`
+- `b_ref_slope_code @ 8521`
+- `b_input_overload @ 8779`
+- `b_gain_overload @ 8780`
+- `b_pll_locked @ 8781`
+
+这档实验的目标不是立刻重写 runtime 合同，而是回答一个更具体的问题：
+
+- 若 collector 线程不再优先保留“不能直接使用的二进制 raw”，而是直接落盘“可用 CSV/JSON”，对 `frames_ok / timeout_count / delta_gt1_count / mean_processing_us_per_frame` 的影响是否仍然可以接受。
+
+当前边界仍然明确：
+
+- `field-decode-csv` 只属于 `Odmr.WinProbe oe-rall` 的 probe/实验路径；
+- `run-execute`、`artifact-check`、`audit-continuity` 仍然沿用现行 `raw + frames.idx + segments` 合同；
+- 是否正式把 runtime 从“raw truth”迁移到“direct decoded truth”，必须以这档实验的长跑结果为前置依据，而不是以当前代码改动本身作为依据。
+
 ## 当前参数归属结论
 
 ### point / run 允许变化

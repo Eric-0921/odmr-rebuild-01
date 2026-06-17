@@ -351,24 +351,36 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     var durationSec = GetIntOption(options, "duration-sec", 300);
     var outDir = GetRequiredOption(options, "out-dir");
     var inThreadProcessMode = GetOption(options, "in-thread-process-mode", "none").Trim().ToLowerInvariant();
+    var writeRaw = GetBoolOption(options, "write-raw", true);
+    var writeValues = GetBoolOption(options, "write-values", false);
+    var previewFieldIndex = GetIntOption(options, "preview-field-index", Oe1022dProbeLayout.DefaultPreviewFieldIndex);
 
     if (durationSec <= 0)
     {
         return Fail("--duration-sec must be positive");
     }
 
-    if (inThreadProcessMode is not ("none" or "measurement-means"))
+    if (inThreadProcessMode is not ("none" or "measurement-means" or "field-decode-csv"))
     {
-        return Fail("--in-thread-process-mode must be `none` or `measurement-means`");
+        return Fail("--in-thread-process-mode must be `none`, `measurement-means`, or `field-decode-csv`");
     }
 
-    var rawDir = Path.Combine(outDir, "raw");
-    Directory.CreateDirectory(rawDir);
+    if (previewFieldIndex < 0 || previewFieldIndex >= Oe1022dProbeLayout.MeasurementFields.Length)
+    {
+        return Fail($"--preview-field-index must be between 0 and {Oe1022dProbeLayout.MeasurementFields.Length - 1}");
+    }
 
+    Directory.CreateDirectory(outDir);
+
+    var rawDir = Path.Combine(outDir, "raw");
     var rawPath = Path.Combine(rawDir, "oe1022d.rall");
     var indexPath = Path.Combine(rawDir, "oe1022d.frames.idx.jsonl");
+    var collectorFramesPath = Path.Combine(outDir, "collector_frames.jsonl");
     var segmentsPath = Path.Combine(outDir, "segments.jsonl");
+    var parameterValuesPath = Path.Combine(outDir, "parameter_values.csv");
+    var previewValuesPath = Path.Combine(outDir, "preview_values.csv");
     var summaryPath = Path.Combine(outDir, "summary.json");
+    var previewField = Oe1022dProbeLayout.MeasurementFields[previewFieldIndex];
 
     var startedAt = UtcNowString();
     var processStart = Stopwatch.GetTimestamp();
@@ -382,17 +394,62 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     long processedNonFiniteValues = 0;
     double processedValueSum = 0.0;
     long processingTotalTicks = 0;
+    long globalSampleIndex = 0;
     string? firstFrameTs = null;
     string? lastFrameTs = null;
     ulong? firstFrameMonotonicNs = null;
     ulong? lastFrameMonotonicNs = null;
+    byte? lastBRefSourceCode = null;
+    byte? lastBRefSlopeCode = null;
+    double? lastBRefCurrentFreqHz = null;
+    byte? lastBInputOverload = null;
+    byte? lastBGainOverload = null;
+    byte? lastBPllLocked = null;
 
     using var oe = Oe1022dVisa.Open(resourceName, baudRate);
-    using var raw = new FileStream(rawPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 1024 * 1024);
-    using var index = new StreamWriter(
-        new FileStream(indexPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
+    if (writeRaw)
+    {
+        Directory.CreateDirectory(rawDir);
+    }
+
+    using var raw = writeRaw
+        ? new FileStream(rawPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 1024 * 1024)
+        : null;
+    using var index = writeRaw
+        ? new StreamWriter(
+            new FileStream(indexPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
+            new UTF8Encoding(false))
+        : null;
+    using var collectorFrames = new StreamWriter(
+        new FileStream(collectorFramesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
         new UTF8Encoding(false));
+    using var parameterWriter = inThreadProcessMode == "field-decode-csv"
+        ? new StreamWriter(new FileStream(parameterValuesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024), new UTF8Encoding(false))
+        : null;
+    using var previewWriter = inThreadProcessMode == "field-decode-csv" && writeValues
+        ? new StreamWriter(new FileStream(previewValuesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024), new UTF8Encoding(false))
+        : null;
     var payload = new byte[Oe1022dDefaults.RallFrameBytes];
+    var fieldMeans = new double[Oe1022dProbeLayout.MeasurementFields.Length];
+    var previewSeries = new double[Oe1022dProbeLayout.SamplesPerFrame];
+
+    collectorFrames.WriteLine("{\"schema_version\":1,\"source\":\"oe1022d_probe\",\"frame_layout\":\"12288B_exact_read\",\"note\":\"probe-level frame index for direct-decode experiments\"}");
+
+    if (parameterWriter is not null)
+    {
+        parameterWriter.Write("frame_seq,monotonic_ns,device_packet_counter,b_ref_source_code,b_ref_slope_code,b_ref_current_freq_hz,b_input_overload,b_gain_overload,b_pll_locked");
+        foreach (var field in Oe1022dProbeLayout.MeasurementFields)
+        {
+            parameterWriter.Write(',');
+            parameterWriter.Write(field.DisplayName);
+        }
+        parameterWriter.WriteLine();
+    }
+
+    if (previewWriter is not null)
+    {
+        previewWriter.WriteLine("frame_seq,sample_in_frame,global_sample_index,monotonic_ns,device_packet_counter,field_index,field_key,field_name,value");
+    }
 
     // Frozen LabVIEW-like RALL hot path: do not add parser, retry, poll sleep,
     // per-frame console output, GUI publish, or async/multi-reader behavior here.
@@ -413,20 +470,39 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
                 continue;
             }
 
+            var monotonicNs = MonotonicNsSince(processStart);
+
             if (inThreadProcessMode != "none")
             {
                 var processingStart = Stopwatch.GetTimestamp();
-                var processingSummary = ProcessOe1022dRawFrame(payload, inThreadProcessMode);
+                var processingSummary = ProcessOe1022dRawFrame(
+                    payload,
+                    inThreadProcessMode,
+                    frameSeq,
+                    monotonicNs,
+                    payload[Oe1022dDefaults.DevicePacketCounterOffset],
+                    previewFieldIndex,
+                    fieldMeans,
+                    previewSeries,
+                    parameterWriter,
+                    previewWriter,
+                    ref globalSampleIndex,
+                    out var statusSnapshot);
                 processingTotalTicks += Stopwatch.GetTimestamp() - processingStart;
                 processedFrames++;
                 processedFiniteValues += processingSummary.FiniteValueCount;
                 processedNonFiniteValues += processingSummary.NonFiniteValueCount;
                 processedValueSum += processingSummary.ValueSum;
+                lastBRefSourceCode = statusSnapshot?.BRefSourceCode;
+                lastBRefSlopeCode = statusSnapshot?.BRefSlopeCode;
+                lastBRefCurrentFreqHz = statusSnapshot?.BRefCurrentFreqHz;
+                lastBInputOverload = statusSnapshot?.BInputOverload;
+                lastBGainOverload = statusSnapshot?.BGainOverload;
+                lastBPllLocked = statusSnapshot?.BPllLocked;
             }
 
-            var monotonicNs = MonotonicNsSince(processStart);
             var ts = UtcNowString();
-            raw.Write(payload, 0, payload.Length);
+            raw?.Write(payload, 0, payload.Length);
             firstFrameTs ??= ts;
             firstFrameMonotonicNs ??= monotonicNs;
             lastFrameTs = ts;
@@ -434,7 +510,23 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
 
             var counter = payload[Oe1022dDefaults.DevicePacketCounterOffset];
             packetAudit.Record(counter);
-            RallArtifactWriter.WriteFrameIndexRecord(index, frameSeq, ts, monotonicNs, nextRawOffset, payload.Length, counter);
+            if (index is not null)
+            {
+                RallArtifactWriter.WriteFrameIndexRecord(index, frameSeq, ts, monotonicNs, nextRawOffset, payload.Length, counter);
+            }
+
+            collectorFrames.Write("{\"frame_seq\":");
+            collectorFrames.Write(frameSeq.ToString(CultureInfo.InvariantCulture));
+            collectorFrames.Write(",\"ts\":\"");
+            collectorFrames.Write(ts);
+            collectorFrames.Write("\",\"monotonic_ns\":");
+            collectorFrames.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+            collectorFrames.Write(",\"device_packet_counter\":");
+            collectorFrames.Write(counter.ToString(CultureInfo.InvariantCulture));
+            collectorFrames.Write(",\"in_thread_process_mode\":\"");
+            collectorFrames.Write(inThreadProcessMode);
+            collectorFrames.Write("\"}");
+            collectorFrames.WriteLine();
 
             nextRawOffset += payload.Length;
             frameSeq++;
@@ -452,22 +544,28 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
         }
     }
 
-    raw.Flush(true);
-    index.Flush();
+    raw?.Flush(true);
+    index?.Flush();
+    collectorFrames.Flush();
+    parameterWriter?.Flush();
+    previewWriter?.Flush();
 
     var finishedAt = UtcNowString();
-    RallArtifactWriter.WriteWholeProbeSegment(
-        segmentsPath,
-        outDir,
-        firstFrameTs ?? startedAt,
-        lastFrameTs ?? finishedAt,
-        firstFrameMonotonicNs ?? 0,
-        lastFrameMonotonicNs ?? MonotonicNsSince(processStart),
-        nextRawOffset,
-        stats.FramesOk);
+    if (writeRaw)
+    {
+        RallArtifactWriter.WriteWholeProbeSegment(
+            segmentsPath,
+            outDir,
+            firstFrameTs ?? startedAt,
+            lastFrameTs ?? finishedAt,
+            firstFrameMonotonicNs ?? 0,
+            lastFrameMonotonicNs ?? MonotonicNsSince(processStart),
+            nextRawOffset,
+            stats.FramesOk);
+    }
 
     var elapsedMs = (long)(Stopwatch.GetElapsedTime(processStart).TotalMilliseconds);
-    var rawBytesWritten = new FileInfo(rawPath).Length;
+    var rawBytesWritten = writeRaw && File.Exists(rawPath) ? new FileInfo(rawPath).Length : 0L;
     var processingTotalMs = processingTotalTicks * 1000.0 / Stopwatch.Frequency;
     var processingMeanUsPerFrame = processedFrames > 0
         ? processingTotalTicks * 1_000_000.0 / Stopwatch.Frequency / processedFrames
@@ -491,21 +589,38 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
         timeout_count = stats.TimeoutCount,
         raw_len_bad_count = stats.RawLenBadCount,
         raw_bytes_written = rawBytesWritten,
-        raw_size_matches_frames_ok = rawBytesWritten == stats.FramesOk * Oe1022dDefaults.RallFrameBytes,
-        raw_path = PathRelative(outDir, rawPath),
-        index_path = PathRelative(outDir, indexPath),
-        segments_path = PathRelative(outDir, segmentsPath),
+        raw_size_matches_frames_ok = writeRaw ? rawBytesWritten == stats.FramesOk * Oe1022dDefaults.RallFrameBytes : (bool?)null,
+        write_raw = writeRaw,
+        raw_path = writeRaw ? PathRelative(outDir, rawPath) : null,
+        index_path = writeRaw ? PathRelative(outDir, indexPath) : null,
+        segments_path = writeRaw ? PathRelative(outDir, segmentsPath) : null,
+        collector_frames_path = PathRelative(outDir, collectorFramesPath),
         packet_counter = packetAudit.ToSummary(),
         in_thread_processing = new
         {
             mode = inThreadProcessMode,
+            decode_mode = inThreadProcessMode == "field-decode-csv" ? Oe1022dProbeLayout.DecodeMode : null,
+            write_values = writeValues,
+            preview_field_index = inThreadProcessMode == "field-decode-csv" ? previewFieldIndex : (int?)null,
+            preview_field_key = inThreadProcessMode == "field-decode-csv" ? previewField.Key : null,
+            preview_field_name = inThreadProcessMode == "field-decode-csv" ? previewField.DisplayName : null,
+            measurement_field_order = inThreadProcessMode == "field-decode-csv" ? Oe1022dProbeLayout.MeasurementFields.Select(static field => field.DisplayName).ToArray() : null,
+            measurement_field_keys = inThreadProcessMode == "field-decode-csv" ? Oe1022dProbeLayout.MeasurementFields.Select(static field => field.Key).ToArray() : null,
             processed_frames = processedFrames,
             finite_value_count = processedFiniteValues,
             non_finite_value_count = processedNonFiniteValues,
             value_mean = processedFiniteValues > 0 && double.IsFinite(processedValueMean) ? processedValueMean : (double?)null,
             processing_total_ms = processingTotalMs,
-            mean_processing_us_per_frame = processingMeanUsPerFrame
-        }
+            mean_processing_us_per_frame = processingMeanUsPerFrame,
+            parameter_values_path = inThreadProcessMode == "field-decode-csv" ? PathRelative(outDir, parameterValuesPath) : null,
+            preview_values_path = inThreadProcessMode == "field-decode-csv" && writeValues ? PathRelative(outDir, previewValuesPath) : null,
+            last_b_ref_source_code = lastBRefSourceCode,
+            last_b_ref_slope_code = lastBRefSlopeCode,
+            last_b_ref_current_freq_hz = lastBRefCurrentFreqHz,
+            last_b_input_overload = lastBInputOverload,
+            last_b_gain_overload = lastBGainOverload,
+            last_b_pll_locked = lastBPllLocked
+        },
     };
 
     File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
@@ -514,11 +629,37 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     return stats.TimeoutCount == 0 && stats.RawLenBadCount == 0 && packetAudit.DeltaGt1Count == 0 ? 0 : 2;
 }
 
-static (long FiniteValueCount, long NonFiniteValueCount, double ValueSum) ProcessOe1022dRawFrame(byte[] payload, string mode)
+static (long FiniteValueCount, long NonFiniteValueCount, double ValueSum) ProcessOe1022dRawFrame(
+    byte[] payload,
+    string mode,
+    long frameSeq,
+    ulong monotonicNs,
+    byte devicePacketCounter,
+    int previewFieldIndex,
+    double[] fieldMeans,
+    double[] previewSeries,
+    StreamWriter? parameterWriter,
+    StreamWriter? previewWriter,
+    ref long globalSampleIndex,
+    out Oe1022dStatusSnapshot? statusSnapshot)
 {
+    statusSnapshot = null;
+
     return mode switch
     {
         "measurement-means" => ProcessOe1022dMeasurementMeans(payload),
+        "field-decode-csv" => ProcessOe1022dFieldDecodeCsv(
+            payload,
+            frameSeq,
+            monotonicNs,
+            devicePacketCounter,
+            previewFieldIndex,
+            fieldMeans,
+            previewSeries,
+            parameterWriter,
+            previewWriter,
+            ref globalSampleIndex,
+            out statusSnapshot),
         _ => (0, 0, 0.0)
     };
 }
@@ -548,6 +689,130 @@ static (long FiniteValueCount, long NonFiniteValueCount, double ValueSum) Proces
     }
 
     return (finiteValueCount, nonFiniteValueCount, valueSum);
+}
+
+static (long FiniteValueCount, long NonFiniteValueCount, double ValueSum) ProcessOe1022dFieldDecodeCsv(
+    byte[] payload,
+    long frameSeq,
+    ulong monotonicNs,
+    byte devicePacketCounter,
+    int previewFieldIndex,
+    double[] fieldMeans,
+    double[] previewSeries,
+    StreamWriter? parameterWriter,
+    StreamWriter? previewWriter,
+    ref long globalSampleIndex,
+    out Oe1022dStatusSnapshot statusSnapshot)
+{
+    long finiteValueCount = 0;
+    long nonFiniteValueCount = 0;
+    double valueSum = 0.0;
+    var span = payload.AsSpan();
+
+    for (var fieldIndex = 0; fieldIndex < Oe1022dProbeLayout.MeasurementFields.Length; fieldIndex++)
+    {
+        var field = Oe1022dProbeLayout.MeasurementFields[fieldIndex];
+        double fieldFiniteSum = 0.0;
+        long fieldFiniteCount = 0;
+        var fieldBaseOffset = field.Offset;
+
+        for (var sampleIndex = 0; sampleIndex < Oe1022dProbeLayout.SamplesPerFrame; sampleIndex++)
+        {
+            var valueOffset = fieldBaseOffset + sampleIndex * Oe1022dProbeLayout.ValueBytes;
+            var value = ReadDoubleBigEndian(span.Slice(valueOffset, Oe1022dProbeLayout.ValueBytes));
+
+            if (fieldIndex == previewFieldIndex)
+            {
+                previewSeries[sampleIndex] = value;
+            }
+
+            if (!double.IsFinite(value))
+            {
+                nonFiniteValueCount++;
+                continue;
+            }
+
+            finiteValueCount++;
+            fieldFiniteCount++;
+            fieldFiniteSum += value;
+            valueSum += value;
+        }
+
+        fieldMeans[fieldIndex] = fieldFiniteCount > 0 ? fieldFiniteSum / fieldFiniteCount : double.NaN;
+    }
+
+    statusSnapshot = new Oe1022dStatusSnapshot(
+        span[Oe1022dProbeLayout.BRefSourceCodeOffset],
+        span[Oe1022dProbeLayout.BRefSlopeCodeOffset],
+        ReadDoubleBigEndian(span.Slice(Oe1022dProbeLayout.BRefCurrentFreqHzOffset, Oe1022dProbeLayout.ValueBytes)),
+        span[Oe1022dProbeLayout.BInputOverloadOffset],
+        span[Oe1022dProbeLayout.BGainOverloadOffset],
+        span[Oe1022dProbeLayout.BPllLockedOffset]);
+
+    if (parameterWriter is not null)
+    {
+        parameterWriter.Write(frameSeq.ToString(CultureInfo.InvariantCulture));
+        parameterWriter.Write(',');
+        parameterWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+        parameterWriter.Write(',');
+        parameterWriter.Write(devicePacketCounter.ToString(CultureInfo.InvariantCulture));
+        parameterWriter.Write(',');
+        parameterWriter.Write(statusSnapshot.BRefSourceCode.ToString(CultureInfo.InvariantCulture));
+        parameterWriter.Write(',');
+        parameterWriter.Write(statusSnapshot.BRefSlopeCode.ToString(CultureInfo.InvariantCulture));
+        parameterWriter.Write(',');
+        parameterWriter.Write(statusSnapshot.BRefCurrentFreqHz.ToString("R", CultureInfo.InvariantCulture));
+        parameterWriter.Write(',');
+        parameterWriter.Write(statusSnapshot.BInputOverload.ToString(CultureInfo.InvariantCulture));
+        parameterWriter.Write(',');
+        parameterWriter.Write(statusSnapshot.BGainOverload.ToString(CultureInfo.InvariantCulture));
+        parameterWriter.Write(',');
+        parameterWriter.Write(statusSnapshot.BPllLocked.ToString(CultureInfo.InvariantCulture));
+        for (var fieldIndex = 0; fieldIndex < fieldMeans.Length; fieldIndex++)
+        {
+            parameterWriter.Write(',');
+            parameterWriter.Write(fieldMeans[fieldIndex].ToString("R", CultureInfo.InvariantCulture));
+        }
+        parameterWriter.WriteLine();
+    }
+
+    if (previewWriter is not null)
+    {
+        var previewField = Oe1022dProbeLayout.MeasurementFields[previewFieldIndex];
+        for (var sampleIndex = 0; sampleIndex < previewSeries.Length; sampleIndex++)
+        {
+            previewWriter.Write(frameSeq.ToString(CultureInfo.InvariantCulture));
+            previewWriter.Write(',');
+            previewWriter.Write(sampleIndex.ToString(CultureInfo.InvariantCulture));
+            previewWriter.Write(',');
+            previewWriter.Write(globalSampleIndex.ToString(CultureInfo.InvariantCulture));
+            previewWriter.Write(',');
+            previewWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+            previewWriter.Write(',');
+            previewWriter.Write(devicePacketCounter.ToString(CultureInfo.InvariantCulture));
+            previewWriter.Write(',');
+            previewWriter.Write(previewFieldIndex.ToString(CultureInfo.InvariantCulture));
+            previewWriter.Write(',');
+            previewWriter.Write(previewField.Key);
+            previewWriter.Write(',');
+            previewWriter.Write(previewField.DisplayName);
+            previewWriter.Write(',');
+            previewWriter.WriteLine(previewSeries[sampleIndex].ToString("R", CultureInfo.InvariantCulture));
+            globalSampleIndex++;
+        }
+    }
+    else
+    {
+        globalSampleIndex += previewSeries.Length;
+    }
+
+    return (finiteValueCount, nonFiniteValueCount, valueSum);
+}
+
+static double ReadDoubleBigEndian(ReadOnlySpan<byte> span)
+{
+    var rawBits = BinaryPrimitives.ReadInt64BigEndian(span);
+    return BitConverter.Int64BitsToDouble(rawBits);
 }
 
 static int Oe1300Rall(IReadOnlyDictionary<string, string> options)
@@ -1017,7 +1282,7 @@ static void PrintUsage()
     Usage:
       Odmr.WinProbe visa-list
       Odmr.WinProbe oe-idn [--resource ASRL8::INSTR] [--baud 921600]
-      Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] [--in-thread-process-mode none|measurement-means] --duration-sec 300 --out-dir <dir>
+      Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] [--in-thread-process-mode none|measurement-means|field-decode-csv] [--write-raw true|false] [--write-values true|false] [--preview-field-index 8] --duration-sec 300 --out-dir <dir>
       Odmr.WinProbe oe1300-idn --port <COMx> [--baud 115200]
       Odmr.WinProbe oe1300-rall --port <COMx> [--baud 115200] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
@@ -1035,6 +1300,54 @@ static void PrintUsage()
       Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]
       Odmr.WinProbe laser-probe [--port COM9] --off-only
     """);
+}
+
+sealed record Oe1022dMeasurementField(string Key, string DisplayName, int Offset);
+
+sealed record Oe1022dStatusSnapshot(
+    byte BRefSourceCode,
+    byte BRefSlopeCode,
+    double BRefCurrentFreqHz,
+    byte BInputOverload,
+    byte BGainOverload,
+    byte BPllLocked);
+
+static class Oe1022dProbeLayout
+{
+    public const string DecodeMode = "measurement_fields_20x50_big_endian_v1";
+    public const int SamplesPerFrame = 50;
+    public const int ValueBytes = 8;
+    public const int DefaultPreviewFieldIndex = 8;
+    public const int BRefSourceCodeOffset = 8504;
+    public const int BRefCurrentFreqHzOffset = 8505;
+    public const int BRefSlopeCodeOffset = 8521;
+    public const int BInputOverloadOffset = 8779;
+    public const int BGainOverloadOffset = 8780;
+    public const int BPllLockedOffset = 8781;
+
+    public static readonly Oe1022dMeasurementField[] MeasurementFields =
+    [
+        new("a_x", "A-X", 0),
+        new("a_y", "A-Y", 400),
+        new("a_freq", "A-Freq", 800),
+        new("a_noise", "A-Noise", 1200),
+        new("a_xh1", "A-Xh1", 1600),
+        new("a_yh1", "A-Yh1", 2000),
+        new("a_xh2", "A-Xh2", 2400),
+        new("a_yh2", "A-Yh2", 2800),
+        new("b_x", "B-X", 3200),
+        new("b_y", "B-Y", 3600),
+        new("b_freq", "B-Freq", 4000),
+        new("b_noise", "B-Noise", 4400),
+        new("b_xh1", "B-Xh1", 4800),
+        new("b_yh1", "B-Yh1", 5200),
+        new("b_xh2", "B-Xh2", 5600),
+        new("b_yh2", "B-Yh2", 6000),
+        new("auxadc1", "AUXADC1", 6400),
+        new("auxadc2", "AUXADC2", 6800),
+        new("auxadc3", "AUXADC3", 7200),
+        new("auxadc4", "AUXADC4", 7600)
+    ];
 }
 
 sealed class ProgressJsonlWriter : IProgress<RunProgressEvent>, IDisposable
