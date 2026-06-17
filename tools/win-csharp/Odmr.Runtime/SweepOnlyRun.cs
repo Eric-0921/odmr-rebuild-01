@@ -11,8 +11,7 @@ namespace Odmr.Runtime;
 public sealed record SweepOnlyRunOptions(
     string OeResource,
     int OeBaudRate,
-    string SmbHost,
-    int SmbPort,
+    string SmbResource,
     int RepeatCount,
     string OutDir);
 
@@ -26,8 +25,7 @@ public sealed record SweepOnlyRunSummary(
     [property: JsonPropertyName("command")] string Command,
     [property: JsonPropertyName("oe_resource")] string OeResource,
     [property: JsonPropertyName("oe_baud_rate")] int OeBaudRate,
-    [property: JsonPropertyName("smb_host")] string SmbHost,
-    [property: JsonPropertyName("smb_port")] int SmbPort,
+    [property: JsonPropertyName("smb_resource")] string SmbResource,
     [property: JsonPropertyName("frame_bytes")] int FrameBytes,
     [property: JsonPropertyName("post_write_delay_ms")] int PostWriteDelayMs,
     [property: JsonPropertyName("visa_timeout_ms")] int VisaTimeoutMs,
@@ -85,7 +83,7 @@ public static class SweepOnlyRun
 
         var sweepObservations = new List<SmbSweepObservation>(options.RepeatCount);
 
-        using (var smb = Smb100aTcp.Open(options.SmbHost, options.SmbPort))
+        using (var smb = Smb100aVisa.Open(options.SmbResource))
         {
             try
             {
@@ -142,8 +140,7 @@ public static class SweepOnlyRun
             "sweep-only-run",
             options.OeResource,
             options.OeBaudRate,
-            options.SmbHost,
-            options.SmbPort,
+            options.SmbResource,
             Oe1022dDefaults.RallFrameBytes,
             Oe1022dDefaults.RallPostWriteDelayMs,
             Oe1022dDefaults.VisaTimeoutMs,

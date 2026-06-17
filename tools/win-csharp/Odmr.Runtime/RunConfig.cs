@@ -32,8 +32,10 @@ public sealed record StationIdentity(
 
 public sealed record StationConnectionFacts(
     string StationId,
-    string SmbHost,
-    int SmbPort,
+    string SmbTransport,
+    string? SmbHost,
+    int? SmbPort,
+    string? SmbResource,
     string OeResource,
     int OeBaudRate,
     string? XPort,
@@ -488,8 +490,10 @@ public static class RunConfigLoader
 
         return new StationConnectionFacts(
             station.StationId,
-            Required(smb.TransportHint.Host, "SMB host"),
-            smb.TransportHint.Port ?? throw new InvalidOperationException("SMB port missing"),
+            smb.TransportHint.Transport,
+            smb.TransportHint.Host,
+            smb.TransportHint.Port,
+            smb.TransportHint.Resource,
             Required(oe.TransportHint.Resource, "OE resource"),
             oe.TransportHint.BaudRate ?? Oe1022dDefaults.BaudRate,
             x is null ? null : Required(x.TransportHint.PortPath, "mag_x port"),

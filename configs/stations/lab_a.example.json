@@ -6,11 +6,10 @@
       "kind": "smb100a",
       "required": true,
       "transport_hint": {
-        "transport": "tcp_socket",
-        "host": "169.254.2.20",
-        "port": 5025,
-        "host_candidates": [
-          "169.254.1.20"
+        "transport": "visa_resource",
+        "resource": "USB::0x0AAD::0x0054::106789::INSTR",
+        "resource_candidates": [
+          "USB::0x0AAD::0x0054::101623::INSTR"
         ]
       },
       "identity": {

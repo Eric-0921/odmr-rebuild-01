@@ -62,7 +62,8 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-rall --port COM8 -
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-idn --host 192.168.1.1 --port 10001
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-rall --host 192.168.1.1 --port 10001 --count 1 --out-dir runs/oe1300_net_probe
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --duration-sec 10 --out-dir runs/oe1300_net_labview_demo
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --list-resources
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB::0x0AAD::0x0054::106789::INSTR
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json
@@ -161,7 +162,7 @@ For strict LabVIEW-style behavior, `--drain-before-write` now defaults to
 `false`. The pre-drain path should only be used as a socket-backlog diagnostic,
 not as the default collector behavior.
 
-`smb-probe` keeps the current Ethernet raw socket path and only sends:
+`smb-probe` now defaults to R&S VISA USB resource access and only sends:
 
 - `*IDN?`
 - `SYST:ERR?`

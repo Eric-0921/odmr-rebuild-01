@@ -5,8 +5,24 @@ using System.Text.Json.Serialization;
 
 namespace Odmr.Devices;
 
+public interface ISmb100aSession : IDisposable
+{
+    void Send(string command);
+    string Query(string command);
+    void SendAndCheck(string command, int settleMs);
+    void EnsureNoError();
+    void ApplyDefaultFixedProfile(int settleMs);
+    void ConfigureDefaultSweep(int settleMs);
+    void ConfigureSweep(SmbSweepSpec spec, int settleMs);
+    SmbSweepObservation ExecuteDefaultSweep();
+    SmbSweepObservation ExecuteSweep(SmbSweepSpec spec, CancellationToken cancellationToken = default);
+    void Cleanup();
+}
+
 public static class Smb100aDefaults
 {
+    public const string Resource = "USB::0x0AAD::0x0054::106789::INSTR";
+    public const string FallbackResource = "USB::0x0AAD::0x0054::101623::INSTR";
     public const string Host = "169.254.2.20";
     public const int Port = 5025;
     public const int TimeoutMs = 3000;
@@ -115,10 +131,14 @@ public sealed record SmbSweepSpec(
 }
 
 public sealed record SmbProbeSummary(
+    [property: JsonPropertyName("transport")]
+    string Transport,
     [property: JsonPropertyName("host")]
-    string Host,
+    string? Host,
     [property: JsonPropertyName("port")]
-    int Port,
+    int? Port,
+    [property: JsonPropertyName("resource")]
+    string? Resource,
     [property: JsonPropertyName("idn")]
     string Idn,
     [property: JsonPropertyName("system_error")]
@@ -140,8 +160,10 @@ public static class Smb100aTcp
         var output = session.Query(Smb100aCommands.QueryOutput);
 
         return new SmbProbeSummary(
+            "tcp_socket",
             host,
             port,
+            null,
             idn,
             error,
             output,
@@ -159,7 +181,7 @@ public static class Smb100aTcp
         response.Contains("No error", StringComparison.OrdinalIgnoreCase);
 }
 
-public sealed class Smb100aSession : IDisposable
+public sealed class Smb100aSession : ISmb100aSession
 {
     private readonly TcpClient client;
     private readonly NetworkStream stream;

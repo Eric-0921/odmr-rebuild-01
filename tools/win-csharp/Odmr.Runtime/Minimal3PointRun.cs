@@ -10,8 +10,7 @@ namespace Odmr.Runtime;
 public sealed record Minimal3PointRunOptions(
     string OeResource,
     int OeBaudRate,
-    string SmbHost,
-    int SmbPort,
+    string SmbResource,
     string XPort,
     string YPort,
     string ZPort,
@@ -26,8 +25,7 @@ public sealed record Minimal3PointRunSummary(
     [property: JsonPropertyName("run_id")] string RunId,
     [property: JsonPropertyName("oe_resource")] string OeResource,
     [property: JsonPropertyName("oe_baud_rate")] int OeBaudRate,
-    [property: JsonPropertyName("smb_host")] string SmbHost,
-    [property: JsonPropertyName("smb_port")] int SmbPort,
+    [property: JsonPropertyName("smb_resource")] string SmbResource,
     [property: JsonPropertyName("m8812_ports")] IReadOnlyList<string> M8812Ports,
     [property: JsonPropertyName("point_count")] int PointCount,
     [property: JsonPropertyName("cycles")] int Cycles,
@@ -117,7 +115,7 @@ public static class Minimal3PointRun
             parameterValuesPath,
             sampleValuesPath,
             processStart);
-        using var smb = Smb100aTcp.Open(options.SmbHost, options.SmbPort);
+        using var smb = Smb100aVisa.Open(options.SmbResource);
         var magAxes = OpenMagAxes(options);
         CniLaserSession? laser = null;
 
@@ -242,8 +240,7 @@ public static class Minimal3PointRun
             runId,
             options.OeResource,
             options.OeBaudRate,
-            options.SmbHost,
-            options.SmbPort,
+            options.SmbResource,
             [options.XPort, options.YPort, options.ZPort],
             Points.Length * options.Cycles,
             options.Cycles,
@@ -342,7 +339,7 @@ public static class Minimal3PointRun
         MinimalPointPlan point,
         IReadOnlyList<double> baselineCurrentA,
         IReadOnlyList<MagAxisHandle> magAxes,
-        Smb100aSession smb,
+        ISmb100aSession smb,
         OeRallCollector collector,
         string segmentsPath,
         string pointsPath,

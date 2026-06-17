@@ -26,8 +26,10 @@ internal sealed record ConfigMagAxis(
 internal sealed record RuntimeResolvedConnections(
     string OeResource,
     int OeBaudRate,
-    string SmbHost,
-    int SmbPort,
+    string SmbTransport,
+    string? SmbHost,
+    int? SmbPort,
+    string? SmbResource,
     IReadOnlyDictionary<string, string> MagPorts,
     string? LaserPort);
 
@@ -126,7 +128,7 @@ public static class ConfigDrivenRun
             parameterValuesPath,
             sampleValuesPath,
             processStart);
-        using var smb = Smb100aTcp.Open(resolvedConnections.SmbHost, resolvedConnections.SmbPort);
+        using var smb = OpenSmbSession(resolvedConnections);
         var magAxes = bundle.ResolvedPlan.RequiresMagneticControl ? OpenMagAxes(bundle, resolvedConnections) : [];
         CniLaserSession? laser = null;
         var pointsPassed = 0;
@@ -552,7 +554,7 @@ public static class ConfigDrivenRun
         var oeDevice = bundle.Station.Devices.First(device => device.DeviceId == "oe1022d_main");
         var smbDevice = bundle.Station.Devices.First(device => device.DeviceId == "smb100a_main");
         var resolvedOeResource = ResolveOeResource(oeDevice, bundle.Connections.OeBaudRate, eventsPath, processStart, bundle.Plan.RunId);
-        var resolvedSmbHost = ResolveSmbHost(smbDevice, bundle.Connections.SmbPort, eventsPath, processStart, bundle.Plan.RunId);
+        var resolvedSmbConnection = ResolveSmbConnection(smbDevice, bundle.Connections, eventsPath, processStart, bundle.Plan.RunId);
         var magPorts = bundle.ResolvedPlan.RequiresMagneticControl
             ? ResolveMagPorts(bundle, eventsPath, processStart)
             : new Dictionary<string, string>();
@@ -560,8 +562,10 @@ public static class ConfigDrivenRun
         return new RuntimeResolvedConnections(
             resolvedOeResource,
             bundle.Connections.OeBaudRate,
-            resolvedSmbHost,
-            bundle.Connections.SmbPort,
+            resolvedSmbConnection.Transport,
+            resolvedSmbConnection.Host,
+            resolvedSmbConnection.Port,
+            resolvedSmbConnection.Resource,
             magPorts,
             bundle.Connections.LaserPort);
     }
@@ -712,7 +716,22 @@ public static class ConfigDrivenRun
         throw new InvalidOperationException($"failed to resolve OE1022D resource for {device.DeviceId}: {string.Join(" | ", failures)}");
     }
 
-    private static string ResolveSmbHost(StationDeviceSpec device, int port, string eventsPath, long processStart, string runId)
+    private static (string Transport, string? Host, int? Port, string? Resource) ResolveSmbConnection(
+        StationDeviceSpec device,
+        StationConnectionFacts connections,
+        string eventsPath,
+        long processStart,
+        string runId)
+    {
+        return connections.SmbTransport switch
+        {
+            "visa_resource" => ResolveSmbResource(device, eventsPath, processStart, runId),
+            "tcp_socket" => ResolveSmbHost(device, connections.SmbPort ?? Smb100aDefaults.Port, eventsPath, processStart, runId),
+            _ => throw new InvalidOperationException($"unsupported SMB transport: {connections.SmbTransport}")
+        };
+    }
+
+    private static (string Transport, string? Host, int? Port, string? Resource) ResolveSmbHost(StationDeviceSpec device, int port, string eventsPath, long processStart, string runId)
     {
         var candidates = new List<string>();
         AppendUnique(candidates, device.TransportHint.Host);
@@ -737,7 +756,7 @@ public static class ConfigDrivenRun
                         port,
                         idn
                     });
-                    return host;
+                    return ("tcp_socket", host, port, null);
                 }
 
                 failures.Add($"{host}:{port}: identity mismatch idn={idn}");
@@ -749,6 +768,61 @@ public static class ConfigDrivenRun
         }
 
         throw new InvalidOperationException($"failed to resolve SMB100A host for {device.DeviceId}: {string.Join(" | ", failures)}");
+    }
+
+    private static (string Transport, string? Host, int? Port, string? Resource) ResolveSmbResource(StationDeviceSpec device, string eventsPath, long processStart, string runId)
+    {
+        var candidates = new List<string>();
+        AppendUnique(candidates, device.TransportHint.Resource);
+        foreach (var candidate in device.TransportHint.ResourceCandidates ?? Array.Empty<string>())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        foreach (var candidate in Smb100aVisa.ListResources())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        var failures = new List<string>();
+        foreach (var resource in candidates)
+        {
+            try
+            {
+                using var smb = Smb100aVisa.Open(resource);
+                var idn = smb.Query(Smb100aCommands.QueryIdn);
+                if (IdentityMatches(device.Identity, idn))
+                {
+                    AppendEvent(eventsPath, processStart, runId, "device_resolved", "resolve", null, device.DeviceId, new
+                    {
+                        transport = "visa_resource",
+                        resource,
+                        idn
+                    });
+                    return ("visa_resource", null, null, resource);
+                }
+
+                failures.Add($"{resource}: identity mismatch idn={idn}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{resource}: {ex.Message}");
+            }
+        }
+
+        throw new InvalidOperationException($"failed to resolve SMB100A VISA resource for {device.DeviceId}: {string.Join(" | ", failures)}");
+    }
+
+    private static ISmb100aSession OpenSmbSession(RuntimeResolvedConnections resolvedConnections)
+    {
+        return resolvedConnections.SmbTransport switch
+        {
+            "visa_resource" => Smb100aVisa.Open(resolvedConnections.SmbResource ?? throw new InvalidOperationException("SMB VISA resource missing")),
+            "tcp_socket" => Smb100aTcp.Open(
+                resolvedConnections.SmbHost ?? throw new InvalidOperationException("SMB TCP host missing"),
+                resolvedConnections.SmbPort ?? throw new InvalidOperationException("SMB TCP port missing")),
+            _ => throw new InvalidOperationException($"unsupported SMB transport: {resolvedConnections.SmbTransport}")
+        };
     }
 
     private static IReadOnlyDictionary<string, string> ResolveMagPorts(RunConfigBundle bundle, string eventsPath, long processStart)
@@ -897,7 +971,7 @@ public static class ConfigDrivenRun
         RunPointPlan point,
         IReadOnlyList<double>? baselineCurrentA,
         IReadOnlyList<ConfigMagAxis> magAxes,
-        Smb100aSession smb,
+        ISmb100aSession smb,
         OeRallCollector collector,
         string segmentsPath,
         string pointsPath,
@@ -1163,7 +1237,7 @@ public static class ConfigDrivenRun
         return quality;
     }
 
-    private static void ApplySmbFixedProfile(Smb100aSession smb, Smb100aRunProfile profile)
+    private static void ApplySmbFixedProfile(ISmb100aSession smb, Smb100aRunProfile profile)
     {
         foreach (var command in BuildSmbFixedCommands(profile.Fixed))
         {
@@ -1171,7 +1245,7 @@ public static class ConfigDrivenRun
         }
     }
 
-    private static void ApplySmbInitialRfOutputOff(Smb100aSession smb, RunConfigBundle bundle, string eventsPath, long processStart)
+    private static void ApplySmbInitialRfOutputOff(ISmb100aSession smb, RunConfigBundle bundle, string eventsPath, long processStart)
     {
         SendSmbProfileCommand(smb, bundle.SmbProfile, Smb100aCommands.OutputOff);
         var output = smb.Query(Smb100aCommands.QueryOutput);
@@ -1187,7 +1261,7 @@ public static class ConfigDrivenRun
         });
     }
 
-    private static string ConfigureSmbSweepForPointPreparation(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
+    private static string ConfigureSmbSweepForPointPreparation(ISmb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
     {
         if (!sweep.RfOutputEnabled)
         {
@@ -1224,7 +1298,7 @@ public static class ConfigDrivenRun
         return error;
     }
 
-    private static void SendSmbProfileCommand(Smb100aSession smb, Smb100aRunProfile profile, string command, CancellationToken emergencyToken = default)
+    private static void SendSmbProfileCommand(ISmb100aSession smb, Smb100aRunProfile profile, string command, CancellationToken emergencyToken = default)
     {
         emergencyToken.ThrowIfCancellationRequested();
         smb.Send(command);
@@ -1236,19 +1310,19 @@ public static class ConfigDrivenRun
         }
     }
 
-    private static void SendSmbProfileCommandWithoutErrorCheck(Smb100aSession smb, Smb100aRunProfile profile, string command, CancellationToken emergencyToken = default)
+    private static void SendSmbProfileCommandWithoutErrorCheck(ISmb100aSession smb, Smb100aRunProfile profile, string command, CancellationToken emergencyToken = default)
     {
         emergencyToken.ThrowIfCancellationRequested();
         smb.Send(command);
         SleepInterruptibly(profile.CommandSettleMs, emergencyToken);
     }
 
-    private static SmbSweepObservation ExecuteSmbSweepInsideSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
+    private static SmbSweepObservation ExecuteSmbSweepInsideSegment(ISmb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
     {
         return smb.ExecuteSweep(sweep, emergencyToken);
     }
 
-    private static void PrepareSmbRfForSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
+    private static void PrepareSmbRfForSegment(ISmb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken)
     {
         SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.OutputOn, emergencyToken);
         SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.FrequencyModeSweep, emergencyToken);
@@ -1272,7 +1346,7 @@ public static class ConfigDrivenRun
         }
     }
 
-    private static void StopSmbRfAfterSegment(Smb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken = default)
+    private static void StopSmbRfAfterSegment(ISmb100aSession smb, Smb100aRunProfile profile, SmbSweepSpec sweep, CancellationToken emergencyToken = default)
     {
         SendSmbProfileCommandWithoutErrorCheck(smb, profile, Smb100aCommands.OutputOff, emergencyToken);
         var output = smb.Query(Smb100aCommands.QueryOutput);

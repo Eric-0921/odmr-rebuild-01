@@ -34,7 +34,7 @@
 
 ### 设备身份原则
 
-- SMB100A：协议层 `*IDN?` + TCP `5025`
+- SMB100A：协议层 `*IDN?` + R&S VISA USB resource
 - OE1022D：协议层 `*IDN?`，串口路径只作 hint
 - M8812：协议层 `*IDN?` 第 3 字段 SN 严格匹配
 - CNI Laser：无稳定 `*IDN?`，依赖协议帧回显、USB 信息和人工 claim
@@ -46,7 +46,7 @@
 
 当前代码基线已经进一步收紧为：
 
-- 当前 C# 默认连接事实是：OE `ASRL8::INSTR`，SMB `169.254.2.20:5025`，M8812 `COM4/COM6/COM3`，Laser `COM9`
+- 当前 C# 默认连接事实是：OE `ASRL8::INSTR`，SMB `USB::0x0AAD::0x0054::106789::INSTR`，M8812 `COM4/COM6/COM3`，Laser `COM9`
 - C# probes 负责验证这些连接事实
 - run provenance 由 snapshots、`device_state.jsonl`、segments/raw/frame index 和离线审查工具给出
 
@@ -79,17 +79,17 @@
 
 ### 已验证连接事实
 
-- transport：TCP raw socket
-- 默认端口：`5025`
+- transport：VISA USB resource
+- 默认 resource：`USB::0x0AAD::0x0054::106789::INSTR`
 - 最小身份命令：`*IDN?`
 - 最小健康查询：
   - `SYST:ERR?`
   - `OUTP?`
 - 真实快照中的身份响应：
   - `Rohde&Schwarz,SMB100A,1406.6000k02/101623,3.1.19.15-3.20.390.24`
-- 当前 station 已支持双实验台固定地址候选：
-  - `169.254.2.20`
-  - `169.254.1.20`
+- 当前 station 已支持双实验台 USB 资源候选：
+  - `USB::0x0AAD::0x0054::106789::INSTR`
+  - `USB::0x0AAD::0x0054::101623::INSTR`
 - 当前 station 已接受双实验台已知 SMB 序列段：
   - `1406.6000k02/101623`
   - `1406.6000k02/106789`
@@ -123,7 +123,7 @@
 
 ### 新项目应直接继承的事实
 
-- `smb100a` transport 用 C# Raw TCP 5025。
+- `smb100a` transport 现以 C# VISA USB 为默认路径。
 - 最小 verify 以 query-only 为主，不在 verify 阶段发 `OUTP ON`、`SWE:EXEC` 等状态改变命令。
 
 ## OE1022D

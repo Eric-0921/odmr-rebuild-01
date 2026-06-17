@@ -162,9 +162,18 @@ static int Oe1300NetIdn(IReadOnlyDictionary<string, string> options)
 
 static int SmbProbe(IReadOnlyDictionary<string, string> options)
 {
-    var host = GetOption(options, "host", Smb100aDefaults.Host);
-    var port = GetIntOption(options, "port", Smb100aDefaults.Port);
-    var result = Smb100aTcp.Probe(host, port);
+    if (GetBoolOption(options, "list-resources", false))
+    {
+        foreach (var visaResource in Smb100aVisa.ListResources())
+        {
+            Console.WriteLine(visaResource);
+        }
+
+        return 0;
+    }
+
+    var resource = GetOptionalOption(options, "resource") ?? ResolveSmbVisaResource();
+    var result = Smb100aVisa.Probe(resource);
 
     Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Pretty));
 
@@ -185,12 +194,11 @@ static int SweepOnlyRunCommand(IReadOnlyDictionary<string, string> options)
 {
     var resourceName = GetOption(options, "resource", Oe1022dDefaults.Resource);
     var baudRate = GetIntOption(options, "baud", Oe1022dDefaults.BaudRate);
-    var host = GetOption(options, "host", Smb100aDefaults.Host);
-    var port = GetIntOption(options, "port", Smb100aDefaults.Port);
+    var smbResource = GetOptionalOption(options, "smb-resource") ?? ResolveSmbVisaResource();
     var repeat = GetIntOption(options, "repeat", 1);
     var outDir = GetRequiredOption(options, "out-dir");
 
-    var summary = SweepOnlyRun.Execute(new SweepOnlyRunOptions(resourceName, baudRate, host, port, repeat, outDir));
+    var summary = SweepOnlyRun.Execute(new SweepOnlyRunOptions(resourceName, baudRate, smbResource, repeat, outDir));
     Console.WriteLine($"sweep-only-run done: repeat={summary.RepeatCount}, frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
     return summary.TimeoutCount == 0 && summary.RawLenBadCount == 0 && summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
 }
@@ -199,8 +207,7 @@ static int Minimal3PointRunCommand(IReadOnlyDictionary<string, string> options)
 {
     var resourceName = GetOption(options, "resource", Oe1022dDefaults.Resource);
     var baudRate = GetIntOption(options, "baud", Oe1022dDefaults.BaudRate);
-    var host = GetOption(options, "host", Smb100aDefaults.Host);
-    var port = GetIntOption(options, "port", Smb100aDefaults.Port);
+    var smbResource = GetOptionalOption(options, "smb-resource") ?? ResolveSmbVisaResource();
     var xPort = GetOption(options, "x", M8812Defaults.XPort);
     var yPort = GetOption(options, "y", M8812Defaults.YPort);
     var zPort = GetOption(options, "z", M8812Defaults.ZPort);
@@ -210,7 +217,7 @@ static int Minimal3PointRunCommand(IReadOnlyDictionary<string, string> options)
     var laserPowerMw = GetIntOption(options, "laser-power-mw", 50);
     var outDir = GetRequiredOption(options, "out-dir");
 
-    var summary = Minimal3PointRun.Execute(new Minimal3PointRunOptions(resourceName, baudRate, host, port, xPort, yPort, zPort, cycles, enableLaser, laserPort, laserPowerMw, outDir));
+    var summary = Minimal3PointRun.Execute(new Minimal3PointRunOptions(resourceName, baudRate, smbResource, xPort, yPort, zPort, cycles, enableLaser, laserPort, laserPowerMw, outDir));
     Console.WriteLine($"minimal-3point-run done: points={summary.PointCount}, cycles={summary.Cycles}, laser={summary.LaserEnabled}, frames_ok={summary.FramesOk}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
     return summary.TimeoutCount == 0 && summary.RawLenBadCount == 0 && summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
 }
@@ -1284,6 +1291,53 @@ static string GetOption(IReadOnlyDictionary<string, string> options, string key,
 static string? GetOptionalOption(IReadOnlyDictionary<string, string> options, string key) =>
     options.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 
+static string ResolveSmbVisaResource()
+{
+    var candidates = new List<string>();
+    AppendUnique(candidates, Smb100aDefaults.Resource);
+    AppendUnique(candidates, Smb100aDefaults.FallbackResource);
+    foreach (var candidate in Smb100aVisa.ListResources())
+    {
+        AppendUnique(candidates, candidate);
+    }
+
+    var failures = new List<string>();
+    foreach (var candidate in candidates)
+    {
+        try
+        {
+            using var smb = Smb100aVisa.Open(candidate);
+            var idn = smb.Query(Smb100aCommands.QueryIdn);
+            if (idn.Contains(Smb100aDefaults.RequiredVendor, StringComparison.Ordinal) &&
+                idn.Contains(Smb100aDefaults.RequiredModel, StringComparison.Ordinal))
+            {
+                return candidate;
+            }
+
+            failures.Add($"{candidate}: identity mismatch idn={idn}");
+        }
+        catch (Exception ex)
+        {
+            failures.Add($"{candidate}: {ex.Message}");
+        }
+    }
+
+    throw new InvalidOperationException($"failed to resolve SMB100A VISA resource: {string.Join(" | ", failures)}");
+}
+
+static void AppendUnique(List<string> values, string? candidate)
+{
+    if (string.IsNullOrWhiteSpace(candidate))
+    {
+        return;
+    }
+
+    if (!values.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+    {
+        values.Add(candidate);
+    }
+}
+
 static int GetIntOption(IReadOnlyDictionary<string, string> options, string key, int defaultValue)
 {
     if (!options.TryGetValue(key, out var value))
@@ -1344,9 +1398,9 @@ static void PrintUsage()
       Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
       Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-labview-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--drain-before-write true|false] [--preview-param-index 0] [--write-values true|false] --duration-sec 10 --out-dir <dir>
-      Odmr.WinProbe smb-probe [--host 169.254.2.20] [--port 5025]
-      Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--repeat 1] --out-dir <dir>
-      Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--host 169.254.2.20] [--port 5025] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
+      Odmr.WinProbe smb-probe [--list-resources] [--resource USB::0x0AAD::0x0054::106789::INSTR]
+      Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--smb-resource USB::0x0AAD::0x0054::106789::INSTR] [--repeat 1] --out-dir <dir>
+      Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--smb-resource USB::0x0AAD::0x0054::106789::INSTR] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
       Odmr.WinProbe run-resolve --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json>
       Odmr.WinProbe run-execute --station <json> --calibration <json> --plan <json> --smb-profile <json> --oe-profile <json> --laser-profile <json> --out-dir <dir> [--progress-jsonl <path>] [--stop-request-file <path>] [--emergency-stop-file <path>]
       Odmr.WinProbe artifact-check --run <run-dir>

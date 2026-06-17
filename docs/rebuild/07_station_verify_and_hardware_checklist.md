@@ -22,7 +22,7 @@ dotnet build tools/win-csharp/Odmr.Win.sln
 
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- visa-list
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-idn --resource ASRL8::INSTR --baud 921600
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB::0x0AAD::0x0054::106789::INSTR
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 
@@ -42,7 +42,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
 
 串口路径规则：
 
-- 当前 Windows 实验机固定事实是：OE `ASRL8::INSTR`，SMB `169.254.2.20:5025`，M8812 `COM4/COM6/COM3`，Laser `COM9`
+- 当前 Windows 实验机固定事实是：OE `ASRL8::INSTR`，SMB `USB::0x0AAD::0x0054::106789::INSTR`，M8812 `COM4/COM6/COM3`，Laser `COM9`
 - `station.json` 保存这些事实和 identity 条件
 - 真机 run 的 provenance 来自 snapshots、`device_state.jsonl`、segments/raw/frame index 和离线审查
 - 端口变化时先跑 C# probes，不回到旧 Rust `station verify`
@@ -51,7 +51,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
 
 ### SMB100A
 
-- 使用 Raw TCP 5025 建连到 `host:port`
+- 使用 VISA USB resource 建连到 `USB::...::INSTR`
 - 发送 `*IDN?`
 - 发送 `SYST:ERR?`
 - 发送 `OUTP?`
