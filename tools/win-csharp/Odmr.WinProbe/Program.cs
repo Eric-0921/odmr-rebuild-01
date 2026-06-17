@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
 using Ivi.Visa;
@@ -349,10 +350,16 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     var baudRate = GetIntOption(options, "baud", Oe1022dDefaults.BaudRate);
     var durationSec = GetIntOption(options, "duration-sec", 300);
     var outDir = GetRequiredOption(options, "out-dir");
+    var inThreadProcessMode = GetOption(options, "in-thread-process-mode", "none").Trim().ToLowerInvariant();
 
     if (durationSec <= 0)
     {
         return Fail("--duration-sec must be positive");
+    }
+
+    if (inThreadProcessMode is not ("none" or "measurement-means"))
+    {
+        return Fail("--in-thread-process-mode must be `none` or `measurement-means`");
     }
 
     var rawDir = Path.Combine(outDir, "raw");
@@ -370,6 +377,11 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
     var frameSeq = 0L;
     var stats = new ProbeStats();
     var packetAudit = new PacketCounterAudit();
+    long processedFrames = 0;
+    long processedFiniteValues = 0;
+    long processedNonFiniteValues = 0;
+    double processedValueSum = 0.0;
+    long processingTotalTicks = 0;
     string? firstFrameTs = null;
     string? lastFrameTs = null;
     ulong? firstFrameMonotonicNs = null;
@@ -399,6 +411,17 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
                 stats.RawLenBadCount++;
                 stats.ReadErrors++;
                 continue;
+            }
+
+            if (inThreadProcessMode != "none")
+            {
+                var processingStart = Stopwatch.GetTimestamp();
+                var processingSummary = ProcessOe1022dRawFrame(payload, inThreadProcessMode);
+                processingTotalTicks += Stopwatch.GetTimestamp() - processingStart;
+                processedFrames++;
+                processedFiniteValues += processingSummary.FiniteValueCount;
+                processedNonFiniteValues += processingSummary.NonFiniteValueCount;
+                processedValueSum += processingSummary.ValueSum;
             }
 
             var monotonicNs = MonotonicNsSince(processStart);
@@ -445,33 +468,86 @@ static int OeRall(IReadOnlyDictionary<string, string> options)
 
     var elapsedMs = (long)(Stopwatch.GetElapsedTime(processStart).TotalMilliseconds);
     var rawBytesWritten = new FileInfo(rawPath).Length;
-    var summary = new ProbeSummary(
-        "oe-rall",
-        resourceName,
-        baudRate,
-        Oe1022dDefaults.RallFrameBytes,
-        Oe1022dDefaults.RallPostWriteDelayMs,
-        Oe1022dDefaults.VisaTimeoutMs,
-        durationSec,
-        startedAt,
-        finishedAt,
-        elapsedMs,
-        stats.ReadAttempts,
-        stats.FramesOk,
-        stats.ReadErrors,
-        stats.TimeoutCount,
-        stats.RawLenBadCount,
-        rawBytesWritten,
-        rawBytesWritten == stats.FramesOk * Oe1022dDefaults.RallFrameBytes,
-        PathRelative(outDir, rawPath),
-        PathRelative(outDir, indexPath),
-        PathRelative(outDir, segmentsPath),
-        packetAudit.ToSummary());
+    var processingTotalMs = processingTotalTicks * 1000.0 / Stopwatch.Frequency;
+    var processingMeanUsPerFrame = processedFrames > 0
+        ? processingTotalTicks * 1_000_000.0 / Stopwatch.Frequency / processedFrames
+        : 0.0;
+    var processedValueMean = processedFiniteValues > 0 ? processedValueSum / processedFiniteValues : 0.0;
+    var summary = new
+    {
+        command = "oe-rall",
+        resource = resourceName,
+        baud_rate = baudRate,
+        frame_bytes = Oe1022dDefaults.RallFrameBytes,
+        post_write_delay_ms = Oe1022dDefaults.RallPostWriteDelayMs,
+        visa_timeout_ms = Oe1022dDefaults.VisaTimeoutMs,
+        duration_sec = durationSec,
+        started_at = startedAt,
+        finished_at = finishedAt,
+        elapsed_ms = elapsedMs,
+        read_attempts = stats.ReadAttempts,
+        frames_ok = stats.FramesOk,
+        read_errors = stats.ReadErrors,
+        timeout_count = stats.TimeoutCount,
+        raw_len_bad_count = stats.RawLenBadCount,
+        raw_bytes_written = rawBytesWritten,
+        raw_size_matches_frames_ok = rawBytesWritten == stats.FramesOk * Oe1022dDefaults.RallFrameBytes,
+        raw_path = PathRelative(outDir, rawPath),
+        index_path = PathRelative(outDir, indexPath),
+        segments_path = PathRelative(outDir, segmentsPath),
+        packet_counter = packetAudit.ToSummary(),
+        in_thread_processing = new
+        {
+            mode = inThreadProcessMode,
+            processed_frames = processedFrames,
+            finite_value_count = processedFiniteValues,
+            non_finite_value_count = processedNonFiniteValues,
+            value_mean = processedFiniteValues > 0 && double.IsFinite(processedValueMean) ? processedValueMean : (double?)null,
+            processing_total_ms = processingTotalMs,
+            mean_processing_us_per_frame = processingMeanUsPerFrame
+        }
+    };
 
     File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
 
-    Console.WriteLine($"oe-rall done: frames_ok={stats.FramesOk}, timeouts={stats.TimeoutCount}, raw_len_bad={stats.RawLenBadCount}, delta_gt1={packetAudit.DeltaGt1Count}, out_dir={outDir}");
+    Console.WriteLine($"oe-rall done: frames_ok={stats.FramesOk}, timeouts={stats.TimeoutCount}, raw_len_bad={stats.RawLenBadCount}, delta_gt1={packetAudit.DeltaGt1Count}, process_mode={inThreadProcessMode}, out_dir={outDir}");
     return stats.TimeoutCount == 0 && stats.RawLenBadCount == 0 && packetAudit.DeltaGt1Count == 0 ? 0 : 2;
+}
+
+static (long FiniteValueCount, long NonFiniteValueCount, double ValueSum) ProcessOe1022dRawFrame(byte[] payload, string mode)
+{
+    return mode switch
+    {
+        "measurement-means" => ProcessOe1022dMeasurementMeans(payload),
+        _ => (0, 0, 0.0)
+    };
+}
+
+static (long FiniteValueCount, long NonFiniteValueCount, double ValueSum) ProcessOe1022dMeasurementMeans(byte[] payload)
+{
+    const int measurementBytes = 8000;
+    const int valueBytes = 8;
+
+    long finiteValueCount = 0;
+    long nonFiniteValueCount = 0;
+    double valueSum = 0.0;
+    var span = payload.AsSpan(0, measurementBytes);
+
+    for (var offset = 0; offset < span.Length; offset += valueBytes)
+    {
+        var rawBits = BinaryPrimitives.ReadInt64LittleEndian(span.Slice(offset, valueBytes));
+        var value = BitConverter.Int64BitsToDouble(rawBits);
+        if (!double.IsFinite(value))
+        {
+            nonFiniteValueCount++;
+            continue;
+        }
+
+        finiteValueCount++;
+        valueSum += value;
+    }
+
+    return (finiteValueCount, nonFiniteValueCount, valueSum);
 }
 
 static int Oe1300Rall(IReadOnlyDictionary<string, string> options)
@@ -941,7 +1017,7 @@ static void PrintUsage()
     Usage:
       Odmr.WinProbe visa-list
       Odmr.WinProbe oe-idn [--resource ASRL8::INSTR] [--baud 921600]
-      Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] --duration-sec 300 --out-dir <dir>
+      Odmr.WinProbe oe-rall [--resource ASRL8::INSTR] [--baud 921600] [--in-thread-process-mode none|measurement-means] --duration-sec 300 --out-dir <dir>
       Odmr.WinProbe oe1300-idn --port <COMx> [--baud 115200]
       Odmr.WinProbe oe1300-rall --port <COMx> [--baud 115200] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
