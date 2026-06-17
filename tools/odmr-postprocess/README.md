@@ -10,8 +10,8 @@
 runs/<run_id>/
   points.jsonl
   quality.jsonl
-  point_fields.jsonl
-  point_fields/*.npz
+  segments.jsonl
+  sample_values.csv
   smb_profile_snapshot.json
   oe_profile_snapshot.json
   laser_profile_snapshot.json
@@ -68,7 +68,7 @@ python3 tools/odmr-postprocess/build_odmr_samples.py \
 
 ## 设计边界
 
-- 不解析裸 `raw/oe1022d.rall`，优先消费当前 runtime 已生成的 point sidecar。
+- 直接消费 `sample_values.csv + segments.jsonl`，不再从 `raw/oe1022d.rall + frames.idx` 重建 sidecar。
 - 不静默校正频率轴错位，只输出 warning。
 - 不把 `quality` 和设备状态混进谱线归一化。
 - 同时输出 `signal_fit` 和 `signal_ml_z`，避免训练归一化覆盖物理 contrast。
@@ -79,8 +79,7 @@ python3 tools/odmr-postprocess/build_odmr_samples.py \
 
 ```bash
 python3 tools/odmr-postprocess/build_li_odmr_gpt_review.py \
-  --run runs/<run_id> \
-  --extract-missing-point-fields
+  --run runs/<run_id>
 ```
 
 输出：
@@ -94,9 +93,7 @@ runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_summary.json
 
 `li_odmr_gpt_review_<run_id>.csv` 是逐频点谱线明细。多 point run 会输出所有 point，例如 125 个 point、每条 641 个频点时，CSV 会有 `125 * 641 = 80125` 行。
 
-`li_odmr_gpt_review_<run_id>_metadata.csv/jsonl` 是 point 级元数据，每行一个 point，包含 `target_b_nt`、RF sweep、激光、overload、PLL、sidecar 路径和折叠统计。
-
-如果 Windows 端只有 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl`，没有 `point_fields.jsonl`，`--extract-missing-point-fields` 会先离线重建 point sidecar。
+`li_odmr_gpt_review_<run_id>_metadata.csv/jsonl` 是 point 级元数据，每行一个 point，包含 `target_b_nt`、RF sweep、激光、overload、PLL 和折叠统计。`sidecar_npz` 现在固定标记为 `sample_values.csv` 来源。
 
 给网页版 GPT 时建议说明：
 
@@ -117,8 +114,7 @@ runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_summary.json
 
 ```bash
 python3 tools/odmr-postprocess/build_odmr_ml_dataset.py \
-  --run runs/<run_id> \
-  --extract-missing-point-fields
+  --run runs/<run_id>
 ```
 
 输出：
@@ -150,7 +146,7 @@ X_bnoise_mean
 sample_count
 ```
 
-`ml_samples_<run_id>.csv/jsonl` 是 point 级索引和质量表，包含 setpoint 标签、overload/PLL、SNR-like 指标、粗峰位、零交叉数量和对应 sidecar 路径。
+`ml_samples_<run_id>.csv/jsonl` 是 point 级索引和质量表，包含 setpoint 标签、overload/PLL、SNR-like 指标、粗峰位、零交叉数量和对应 decoded truth 来源。
 
 训练建议：
 

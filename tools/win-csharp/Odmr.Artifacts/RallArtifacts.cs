@@ -96,11 +96,28 @@ public sealed record SegmentRecord(
     [property: JsonPropertyName("end_ts")] string EndTs,
     [property: JsonPropertyName("start_monotonic_ns")] ulong StartMonotonicNs,
     [property: JsonPropertyName("end_monotonic_ns")] ulong EndMonotonicNs,
-    [property: JsonPropertyName("raw_file")] string RawFile,
-    [property: JsonPropertyName("raw_offset_start")] long RawOffsetStart,
-    [property: JsonPropertyName("raw_offset_end")] long RawOffsetEnd,
-    [property: JsonPropertyName("frame_seq_start")] long? FrameSeqStart,
-    [property: JsonPropertyName("frame_seq_end")] long? FrameSeqEnd);
+    [property: JsonPropertyName("source_file")] string SourceFile,
+    [property: JsonPropertyName("block_seq_start")] long? BlockSeqStart,
+    [property: JsonPropertyName("block_seq_end")] long? BlockSeqEnd,
+    [property: JsonPropertyName("sample_index_start")] long SampleIndexStart,
+    [property: JsonPropertyName("sample_index_end")] long SampleIndexEnd);
+
+public sealed record CollectorFrameRecord(
+    [property: JsonPropertyName("schema_version")] int SchemaVersion,
+    [property: JsonPropertyName("source")] string Source,
+    [property: JsonPropertyName("frame_seq")] long FrameSeq,
+    [property: JsonPropertyName("ts")] string Ts,
+    [property: JsonPropertyName("monotonic_ns")] ulong MonotonicNs,
+    [property: JsonPropertyName("sample_index_start")] long SampleIndexStart,
+    [property: JsonPropertyName("sample_index_end")] long SampleIndexEnd,
+    [property: JsonPropertyName("samples_per_frame")] int SamplesPerFrame,
+    [property: JsonPropertyName("device_packet_counter")] byte DevicePacketCounter,
+    [property: JsonPropertyName("b_ref_source_code")] byte BRefSourceCode,
+    [property: JsonPropertyName("b_ref_slope_code")] byte BRefSlopeCode,
+    [property: JsonPropertyName("b_ref_current_freq_hz")] double BRefCurrentFreqHz,
+    [property: JsonPropertyName("b_input_overload")] byte BInputOverload,
+    [property: JsonPropertyName("b_gain_overload")] byte BGainOverload,
+    [property: JsonPropertyName("b_pll_locked")] byte BPllLocked);
 
 public sealed record BaselineAxisSnapshot(
     [property: JsonPropertyName("axis")] string Axis,
@@ -169,10 +186,10 @@ public sealed record RfExposureWindowRecord(
 
 public sealed record SegmentBindingRecord(
     [property: JsonPropertyName("segment_id")] string SegmentId,
-    [property: JsonPropertyName("frame_seq_start")] long? FrameSeqStart,
-    [property: JsonPropertyName("frame_seq_end")] long? FrameSeqEnd,
-    [property: JsonPropertyName("raw_offset_start")] long RawOffsetStart,
-    [property: JsonPropertyName("raw_offset_end")] long RawOffsetEnd);
+    [property: JsonPropertyName("block_seq_start")] long? BlockSeqStart,
+    [property: JsonPropertyName("block_seq_end")] long? BlockSeqEnd,
+    [property: JsonPropertyName("sample_index_start")] long SampleIndexStart,
+    [property: JsonPropertyName("sample_index_end")] long SampleIndexEnd);
 
 public sealed record DeviceStateRecord(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
@@ -237,14 +254,16 @@ public sealed record RunSummaryRecord(
     [property: JsonPropertyName("points_passed")] int PointsPassed,
     [property: JsonPropertyName("points_failed")] int PointsFailed,
     [property: JsonPropertyName("frames_total")] long FramesTotal,
+    [property: JsonPropertyName("samples_total")] long SamplesTotal,
     [property: JsonPropertyName("started_at")] string StartedAt,
     [property: JsonPropertyName("ended_at")] string EndedAt,
     [property: JsonPropertyName("failure")] string? Failure,
     [property: JsonPropertyName("read_attempts")] long ReadAttempts,
     [property: JsonPropertyName("timeout_count")] long TimeoutCount,
     [property: JsonPropertyName("raw_len_bad_count")] long RawLenBadCount,
-    [property: JsonPropertyName("raw_bytes_written")] long RawBytesWritten,
-    [property: JsonPropertyName("raw_size_matches_frames_ok")] bool RawSizeMatchesFramesOk,
+    [property: JsonPropertyName("collector_frames_path")] string CollectorFramesPath,
+    [property: JsonPropertyName("parameter_values_path")] string ParameterValuesPath,
+    [property: JsonPropertyName("sample_values_path")] string SampleValuesPath,
     [property: JsonPropertyName("packet_counter")] PacketCounterSummary PacketCounter);
 
 public sealed record EventRecord(
@@ -259,6 +278,11 @@ public sealed record EventRecord(
 
 public static class RallArtifactWriter
 {
+    public static void WriteJsonlRecord<T>(StreamWriter writer, T record)
+    {
+        writer.WriteLine(JsonSerializer.Serialize(record, JsonOptions.Default));
+    }
+
     public static void WriteFrameIndexRecord(
         StreamWriter writer,
         long frameSeq,
@@ -284,6 +308,11 @@ public static class RallArtifactWriter
         writer.WriteLine();
     }
 
+    public static void AppendCollectorFrameRecord(string collectorFramesPath, CollectorFrameRecord record)
+    {
+        AppendJsonl(collectorFramesPath, record);
+    }
+
     public static void WriteWholeProbeSegment(
         string segmentsPath,
         string outDir,
@@ -305,10 +334,10 @@ public static class RallArtifactWriter
             startMonotonicNs,
             endMonotonicNs,
             "raw/oe1022d.rall",
-            0,
-            rawOffsetEnd,
             framesOk > 0 ? (long?)0 : null,
-            framesOk > 0 ? framesOk - 1 : null);
+            framesOk > 0 ? framesOk - 1 : null,
+            0,
+            framesOk * 50);
 
         File.WriteAllText(segmentsPath, JsonSerializer.Serialize(segment, JsonOptions.Default) + Environment.NewLine, new UTF8Encoding(false));
     }

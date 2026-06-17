@@ -11,33 +11,16 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from decoded_truth import (
+    ensure_decoded_truth,
+    load_json,
+    load_jsonl,
+    load_point_series_map,
+)
 
 SCHEMA_VERSION = 1
 DEFAULT_SAMPLE_INTERVAL_MS = 1.0
 DEFAULT_LABEL_SOURCE = "helmholtz_setpoint_calibrated"
-
-
-def load_json(path: Path, default: Any = None) -> Any:
-    if not path.exists():
-        return default
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def load_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    if not path.exists():
-        return rows
-    with path.open("r", encoding="utf-8") as handle:
-        for line_no, line in enumerate(handle, start=1):
-            text = line.strip()
-            if not text:
-                continue
-            try:
-                rows.append(json.loads(text))
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"{path}:{line_no}: invalid JSONL row") from exc
-    return rows
 
 
 def point_id(row: dict[str, Any]) -> str:
@@ -171,23 +154,6 @@ def target_b(point: dict[str, Any]) -> tuple[float, float, float]:
     return (numeric(padded[0]), numeric(padded[1]), numeric(padded[2]))
 
 
-def npz_path_for(run_dir: Path, field_row: dict[str, Any]) -> Path | None:
-    sidecar = field_row.get("sidecar") or {}
-    rel = sidecar.get("relative_path")
-    if not rel:
-        return None
-    return run_dir / str(rel)
-
-
-def load_signal(np: Any, npz_path: Path, key: str) -> list[float]:
-    with np.load(npz_path, allow_pickle=False) as data:
-        if key not in data:
-            available = ", ".join(sorted(data.files))
-            raise KeyError(f"{npz_path}: missing key {key!r}; available keys: {available}")
-        arr = data[key]
-        return [float(v) for v in np.ravel(arr)]
-
-
 def bin_trace(
     signal: list[float],
     frequency_grid: list[float],
@@ -299,18 +265,18 @@ def build(args: argparse.Namespace) -> int:
         return 2
 
     run_dir = Path(args.run).resolve()
+    ensure_decoded_truth(run_dir)
     out_dir = Path(args.out).resolve() if args.out else run_dir / "postprocess"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     points = load_jsonl(run_dir / "points.jsonl")
-    point_fields = load_jsonl(run_dir / "point_fields.jsonl")
     quality_rows = load_jsonl(run_dir / "quality.jsonl")
     smb_snapshot = load_json(run_dir / "smb_profile_snapshot.json", {})
     oe_snapshot = load_json(run_dir / "oe_profile_snapshot.json", {})
     laser_snapshot = load_json(run_dir / "laser_profile_snapshot.json", {})
     calibration_snapshot = load_json(run_dir / "calibration_snapshot.json", {})
 
-    fields_by_point = index_by_point(point_fields)
+    traces_by_point = load_point_series_map(run_dir, [args.channel_key])
     quality_by_point = index_by_point(quality_rows)
 
     spectra_path = out_dir / "odmr_spectra.csv"
@@ -354,7 +320,6 @@ def build(args: argparse.Namespace) -> int:
         for point in points:
             point_count += 1
             pid = point_id(point)
-            field_row = fields_by_point.get(pid)
             quality = quality_by_point.get(pid, {})
             rf = resolve_rf(point, smb_snapshot)
             start_hz = numeric(rf.get("start_hz"))
@@ -373,18 +338,14 @@ def build(args: argparse.Namespace) -> int:
                 "raw_samples": 0,
             }
             norm_meta: dict[str, Any] = {}
-            sidecar_path = npz_path_for(run_dir, field_row or {}) if field_row else None
+            trace = traces_by_point.get(pid)
 
-            if not field_row:
-                warnings.append("missing_point_fields")
-            elif sidecar_path is None:
-                warnings.append("missing_sidecar_path")
-            elif not sidecar_path.exists():
-                warnings.append("missing_sidecar_file")
+            if trace is None:
+                warnings.append("missing_decoded_trace")
             elif not math.isfinite(dwell_ms) or dwell_ms <= 0:
                 warnings.append("invalid_dwell_ms")
             else:
-                signal = load_signal(np, sidecar_path, args.channel_key)
+                signal = trace[args.channel_key]
                 bins, signal_meta = bin_trace(
                     signal=signal,
                     frequency_grid=frequency_grid,
@@ -436,7 +397,7 @@ def build(args: argparse.Namespace) -> int:
                     "dwell_ms": finite_or_none(dwell_ms),
                     "power_dbm": finite_or_none(numeric(rf.get("power_dbm"))),
                 },
-                "sidecar": str(sidecar_path.relative_to(run_dir)) if sidecar_path and sidecar_path.exists() else None,
+                "sidecar": "sample_values.csv" if trace is not None else None,
                 "channel_key": args.channel_key,
                 "frequency_count_expected": len(frequency_grid),
                 "frequency_count_written": len(bins),

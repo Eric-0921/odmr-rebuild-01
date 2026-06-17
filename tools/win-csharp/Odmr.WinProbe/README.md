@@ -11,7 +11,8 @@ loop:
 write RALL?
 sleep 30ms
 blocking read 12288 bytes
-append raw frame and frame index
+direct-decode in-thread
+append collector_frames + parameter_values + sample_values
 ```
 
 ## Frozen RALL Hot Path
@@ -26,8 +27,10 @@ Allowed inside the loop:
 - write `RALL?\r`
 - sleep `30ms`
 - blocking exact read `12288` bytes
-- append raw frame
-- append frame index
+- decode `20 x 50` big-endian `double`
+- append `collector_frames.jsonl`
+- append `parameter_values.csv`
+- append `sample_values.csv`
 - update minimal counters from `payload[12287]`
 
 Forbidden inside the loop:
@@ -38,8 +41,6 @@ Forbidden inside the loop:
 - zero-byte retry
 - timeout clear/retry
 - per-frame console output
-- per-frame object serialization
-- RALL parsing
 - GUI publish
 - async or multi-reader behavior
 
@@ -72,12 +73,12 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- device-command-check
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/win_csharp_run_execute_minimal
 ```
 
-`oe-rall` baseline writes:
+`oe-rall --in-thread-process-mode field-decode-csv --write-raw false` reflects the
+same direct-decode direction now used by runtime. It writes:
 
-- `raw/oe1022d.rall`
-- `raw/oe1022d.frames.idx.jsonl`
-- `segments.jsonl`
 - `collector_frames.jsonl`
+- `parameter_values.csv`
+- `preview_values.csv`
 - `summary.json`
 
 `oe-rall --in-thread-process-mode measurement-means` is a controlled collector
@@ -99,18 +100,8 @@ but after each `12288 B` exact read it immediately:
 - writes one frame-level row into `parameter_values.csv`
 - optionally writes one selected field into `preview_values.csv`
 
-This mode is intentionally probe-only. It exists to answer a narrower question:
-whether OE1022D can move from “store unreadable `raw/rall` first” to “decode and
-persist directly usable CSV/JSON in the collector thread” without materially
-harming continuity.
-
-When `--write-raw false`, this mode does not keep the binary `raw/oe1022d.rall`
-file. The direct-decode probe output is:
-
-- `collector_frames.jsonl`
-- `parameter_values.csv`
-- `preview_values.csv` when `--write-values true`
-- `summary.json`
+This mode established the direct-decode contract now used by runtime: do not
+keep `raw/oe1022d.rall` as formal truth; persist decoded CSV/JSON directly.
 
 Current verified OE1022D direct-decode layout is:
 
@@ -152,7 +143,9 @@ The summary reports both:
 It writes:
 
 - `summary.json`
+- `collector_blocks.jsonl`
 - `parameter_values.csv`
+- `sample_values.csv`
 - `preview_values.csv` when `--write-values true`
 
 Current verified interpretation is:
@@ -190,21 +183,23 @@ not as the default collector behavior.
 - snapshots: station, plan, calibration, SMB, OE, laser
 - `run_manifest.json`
 - `events.jsonl`
-- `raw/oe1022d.rall`
-- `raw/oe1022d.frames.idx.jsonl`
+- `collector_frames.jsonl`
+- `parameter_values.csv`
+- `sample_values.csv`
 - `segments.jsonl`
 - `points.jsonl`
 - `quality.jsonl`
+- `device_state.jsonl`
 - `summary.json`
 
 `artifact-check` is an offline run directory contract check. It reads existing
 artifacts only and does not open instruments or touch the collector.
 
-`audit-continuity` is an offline device-packet-counter audit. It does not parse
-RALL payloads in the collector thread.
+`audit-continuity` is an offline device-packet-counter audit over
+`collector_frames.jsonl`. It does not reopen raw binary files.
 
 `device-command-check` lists the migrated C# command catalog and the archived
 `win-csharp-rebuild` Rust command source each entry came from.
 
-`live-replay` reduces existing `events.jsonl`, frame index, and summary files
-into a current live snapshot. It does not connect to hardware.
+`live-replay` reduces existing `events.jsonl`, `collector_frames.jsonl`, and
+summary files into a current live snapshot. It does not connect to hardware.

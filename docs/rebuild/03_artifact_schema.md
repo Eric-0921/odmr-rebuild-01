@@ -1,6 +1,6 @@
 # Artifact Schema
 
-Artifact 是 run 的事实来源。第一版使用普通文件和 JSONL，便于 grep、replay、Python 分析和人工审查。
+Artifact 是 run 的事实来源。当前正式合同已经切到 direct-decode：`collector_frames.jsonl + parameter_values.csv + sample_values.csv + segments.jsonl`。本文件后续章节仍保留部分 raw truth 历史描述，若有冲突，以当前运行时代码和本段说明为准。
 
 ## Run 目录
 
@@ -15,16 +15,12 @@ runs/<run_id>/
   plan_snapshot.json
   events.jsonl
   points.jsonl
-  point_fields.jsonl
-  point_fields/
-    seg_<point_id>_0000.npz
-    seg_<point_id>_0000.manifest.json
+  collector_frames.jsonl
+  parameter_values.csv
+  sample_values.csv
   segments.jsonl
   quality.jsonl
-  raw/
-    oe1022d.rall
-    oe1022d.frames.idx.jsonl
-    oe1022d.frames.parsed.jsonl   # 仅 debug artifact mode
+  device_state.jsonl
   summary.json
 ```
 

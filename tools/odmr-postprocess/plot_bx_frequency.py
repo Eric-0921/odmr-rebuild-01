@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from decoded_truth import ensure_decoded_truth, load_json, load_jsonl, load_point_series_map
 
 try:
     import matplotlib
@@ -29,31 +30,6 @@ try:
     import matplotlib.pyplot as plt
 except ImportError as exc:  # pragma: no cover
     raise RuntimeError("matplotlib is required: python3 -m pip install matplotlib") from exc
-
-
-def load_json(path: Path, default: Any = None) -> Any:
-    if not path.exists():
-        return default
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def load_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    if not path.exists():
-        return rows
-    with path.open("r", encoding="utf-8") as handle:
-        for line_no, line in enumerate(handle, start=1):
-            text = line.strip()
-            if not text:
-                continue
-            try:
-                rows.append(json.loads(text))
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"{path}:{line_no}: invalid JSONL row") from exc
-    return rows
-
-
 def parse_iso_ts(ts: str) -> float:
     """Return seconds since epoch for an ISO-8601 timestamp string."""
     # Python 3.11+ has datetime.fromisoformat with Z support; keep simple here.
@@ -229,40 +205,26 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     run_dir = Path(args.run).resolve()
+    ensure_decoded_truth(run_dir)
     out_dir = Path(args.out_dir).resolve() if args.out_dir else run_dir / "postprocess" / "plots"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    point_fields = load_jsonl(run_dir / "point_fields.jsonl")
     points = load_jsonl(run_dir / "points.jsonl")
     events = load_jsonl(run_dir / "events.jsonl")
     smb_snapshot = load_json(run_dir / "smb_profile_snapshot.json", {})
     run_manifest = load_json(run_dir / "run_manifest.json", {})
     run_id = run_manifest.get("run_id") or run_dir.name
+    traces_by_point = load_point_series_map(run_dir, [args.channel_key])
 
     points_by_id = {p["point_id"]: p for p in points}
     summaries: list[dict[str, Any]] = []
 
-    for pf in point_fields:
-        pid = pf["point_id"]
+    for pid, trace in traces_by_point.items():
         point = points_by_id.get(pid)
         if point is None:
             print(f"warning: no point record for {pid}", file=sys.stderr)
             continue
-
-        sidecar_rel = pf.get("sidecar", {}).get("relative_path")
-        if not sidecar_rel:
-            print(f"warning: missing sidecar for {pid}", file=sys.stderr)
-            continue
-        npz_path = run_dir / sidecar_rel
-        if not npz_path.exists():
-            print(f"warning: missing npz file {npz_path}", file=sys.stderr)
-            continue
-
-        with np.load(npz_path, allow_pickle=False) as data:
-            if args.channel_key not in data:
-                print(f"warning: npz {npz_path} missing key {args.channel_key}", file=sys.stderr)
-                continue
-            b_x = np.asarray(data[args.channel_key], dtype=np.float64)
+        b_x = np.asarray(trace[args.channel_key], dtype=np.float64)
 
         rf = resolve_rf(point, smb_snapshot)
         plot_path = out_dir / f"bx_vs_frequency_{pid}.png"

@@ -18,7 +18,7 @@ public sealed record SweepOnlyRunOptions(
 
 public sealed record CollectorCursor(
     long NextFrameSeq,
-    long NextRawOffset,
+    long NextSampleIndex,
     string Timestamp,
     ulong MonotonicNs);
 
@@ -39,10 +39,10 @@ public sealed record SweepOnlyRunSummary(
     [property: JsonPropertyName("read_errors")] long ReadErrors,
     [property: JsonPropertyName("timeout_count")] long TimeoutCount,
     [property: JsonPropertyName("raw_len_bad_count")] long RawLenBadCount,
-    [property: JsonPropertyName("raw_bytes_written")] long RawBytesWritten,
-    [property: JsonPropertyName("raw_size_matches_frames_ok")] bool RawSizeMatchesFramesOk,
-    [property: JsonPropertyName("raw_path")] string RawPath,
-    [property: JsonPropertyName("index_path")] string IndexPath,
+    [property: JsonPropertyName("samples_total")] long SamplesTotal,
+    [property: JsonPropertyName("collector_frames_path")] string CollectorFramesPath,
+    [property: JsonPropertyName("parameter_values_path")] string ParameterValuesPath,
+    [property: JsonPropertyName("sample_values_path")] string SampleValuesPath,
     [property: JsonPropertyName("segments_path")] string SegmentsPath,
     [property: JsonPropertyName("sweep")] SmbSweepSpec Sweep,
     [property: JsonPropertyName("repeat_count")] int RepeatCount,
@@ -55,11 +55,10 @@ public static class SweepOnlyRun
 
     public static SweepOnlyRunSummary Execute(SweepOnlyRunOptions options)
     {
-        var rawDir = Path.Combine(options.OutDir, "raw");
-        Directory.CreateDirectory(rawDir);
-
-        var rawPath = Path.Combine(rawDir, "oe1022d.rall");
-        var indexPath = Path.Combine(rawDir, "oe1022d.frames.idx.jsonl");
+        Directory.CreateDirectory(options.OutDir);
+        var collectorFramesPath = Path.Combine(options.OutDir, "collector_frames.jsonl");
+        var parameterValuesPath = Path.Combine(options.OutDir, "parameter_values.csv");
+        var sampleValuesPath = Path.Combine(options.OutDir, "sample_values.csv");
         var segmentsPath = Path.Combine(options.OutDir, "segments.jsonl");
         var summaryPath = Path.Combine(options.OutDir, "summary.json");
         if (File.Exists(segmentsPath))
@@ -72,8 +71,9 @@ public static class SweepOnlyRun
         using var collector = new OeRallCollector(
             options.OeResource,
             options.OeBaudRate,
-            rawPath,
-            indexPath,
+            collectorFramesPath,
+            parameterValuesPath,
+            sampleValuesPath,
             processStart);
         collector.Start();
         collector.WaitForFirstFrame(TimeSpan.FromSeconds(5));
@@ -112,18 +112,18 @@ public static class SweepOnlyRun
                         new SegmentRecord(
                             1,
                             runId,
-                            $"seg_smb_sweep_only_{sweepIndex:0000}",
-                            "smb_sweep_only",
-                            "oe1022d_main",
-                            segmentStartTs,
-                            segmentEndTs,
-                            segmentStartMonotonicNs,
-                            segmentEndMonotonicNs,
-                            "raw/oe1022d.rall",
-                            segmentStart.NextRawOffset,
-                            segmentEnd.NextRawOffset,
-                            framesInSegment > 0 ? segmentStart.NextFrameSeq : null,
-                            framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null));
+                        $"seg_smb_sweep_only_{sweepIndex:0000}",
+                        "smb_sweep_only",
+                        "oe1022d_main",
+                        segmentStartTs,
+                        segmentEndTs,
+                        segmentStartMonotonicNs,
+                        segmentEndMonotonicNs,
+                        "sample_values.csv",
+                        framesInSegment > 0 ? segmentStart.NextFrameSeq : null,
+                        framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null,
+                        segmentStart.NextSampleIndex,
+                        segmentEnd.NextSampleIndex));
                 }
             }
             finally
@@ -136,7 +136,7 @@ public static class SweepOnlyRun
         var snapshot = collector.Snapshot();
         var finishedAt = UtcNowString();
         var elapsedMs = (long)Stopwatch.GetElapsedTime(processStart).TotalMilliseconds;
-        var rawBytesWritten = new FileInfo(rawPath).Length;
+        var samplesTotal = snapshot.SamplesWritten;
 
         var summary = new SweepOnlyRunSummary(
             "sweep-only-run",
@@ -155,10 +155,10 @@ public static class SweepOnlyRun
             snapshot.Stats.ReadErrors,
             snapshot.Stats.TimeoutCount,
             snapshot.Stats.RawLenBadCount,
-            rawBytesWritten,
-            rawBytesWritten == snapshot.Stats.FramesOk * Oe1022dDefaults.RallFrameBytes,
-            PathRelative(options.OutDir, rawPath),
-            PathRelative(options.OutDir, indexPath),
+            samplesTotal,
+            PathRelative(options.OutDir, collectorFramesPath),
+            PathRelative(options.OutDir, parameterValuesPath),
+            PathRelative(options.OutDir, sampleValuesPath),
             PathRelative(options.OutDir, segmentsPath),
             SmbSweepSpec.Default,
             options.RepeatCount,
@@ -180,14 +180,15 @@ public static class SweepOnlyRun
     private static string PathRelative(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
 }
 
-public sealed record OeRallCollectorSnapshot(ProbeStats Stats, PacketCounterAudit PacketCounter);
+public sealed record OeRallCollectorSnapshot(ProbeStats Stats, PacketCounterAudit PacketCounter, long SamplesWritten);
 
 public sealed class OeRallCollector : IDisposable
 {
     private readonly string resourceName;
     private readonly int baudRate;
-    private readonly string rawPath;
-    private readonly string indexPath;
+    private readonly string collectorFramesPath;
+    private readonly string parameterValuesPath;
+    private readonly string sampleValuesPath;
     private readonly long processStart;
     private readonly object sync = new();
     private readonly ManualResetEventSlim firstFrameReady = new(false);
@@ -196,17 +197,24 @@ public sealed class OeRallCollector : IDisposable
     private volatile bool stopRequested;
     private Thread? thread;
     private Exception? failure;
-    private long nextRawOffset;
     private long frameSeq;
+    private long nextSampleIndex;
     private string lastTs;
     private ulong lastMonotonicNs;
 
-    public OeRallCollector(string resourceName, int baudRate, string rawPath, string indexPath, long processStart)
+    public OeRallCollector(
+        string resourceName,
+        int baudRate,
+        string collectorFramesPath,
+        string parameterValuesPath,
+        string sampleValuesPath,
+        long processStart)
     {
         this.resourceName = resourceName;
         this.baudRate = baudRate;
-        this.rawPath = rawPath;
-        this.indexPath = indexPath;
+        this.collectorFramesPath = collectorFramesPath;
+        this.parameterValuesPath = parameterValuesPath;
+        this.sampleValuesPath = sampleValuesPath;
         this.processStart = processStart;
         lastTs = SweepOnlyRunCollectorTime.ExecuteTimestampForCollector();
     }
@@ -232,7 +240,7 @@ public sealed class OeRallCollector : IDisposable
     {
         lock (sync)
         {
-            return new CollectorCursor(frameSeq, nextRawOffset, lastTs, lastMonotonicNs);
+            return new CollectorCursor(frameSeq, nextSampleIndex, lastTs, lastMonotonicNs);
         }
     }
 
@@ -249,7 +257,8 @@ public sealed class OeRallCollector : IDisposable
                     TimeoutCount = stats.TimeoutCount,
                     RawLenBadCount = stats.RawLenBadCount
                 },
-                packetAudit);
+                packetAudit,
+                nextSampleIndex);
         }
     }
 
@@ -272,14 +281,37 @@ public sealed class OeRallCollector : IDisposable
         try
         {
             using var oe = Oe1022dVisa.Open(resourceName, baudRate);
-            using var raw = new FileStream(rawPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 1024 * 1024);
-            using var index = new StreamWriter(
-                new FileStream(indexPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
+            using var collectorFrames = new StreamWriter(
+                new FileStream(collectorFramesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
+                new UTF8Encoding(false));
+            using var parameterValues = new StreamWriter(
+                new FileStream(parameterValuesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 256 * 1024),
+                new UTF8Encoding(false));
+            using var sampleValues = new StreamWriter(
+                new FileStream(sampleValuesPath, FileMode.Create, FileAccess.Write, FileShare.Read, bufferSize: 1024 * 1024),
                 new UTF8Encoding(false));
             var payload = new byte[Oe1022dDefaults.RallFrameBytes];
+            var fieldSums = new double[Oe1022dDirectDecode.MeasurementFields.Length];
+            var fieldCounts = new long[Oe1022dDirectDecode.MeasurementFields.Length];
 
-            // Frozen LabVIEW-like RALL hot path: write, 30ms delay, exact blocking read,
-            // append raw, append frame index. No parser, retry, GUI, or async fan-out here.
+            parameterValues.Write("frame_seq,monotonic_ns,device_packet_counter,b_ref_source_code,b_ref_slope_code,b_ref_current_freq_hz,b_input_overload,b_gain_overload,b_pll_locked");
+            foreach (var field in Oe1022dDirectDecode.MeasurementFields)
+            {
+                parameterValues.Write(',');
+                parameterValues.Write(field.Key);
+            }
+            parameterValues.WriteLine();
+
+            sampleValues.Write("frame_seq,sample_in_frame,global_sample_index,monotonic_ns,device_packet_counter,b_ref_source_code,b_ref_slope_code,b_ref_current_freq_hz,b_input_overload,b_gain_overload,b_pll_locked");
+            foreach (var field in Oe1022dDirectDecode.MeasurementFields)
+            {
+                sampleValues.Write(',');
+                sampleValues.Write(field.Key);
+            }
+            sampleValues.WriteLine();
+
+            // Frozen direct-decode hot path: write, 30ms delay, exact blocking read,
+            // same-thread decode, append decoded truth. No retry, GUI, or async fan-out here.
             while (!stopRequested)
             {
                 lock (sync)
@@ -306,14 +338,102 @@ public sealed class OeRallCollector : IDisposable
 
                     var monotonicNs = MonotonicNsSince(processStart);
                     var ts = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", System.Globalization.CultureInfo.InvariantCulture);
-                    raw.Write(payload, 0, payload.Length);
                     var counter = payload[Oe1022dDefaults.DevicePacketCounterOffset];
+                    var status = Oe1022dDirectDecode.ReadStatus(payload);
+                    Array.Clear(fieldSums, 0, fieldSums.Length);
+                    Array.Clear(fieldCounts, 0, fieldCounts.Length);
+                    var frameSampleStart = nextSampleIndex;
+                    var frameSampleEnd = frameSampleStart + Oe1022dDirectDecode.SamplesPerFrame;
+
+                    for (var sampleIndex = 0; sampleIndex < Oe1022dDirectDecode.SamplesPerFrame; sampleIndex++)
+                    {
+                        sampleValues.Write(frameSeq.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(sampleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write((frameSampleStart + sampleIndex).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(monotonicNs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(counter.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(status.BRefSourceCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(status.BRefSlopeCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(status.BRefCurrentFreqHz.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(status.BInputOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(status.BGainOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        sampleValues.Write(',');
+                        sampleValues.Write(status.BPllLocked.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+                        for (var fieldIndex = 0; fieldIndex < Oe1022dDirectDecode.MeasurementFields.Length; fieldIndex++)
+                        {
+                            var value = Oe1022dDirectDecode.ReadMeasurementValue(payload, fieldIndex, sampleIndex);
+                            if (double.IsFinite(value))
+                            {
+                                fieldSums[fieldIndex] += value;
+                                fieldCounts[fieldIndex]++;
+                            }
+
+                            sampleValues.Write(',');
+                            sampleValues.Write(value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                        }
+
+                        sampleValues.WriteLine();
+                    }
+
+                    parameterValues.Write(frameSeq.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    parameterValues.Write(',');
+                    parameterValues.Write(monotonicNs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    parameterValues.Write(',');
+                    parameterValues.Write(counter.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    parameterValues.Write(',');
+                    parameterValues.Write(status.BRefSourceCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    parameterValues.Write(',');
+                    parameterValues.Write(status.BRefSlopeCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    parameterValues.Write(',');
+                    parameterValues.Write(status.BRefCurrentFreqHz.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                    parameterValues.Write(',');
+                    parameterValues.Write(status.BInputOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    parameterValues.Write(',');
+                    parameterValues.Write(status.BGainOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    parameterValues.Write(',');
+                    parameterValues.Write(status.BPllLocked.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    for (var fieldIndex = 0; fieldIndex < Oe1022dDirectDecode.MeasurementFields.Length; fieldIndex++)
+                    {
+                        var mean = fieldCounts[fieldIndex] > 0
+                            ? fieldSums[fieldIndex] / fieldCounts[fieldIndex]
+                            : double.NaN;
+                        parameterValues.Write(',');
+                        parameterValues.Write(mean.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                    }
+                    parameterValues.WriteLine();
 
                     lock (sync)
                     {
                         packetAudit.Record(counter);
-                        RallArtifactWriter.WriteFrameIndexRecord(index, frameSeq, ts, monotonicNs, nextRawOffset, payload.Length, counter);
-                        nextRawOffset += payload.Length;
+                        RallArtifactWriter.WriteJsonlRecord(
+                            collectorFrames,
+                            new CollectorFrameRecord(
+                                1,
+                                "oe1022d_main",
+                                frameSeq,
+                                ts,
+                                monotonicNs,
+                                frameSampleStart,
+                                frameSampleEnd,
+                                Oe1022dDirectDecode.SamplesPerFrame,
+                                counter,
+                                status.BRefSourceCode,
+                                status.BRefSlopeCode,
+                                status.BRefCurrentFreqHz,
+                                status.BInputOverload,
+                                status.BGainOverload,
+                                status.BPllLocked));
+                        nextSampleIndex = frameSampleEnd;
                         frameSeq++;
                         stats.FramesOk++;
                         lastTs = ts;
@@ -332,8 +452,9 @@ public sealed class OeRallCollector : IDisposable
                 }
             }
 
-            raw.Flush(true);
-            index.Flush();
+            collectorFrames.Flush();
+            parameterValues.Flush();
+            sampleValues.Flush();
         }
         catch (Exception ex)
         {

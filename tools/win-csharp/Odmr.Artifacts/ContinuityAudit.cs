@@ -6,7 +6,7 @@ namespace Odmr.Artifacts;
 public sealed record ContinuityAuditReport(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,
     [property: JsonPropertyName("run_dir")] string RunDir,
-    [property: JsonPropertyName("parsed_frames_file")] string ParsedFramesFile,
+    [property: JsonPropertyName("collector_frames_file")] string CollectorFramesFile,
     [property: JsonPropertyName("segments_file")] string SegmentsFile,
     [property: JsonPropertyName("frames_total")] long FramesTotal,
     [property: JsonPropertyName("frames_usable")] long FramesUsable,
@@ -63,25 +63,24 @@ public sealed record ContinuitySegmentReport(
     [property: JsonPropertyName("verdict")] string Verdict,
     [property: JsonPropertyName("suspect_boundaries")] IReadOnlyList<object> SuspectBoundaries);
 
-public sealed record FrameIndexAuditRecord(
+public sealed record CollectorFrameAuditRecord(
     [property: JsonPropertyName("frame_seq")] long FrameSeq,
     [property: JsonPropertyName("ts")] string Ts,
     [property: JsonPropertyName("monotonic_ns")] ulong MonotonicNs,
-    [property: JsonPropertyName("raw_offset")] long RawOffset,
-    [property: JsonPropertyName("raw_len")] long RawLen,
-    [property: JsonPropertyName("device_packet_counter")] byte? DevicePacketCounter,
-    [property: JsonPropertyName("parse_status")] string ParseStatus,
-    [property: JsonPropertyName("duplicate_of")] long? DuplicateOf);
+    [property: JsonPropertyName("sample_index_start")] long SampleIndexStart,
+    [property: JsonPropertyName("sample_index_end")] long SampleIndexEnd,
+    [property: JsonPropertyName("samples_per_frame")] int SamplesPerFrame,
+    [property: JsonPropertyName("device_packet_counter")] byte DevicePacketCounter);
 
 public static class ContinuityAudit
 {
     public static ContinuityAuditReport Audit(string runDir)
     {
-        var indexPath = Path.Combine(runDir, "raw", "oe1022d.frames.idx.jsonl");
+        var collectorFramesPath = Path.Combine(runDir, "collector_frames.jsonl");
         var segmentsPath = Path.Combine(runDir, "segments.jsonl");
-        if (!File.Exists(indexPath))
+        if (!File.Exists(collectorFramesPath))
         {
-            throw new FileNotFoundException("frame index missing", indexPath);
+            throw new FileNotFoundException("collector frames missing", collectorFramesPath);
         }
 
         if (!File.Exists(segmentsPath))
@@ -89,7 +88,7 @@ public static class ContinuityAudit
             throw new FileNotFoundException("segments file missing", segmentsPath);
         }
 
-        var frames = ReadJsonl<FrameIndexAuditRecord>(indexPath);
+        var frames = ReadJsonl<CollectorFrameAuditRecord>(collectorFramesPath);
         var segments = ReadJsonl<SegmentRecord>(segmentsPath);
         var counterAudit = AuditDevicePacketCounters(frames);
         var segmentReports = segments.Select(BuildSegmentReport).ToArray();
@@ -98,22 +97,22 @@ public static class ContinuityAudit
         return new ContinuityAuditReport(
             1,
             runDir,
-            "raw/oe1022d.rall (derived_from_raw + raw/oe1022d.frames.idx.jsonl)",
+            "collector_frames.jsonl",
             "segments.jsonl",
             frames.Count,
-            0,
-            0,
+            frames.Count,
+            frames.Count - counterAudit.Delta0Count,
             segments.Count,
             segments.Count,
             counterAudit,
-            0,
-            0,
-            0.0,
+            counterAudit.DeltaGt1Count,
+            counterAudit.Delta0Count,
+            MaxObservedGapMs(frames),
             verdict,
             segmentReports);
     }
 
-    private static DevicePacketCounterAuditReport AuditDevicePacketCounters(IReadOnlyList<FrameIndexAuditRecord> frames)
+    private static DevicePacketCounterAuditReport AuditDevicePacketCounters(IReadOnlyList<CollectorFrameAuditRecord> frames)
     {
         var deltaCounts = new Dictionary<int, long>();
         var suspects = new List<DevicePacketCounterSuspectBoundary>();
@@ -127,13 +126,8 @@ public static class ContinuityAudit
         for (var index = 0; index < frames.Count; index++)
         {
             var current = frames[index].DevicePacketCounter;
-            if (!current.HasValue)
-            {
-                continue;
-            }
-
-            firstCounter ??= current.Value;
-            lastCounter = current.Value;
+            firstCounter ??= current;
+            lastCounter = current;
 
             if (index == 0)
             {
@@ -141,12 +135,7 @@ public static class ContinuityAudit
             }
 
             var previous = frames[index - 1].DevicePacketCounter;
-            if (!previous.HasValue)
-            {
-                continue;
-            }
-
-            var delta = (current.Value - previous.Value + 256) % 256;
+            var delta = (current - previous + 256) % 256;
             deltaCounts[delta] = deltaCounts.TryGetValue(delta, out var count) ? count + 1 : 1;
             switch (delta)
             {
@@ -162,8 +151,8 @@ public static class ContinuityAudit
                     suspects.Add(new DevicePacketCounterSuspectBoundary(
                         frames[index - 1].FrameSeq,
                         frames[index].FrameSeq,
-                        previous.Value,
-                        current.Value,
+                        previous,
+                        current,
                         delta,
                         delta - 1,
                         GapMs(frames[index - 1], frames[index])));
@@ -178,8 +167,8 @@ public static class ContinuityAudit
 
         return new DevicePacketCounterAuditReport(
             12287,
-            frames.LongCount(frame => frame.DevicePacketCounter.HasValue),
-            Math.Max(0, frames.LongCount(frame => frame.DevicePacketCounter.HasValue) - 1),
+            frames.Count,
+            Math.Max(0, frames.Count - 1),
             firstCounter,
             lastCounter,
             delta1Count,
@@ -192,8 +181,8 @@ public static class ContinuityAudit
 
     private static ContinuitySegmentReport BuildSegmentReport(SegmentRecord segment)
     {
-        var framesTotal = segment.FrameSeqStart.HasValue && segment.FrameSeqEnd.HasValue
-            ? Math.Max(0, segment.FrameSeqEnd.Value - segment.FrameSeqStart.Value + 1)
+        var framesTotal = segment.BlockSeqStart.HasValue && segment.BlockSeqEnd.HasValue
+            ? Math.Max(0, segment.BlockSeqEnd.Value - segment.BlockSeqStart.Value + 1)
             : 0;
 
         return new ContinuitySegmentReport(
@@ -225,7 +214,7 @@ public static class ContinuityAudit
         RallArtifactWriter.WritePrettyJson(outPath, report);
     }
 
-    private static double GapMs(FrameIndexAuditRecord previous, FrameIndexAuditRecord current)
+    private static double GapMs(CollectorFrameAuditRecord previous, CollectorFrameAuditRecord current)
     {
         if (current.MonotonicNs < previous.MonotonicNs)
         {
@@ -233,6 +222,17 @@ public static class ContinuityAudit
         }
 
         return Math.Round((current.MonotonicNs - previous.MonotonicNs) / 1_000_000.0, 4);
+    }
+
+    private static double MaxObservedGapMs(IReadOnlyList<CollectorFrameAuditRecord> frames)
+    {
+        double maxGapMs = 0.0;
+        for (var index = 1; index < frames.Count; index++)
+        {
+            maxGapMs = Math.Max(maxGapMs, GapMs(frames[index - 1], frames[index]));
+        }
+
+        return maxGapMs;
     }
 
     private static List<T> ReadJsonl<T>(string path)

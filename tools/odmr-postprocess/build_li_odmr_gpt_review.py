@@ -12,29 +12,17 @@ import argparse
 import csv
 import json
 import math
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
-
-def load_json(path: Path, default: Any = None) -> Any:
-    if not path.exists():
-        return default
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def load_jsonl(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            text = line.strip()
-            if text:
-                rows.append(json.loads(text))
-    return rows
+from decoded_truth import (
+    build_point_field_summaries,
+    ensure_decoded_truth,
+    load_json,
+    load_jsonl,
+    load_point_series_map,
+)
 
 
 def safe_json_dumps(row: dict[str, Any]) -> str:
@@ -53,14 +41,8 @@ def safe_json_dumps(row: dict[str, Any]) -> str:
 
 
 def ensure_point_fields(run_dir: Path, allow_extract: bool) -> None:
-    point_fields = run_dir / "point_fields.jsonl"
-    if point_fields.exists() and any((run_dir / "point_fields").glob("*.npz")):
-        return
-    if not allow_extract:
-        raise FileNotFoundError(f"{run_dir} has no point_fields sidecar; rerun with --extract-missing-point-fields")
-
-    script = Path(__file__).with_name("extract_point_fields_from_rall.py")
-    subprocess.run([sys.executable, str(script), "--run", str(run_dir)], check=True)
+    del allow_extract
+    ensure_decoded_truth(run_dir)
 
 
 def build_frequency_grid(start_hz: float, stop_hz: float, step_hz: float) -> list[float]:
@@ -177,12 +159,9 @@ def write_review_csv(args: argparse.Namespace) -> int:
     ensure_point_fields(run_dir, args.extract_missing_point_fields)
 
     points = load_jsonl(run_dir / "points.jsonl")
-    point_fields = load_jsonl(run_dir / "point_fields.jsonl")
     qualities = load_jsonl(run_dir / "quality.jsonl")
     if not points:
         raise ValueError(f"missing points.jsonl rows in {run_dir}")
-    if not point_fields:
-        raise ValueError(f"missing point_fields.jsonl rows in {run_dir}")
 
     smb = load_json(run_dir / "smb_profile_snapshot.json", {})
     oe = load_json(run_dir / "oe_profile_snapshot.json", {})
@@ -197,7 +176,11 @@ def write_review_csv(args: argparse.Namespace) -> int:
     metadata_jsonl_path = output_dir / f"li_odmr_gpt_review_{suffix}_metadata.jsonl"
     summary_path = output_dir / f"li_odmr_gpt_review_{suffix}_summary.json"
 
-    fields_by_point = index_by_point(point_fields)
+    traces_by_point = load_point_series_map(
+        run_dir,
+        ["b_x", "b_y", "b_noise", "b_input_overload", "b_gain_overload", "b_pll_locked"],
+    )
+    fields_by_point = build_point_field_summaries(traces_by_point)
     qualities_by_point = index_by_point(qualities) if qualities else {}
     metadata_rows: list[dict[str, Any]] = []
     skipped_rows: list[dict[str, Any]] = []
@@ -278,6 +261,10 @@ def write_review_csv(args: argparse.Namespace) -> int:
             if field_row is None:
                 skipped_rows.append({"point_id": pid, "reason": "missing_point_fields"})
                 continue
+            trace = traces_by_point.get(pid)
+            if not trace:
+                skipped_rows.append({"point_id": pid, "reason": "missing_decoded_trace"})
+                continue
 
             quality = qualities_by_point.get(pid, {})
             rf = resolve_rf(point, smb)
@@ -292,21 +279,11 @@ def write_review_csv(args: argparse.Namespace) -> int:
             frequency_hz = build_frequency_grid(start_hz, stop_hz, step_hz)
             samples_per_freq = max(1, int(round(dwell_ms / args.sample_interval_ms)))
 
-            sidecar_rel = (field_row.get("sidecar") or {}).get("relative_path")
-            if not sidecar_rel:
-                skipped_rows.append({"point_id": pid, "reason": "missing_sidecar_path"})
-                continue
-            sidecar_path = run_dir / sidecar_rel
-            if not sidecar_path.exists():
-                skipped_rows.append({"point_id": pid, "reason": "sidecar_not_found"})
-                continue
-
-            with np.load(sidecar_path, allow_pickle=False) as data:
-                b_x_mean, b_x_std, sample_count, cycles, leftover = fold_trace(
-                    np, data["b_x"], len(frequency_hz), samples_per_freq
-                )
-                b_y_mean, b_y_std, _, _, _ = fold_trace(np, data["b_y"], len(frequency_hz), samples_per_freq)
-                b_noise_mean, _, _, _, _ = fold_trace(np, data["b_noise"], len(frequency_hz), samples_per_freq)
+            b_x_mean, b_x_std, sample_count, cycles, leftover = fold_trace(
+                np, trace["b_x"], len(frequency_hz), samples_per_freq
+            )
+            b_y_mean, b_y_std, _, _, _ = fold_trace(np, trace["b_y"], len(frequency_hz), samples_per_freq)
+            b_noise_mean, _, _, _, _ = fold_trace(np, trace["b_noise"], len(frequency_hz), samples_per_freq)
 
             frequency_hz_arr = np.asarray(frequency_hz[: b_x_mean.size], dtype=float)
             b_r_mean = np.sqrt(b_x_mean * b_x_mean + b_y_mean * b_y_mean)
@@ -354,7 +331,7 @@ def write_review_csv(args: argparse.Namespace) -> int:
                     "b_input_overload_ratio": field_row.get("b_input_overload_ratio"),
                     "b_gain_overload_ratio": field_row.get("b_gain_overload_ratio"),
                     "b_pll_locked_ratio": field_row.get("b_pll_locked_ratio"),
-                    "sidecar_npz": sidecar_rel,
+                    "sidecar_npz": "sample_values.csv",
                 }
             )
 
@@ -465,7 +442,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--extract-missing-point-fields",
         action="store_true",
-        help="If point_fields sidecars are missing, reconstruct them from raw/frames.idx/segments first.",
+        help="Deprecated no-op. Direct-decode postprocess reads sample_values.csv + segments.jsonl directly.",
     )
     return parser.parse_args(argv)
 

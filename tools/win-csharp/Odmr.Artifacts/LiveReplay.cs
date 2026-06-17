@@ -39,7 +39,7 @@ public static class LiveReplay
 
         var summaryPath = Path.Combine(runDir, "summary.json");
         var eventsPath = Path.Combine(runDir, "events.jsonl");
-        var indexPath = Path.Combine(runDir, "raw", "oe1022d.frames.idx.jsonl");
+        var collectorFramesPath = Path.Combine(runDir, "collector_frames.jsonl");
         if (!File.Exists(summaryPath))
         {
             throw new FileNotFoundException("summary missing", summaryPath);
@@ -90,7 +90,7 @@ public static class LiveReplay
             }
         }
 
-        var lastFrame = File.Exists(indexPath) ? ReadLastFrame(indexPath) : null;
+        var lastFrame = File.Exists(collectorFramesPath) ? ReadLastFrame(collectorFramesPath) : null;
         var timeoutCount = GetInt64(summary, "timeout_count") ?? 0;
         var rawLenBadCount = GetInt64(summary, "raw_len_bad_count") ?? 0;
         var deltaGt1Count = GetNestedInt64(summary, "packet_counter", "delta_gt1_count") ?? 0;
@@ -117,10 +117,10 @@ public static class LiveReplay
             recentEvents.ToArray());
     }
 
-    private static FrameIndexAuditRecord? ReadLastFrame(string indexPath)
+    private static CollectorFrameAuditRecord? ReadLastFrame(string collectorFramesPath)
     {
         string? lastLine = null;
-        foreach (var line in File.ReadLines(indexPath))
+        foreach (var line in File.ReadLines(collectorFramesPath))
         {
             if (!string.IsNullOrWhiteSpace(line))
             {
@@ -130,7 +130,7 @@ public static class LiveReplay
 
         return lastLine is null
             ? null
-            : JsonSerializer.Deserialize<FrameIndexAuditRecord>(lastLine, JsonOptions.Default);
+            : JsonSerializer.Deserialize<CollectorFrameAuditRecord>(lastLine, JsonOptions.Default);
     }
 
     private static string? GetString(JsonElement element, string propertyName) =>

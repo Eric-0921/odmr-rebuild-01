@@ -42,10 +42,10 @@ public sealed record Minimal3PointRunSummary(
     [property: JsonPropertyName("read_errors")] long ReadErrors,
     [property: JsonPropertyName("timeout_count")] long TimeoutCount,
     [property: JsonPropertyName("raw_len_bad_count")] long RawLenBadCount,
-    [property: JsonPropertyName("raw_bytes_written")] long RawBytesWritten,
-    [property: JsonPropertyName("raw_size_matches_frames_ok")] bool RawSizeMatchesFramesOk,
-    [property: JsonPropertyName("raw_path")] string RawPath,
-    [property: JsonPropertyName("index_path")] string IndexPath,
+    [property: JsonPropertyName("samples_total")] long SamplesTotal,
+    [property: JsonPropertyName("collector_frames_path")] string CollectorFramesPath,
+    [property: JsonPropertyName("parameter_values_path")] string ParameterValuesPath,
+    [property: JsonPropertyName("sample_values_path")] string SampleValuesPath,
     [property: JsonPropertyName("segments_path")] string SegmentsPath,
     [property: JsonPropertyName("points_path")] string PointsPath,
     [property: JsonPropertyName("quality_path")] string QualityPath,
@@ -84,11 +84,10 @@ public static class Minimal3PointRun
 
     public static Minimal3PointRunSummary Execute(Minimal3PointRunOptions options)
     {
-        var rawDir = Path.Combine(options.OutDir, "raw");
-        Directory.CreateDirectory(rawDir);
-
-        var rawPath = Path.Combine(rawDir, "oe1022d.rall");
-        var indexPath = Path.Combine(rawDir, "oe1022d.frames.idx.jsonl");
+        Directory.CreateDirectory(options.OutDir);
+        var collectorFramesPath = Path.Combine(options.OutDir, "collector_frames.jsonl");
+        var parameterValuesPath = Path.Combine(options.OutDir, "parameter_values.csv");
+        var sampleValuesPath = Path.Combine(options.OutDir, "sample_values.csv");
         var segmentsPath = Path.Combine(options.OutDir, "segments.jsonl");
         var pointsPath = Path.Combine(options.OutDir, "points.jsonl");
         var qualityPath = Path.Combine(options.OutDir, "quality.jsonl");
@@ -111,7 +110,13 @@ public static class Minimal3PointRun
         var startedAt = UtcNowString();
         var processStart = Stopwatch.GetTimestamp();
         var runId = Path.GetFileName(Path.GetFullPath(options.OutDir));
-        using var collector = new OeRallCollector(options.OeResource, options.OeBaudRate, rawPath, indexPath, processStart);
+        using var collector = new OeRallCollector(
+            options.OeResource,
+            options.OeBaudRate,
+            collectorFramesPath,
+            parameterValuesPath,
+            sampleValuesPath,
+            processStart);
         using var smb = Smb100aTcp.Open(options.SmbHost, options.SmbPort);
         var magAxes = OpenMagAxes(options);
         CniLaserSession? laser = null;
@@ -232,7 +237,6 @@ public static class Minimal3PointRun
 
         var snapshot = collector.Snapshot();
         var finishedAt = UtcNowString();
-        var rawBytesWritten = new FileInfo(rawPath).Length;
         var summary = new Minimal3PointRunSummary(
             "minimal-3point-run",
             runId,
@@ -254,10 +258,10 @@ public static class Minimal3PointRun
             snapshot.Stats.ReadErrors,
             snapshot.Stats.TimeoutCount,
             snapshot.Stats.RawLenBadCount,
-            rawBytesWritten,
-            rawBytesWritten == snapshot.Stats.FramesOk * Oe1022dDefaults.RallFrameBytes,
-            PathRelative(options.OutDir, rawPath),
-            PathRelative(options.OutDir, indexPath),
+            snapshot.SamplesWritten,
+            PathRelative(options.OutDir, collectorFramesPath),
+            PathRelative(options.OutDir, parameterValuesPath),
+            PathRelative(options.OutDir, sampleValuesPath),
             PathRelative(options.OutDir, segmentsPath),
             PathRelative(options.OutDir, pointsPath),
             PathRelative(options.OutDir, qualityPath),
@@ -395,11 +399,11 @@ public static class Minimal3PointRun
                 segmentEndTs,
                 segmentStartMonotonicNs,
                 segmentEndMonotonicNs,
-                "raw/oe1022d.rall",
-                segmentStart.NextRawOffset,
-                segmentEnd.NextRawOffset,
+                "sample_values.csv",
                 framesInSegment > 0 ? segmentStart.NextFrameSeq : null,
-                framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null));
+                framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null,
+                segmentStart.NextSampleIndex,
+                segmentEnd.NextSampleIndex));
 
         RallArtifactWriter.AppendJsonl(
             pointsPath,

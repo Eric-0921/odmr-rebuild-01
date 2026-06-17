@@ -56,8 +56,9 @@ public static class ConfigDrivenRun
         PrepareRunDirectory(options.OutDir);
         WriteSnapshots(options.OutDir, bundle);
 
-        var rawPath = Path.Combine(options.OutDir, "raw", "oe1022d.rall");
-        var indexPath = Path.Combine(options.OutDir, "raw", "oe1022d.frames.idx.jsonl");
+        var collectorFramesPath = Path.Combine(options.OutDir, "collector_frames.jsonl");
+        var parameterValuesPath = Path.Combine(options.OutDir, "parameter_values.csv");
+        var sampleValuesPath = Path.Combine(options.OutDir, "sample_values.csv");
         var segmentsPath = Path.Combine(options.OutDir, "segments.jsonl");
         var pointsPath = Path.Combine(options.OutDir, "points.jsonl");
         var qualityPath = Path.Combine(options.OutDir, "quality.jsonl");
@@ -121,8 +122,9 @@ public static class ConfigDrivenRun
         using var collector = new OeRallCollector(
             resolvedConnections.OeResource,
             resolvedConnections.OeBaudRate,
-            rawPath,
-            indexPath,
+            collectorFramesPath,
+            parameterValuesPath,
+            sampleValuesPath,
             processStart);
         using var smb = Smb100aTcp.Open(resolvedConnections.SmbHost, resolvedConnections.SmbPort);
         var magAxes = bundle.ResolvedPlan.RequiresMagneticControl ? OpenMagAxes(bundle, resolvedConnections) : [];
@@ -446,7 +448,6 @@ public static class ConfigDrivenRun
 
         var finalSnapshot = collector.Snapshot();
         var endedAt = UtcNowString();
-        var rawBytesWritten = File.Exists(rawPath) ? new FileInfo(rawPath).Length : 0;
         var status = aborted
             ? "aborted"
             : failure is not null
@@ -491,14 +492,16 @@ public static class ConfigDrivenRun
             pointsPassed,
             pointsFailed,
             finalSnapshot.Stats.FramesOk,
+            finalSnapshot.SamplesWritten,
             startedAt,
             endedAt,
             failure,
             finalSnapshot.Stats.ReadAttempts,
             finalSnapshot.Stats.TimeoutCount,
             finalSnapshot.Stats.RawLenBadCount,
-            rawBytesWritten,
-            rawBytesWritten == finalSnapshot.Stats.FramesOk * Oe1022dDefaults.RallFrameBytes,
+            PathRelative(options.OutDir, collectorFramesPath),
+            PathRelative(options.OutDir, parameterValuesPath),
+            PathRelative(options.OutDir, sampleValuesPath),
             finalSnapshot.PacketCounter.ToSummary());
         RallArtifactWriter.WritePrettyJson(summaryPath, summary);
 
@@ -512,7 +515,7 @@ public static class ConfigDrivenRun
 
     private static void PrepareRunDirectory(string outDir)
     {
-        Directory.CreateDirectory(Path.Combine(outDir, "raw"));
+        Directory.CreateDirectory(outDir);
         foreach (var path in new[]
         {
             "segments.jsonl",
@@ -520,6 +523,9 @@ public static class ConfigDrivenRun
             "quality.jsonl",
             "device_state.jsonl",
             "events.jsonl",
+            "collector_frames.jsonl",
+            "parameter_values.csv",
+            "sample_values.csv",
             "point_fields.jsonl"
         })
         {
@@ -1073,17 +1079,17 @@ public static class ConfigDrivenRun
             segmentEndTs,
             segmentStartMonotonicNs,
             segmentEndMonotonicNs,
-            "raw/oe1022d.rall",
-            segmentStart.NextRawOffset,
-            segmentEnd.NextRawOffset,
+            "sample_values.csv",
             framesInSegment > 0 ? segmentStart.NextFrameSeq : null,
-            framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null);
+            framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null,
+            segmentStart.NextSampleIndex,
+            segmentEnd.NextSampleIndex);
         RallArtifactWriter.AppendSegmentRecord(segmentsPath, segment);
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "segment_completed", "segment", point.PointId, null, new
         {
             segment_id = segmentId,
-            raw_offset_start = segment.RawOffsetStart,
-            raw_offset_end = segment.RawOffsetEnd
+            sample_index_start = segment.SampleIndexStart,
+            sample_index_end = segment.SampleIndexEnd
         });
 
         var sweepRecord = ToSweepRecord(sweep);
@@ -1136,10 +1142,10 @@ public static class ConfigDrivenRun
                     segmentEndMonotonicNs),
                 new SegmentBindingRecord(
                     segmentId,
-                    segment.FrameSeqStart,
-                    segment.FrameSeqEnd,
-                    segment.RawOffsetStart,
-                    segment.RawOffsetEnd),
+                    segment.BlockSeqStart,
+                    segment.BlockSeqEnd,
+                    segment.SampleIndexStart,
+                    segment.SampleIndexEnd),
                 bundle.LaserProfile.ProfileId,
                 bundle.LaserProfile.Mode,
                 bundle.LaserProfile.PowerMw,
@@ -1478,6 +1484,8 @@ public static class ConfigDrivenRun
             stepHz,
             dwellMs));
     }
+
+    private static string PathRelative(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');
 
     private static void ThrowIfEmergencyRequested(ConfigDrivenRunOptions options)
     {

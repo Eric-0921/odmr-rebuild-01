@@ -79,12 +79,15 @@ next round
   - `status_hex`
   - `status_byte`
   - `trig_count`
+  - 整个 `3168 B` 状态区的 `status_zone_hex / status_zone_sha256`
 - 直接写：
+  - `collector_blocks.jsonl`
   - `parameter_values.csv`
+  - `sample_values.csv`
   - `preview_values.csv`（仅 `--write-values true`）
   - `summary.json`
 
-当前 **不保留 raw 二进制**。
+当前 **不保留独立 raw 二进制文件**。状态区原始事实保留在 `collector_blocks.jsonl` 的 `status_zone_hex` 中。
 
 这符合当前阶段的工程选择：直接处理并保存“解析后原始事实”，而不是先堆本地 raw 再决定如何解释。
 

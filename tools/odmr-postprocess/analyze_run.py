@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from decoded_truth import ensure_decoded_truth, load_json, load_jsonl, load_point_series_map
 
 
 try:
@@ -32,31 +33,6 @@ try:
     from scipy.signal import find_peaks
 except ImportError:  # pragma: no cover
     find_peaks = None
-
-
-def load_json(path: Path, default: Any = None) -> Any:
-    if not path.exists():
-        return default
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
-
-
-def load_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    if not path.exists():
-        return rows
-    with path.open("r", encoding="utf-8") as handle:
-        for line_no, line in enumerate(handle, start=1):
-            text = line.strip()
-            if not text:
-                continue
-            try:
-                rows.append(json.loads(text))
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"{path}:{line_no}: invalid JSONL row") from exc
-    return rows
-
-
 def build_frequency_axis(
     n_samples: int,
     rf: dict[str, Any],
@@ -77,16 +53,13 @@ def build_frequency_axis(
 
 
 def summarize_point(
-    run_dir: Path,
     point: dict[str, Any],
-    pf_row: dict[str, Any],
+    trace: dict[str, list[float]],
     channel_key: str,
 ) -> dict[str, Any]:
-    npz_path = run_dir / pf_row["sidecar"]["relative_path"]
-    with np.load(npz_path, allow_pickle=False) as data:
-        b_x = np.asarray(data[channel_key], dtype=np.float64)
-        frame_seq = np.asarray(data["frame_seq"], dtype=np.uint64)
-        b_pll = np.asarray(data["b_pll_locked"], dtype=np.int8)
+    b_x = np.asarray(trace[channel_key], dtype=np.float64)
+    frame_seq = np.asarray(trace["frame_seq"], dtype=np.uint64)
+    b_pll = np.asarray(trace["b_pll_locked"], dtype=np.int8)
 
     rf = point.get("rf", {})
     frequency_hz = build_frequency_axis(b_x.size, rf)
@@ -299,26 +272,22 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     run_dir = Path(args.run).resolve()
+    ensure_decoded_truth(run_dir)
     out_dir = Path(args.out_dir).resolve() if args.out_dir else run_dir / "analysis"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    point_fields = load_jsonl(run_dir / "point_fields.jsonl")
     points = load_jsonl(run_dir / "points.jsonl")
+    traces_by_point = load_point_series_map(run_dir, [args.channel_key, "b_pll_locked"])
     points_by_id = {p["point_id"]: p for p in points}
 
-    if not point_fields:
-        print(f"missing point_fields.jsonl in {run_dir}; run extract_point_fields_from_rall.py first", file=sys.stderr)
-        return 2
-
     summaries: list[dict[str, Any]] = []
-    for pf in point_fields:
-        pid = pf["point_id"]
+    for pid, trace in traces_by_point.items():
         point = points_by_id.get(pid)
         if point is None:
             print(f"warning: no point record for {pid}", file=sys.stderr)
             continue
 
-        ctx = summarize_point(run_dir, point, pf, args.channel_key)
+        ctx = summarize_point(point, trace, args.channel_key)
         summaries.append({"point_id": pid, "stats": ctx["stats"]})
 
         print(f"\n=== {pid} ===")

@@ -8,10 +8,13 @@ public sealed record ArtifactCheckReport(
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("run_id")] string? RunId,
     [property: JsonPropertyName("frames_total")] long FramesTotal,
-    [property: JsonPropertyName("raw_bytes")] long RawBytes,
-    [property: JsonPropertyName("raw_size_matches_frames")] bool RawSizeMatchesFrames,
-    [property: JsonPropertyName("idx_lines")] long IndexLines,
-    [property: JsonPropertyName("idx_lines_match_frames")] bool IndexLinesMatchFrames,
+    [property: JsonPropertyName("samples_total")] long SamplesTotal,
+    [property: JsonPropertyName("collector_frame_rows")] long CollectorFrameRows,
+    [property: JsonPropertyName("collector_rows_match_frames")] bool CollectorRowsMatchFrames,
+    [property: JsonPropertyName("parameter_rows")] long ParameterRows,
+    [property: JsonPropertyName("parameter_rows_match_frames")] bool ParameterRowsMatchFrames,
+    [property: JsonPropertyName("sample_rows")] long SampleRows,
+    [property: JsonPropertyName("sample_rows_match_total")] bool SampleRowsMatchTotal,
     [property: JsonPropertyName("segments_count")] long SegmentsCount,
     [property: JsonPropertyName("points_count")] long PointsCount,
     [property: JsonPropertyName("quality_count")] long QualityCount,
@@ -37,8 +40,9 @@ public static class ArtifactCheck
         "summary.json",
         "run_manifest.json",
         "events.jsonl",
-        "raw/oe1022d.rall",
-        "raw/oe1022d.frames.idx.jsonl",
+        "collector_frames.jsonl",
+        "parameter_values.csv",
+        "sample_values.csv",
         "segments.jsonl",
         "points.jsonl",
         "quality.jsonl",
@@ -81,8 +85,9 @@ public static class ArtifactCheck
 
         var summaryPath = Path.Combine(runDir, "summary.json");
         var manifestPath = Path.Combine(runDir, "run_manifest.json");
-        var rawPath = Path.Combine(runDir, "raw", "oe1022d.rall");
-        var indexPath = Path.Combine(runDir, "raw", "oe1022d.frames.idx.jsonl");
+        var collectorFramesPath = Path.Combine(runDir, "collector_frames.jsonl");
+        var parameterValuesPath = Path.Combine(runDir, "parameter_values.csv");
+        var sampleValuesPath = Path.Combine(runDir, "sample_values.csv");
         var segmentsPath = Path.Combine(runDir, "segments.jsonl");
         var pointsPath = Path.Combine(runDir, "points.jsonl");
         var qualityPath = Path.Combine(runDir, "quality.jsonl");
@@ -92,11 +97,13 @@ public static class ArtifactCheck
         var summary = File.Exists(summaryPath) ? ReadObject(summaryPath) : null;
         var manifest = File.Exists(manifestPath) ? ReadObject(manifestPath) : null;
         var framesTotal = GetInt64(summary, "frames_total") ?? GetInt64(summary, "frames_ok") ?? 0;
+        var samplesTotal = GetInt64(summary, "samples_total") ?? 0;
         var runId = GetString(summary, "run_id");
         var summaryStatus = GetString(summary, "status");
         var manifestStatus = GetString(manifest, "status");
-        var rawBytes = File.Exists(rawPath) ? new FileInfo(rawPath).Length : 0;
-        var idxLines = File.Exists(indexPath) ? CountLines(indexPath) : 0;
+        var collectorFrameRows = File.Exists(collectorFramesPath) ? CountLines(collectorFramesPath) : 0;
+        var parameterRows = File.Exists(parameterValuesPath) ? CountCsvDataRows(parameterValuesPath) : 0;
+        var sampleRows = File.Exists(sampleValuesPath) ? CountCsvDataRows(sampleValuesPath) : 0;
         var segmentsCount = File.Exists(segmentsPath) ? CountLines(segmentsPath) : 0;
         var pointsCount = File.Exists(pointsPath) ? CountLines(pointsPath) : 0;
         var qualityCount = File.Exists(qualityPath) ? CountLines(qualityPath) : 0;
@@ -134,8 +141,9 @@ public static class ArtifactCheck
             missingEvents.Add("run_completed|run_failed|run_aborted");
         }
 
-        var rawSizeMatchesFrames = rawBytes == framesTotal * 12288;
-        var idxLinesMatchFrames = idxLines == framesTotal;
+        var collectorRowsMatchFrames = collectorFrameRows == framesTotal;
+        var parameterRowsMatchFrames = parameterRows == framesTotal;
+        var sampleRowsMatchTotal = sampleRows == samplesTotal;
         var recordCountsConsistent = aborted
             ? segmentsCount == pointsCount &&
                 pointsCount == qualityCount &&
@@ -148,8 +156,9 @@ public static class ArtifactCheck
             string.Equals(summaryStatus, manifestStatus, StringComparison.Ordinal);
         var passed = missingFiles.Length == 0 &&
             missingSnapshots.Length == 0 &&
-            rawSizeMatchesFrames &&
-            idxLinesMatchFrames &&
+            collectorRowsMatchFrames &&
+            parameterRowsMatchFrames &&
+            sampleRowsMatchTotal &&
             recordCountsConsistent &&
             deviceStateConsistent &&
             rfExposureWindowsCovered &&
@@ -161,10 +170,13 @@ public static class ArtifactCheck
             passed ? "passed" : "failed",
             runId,
             framesTotal,
-            rawBytes,
-            rawSizeMatchesFrames,
-            idxLines,
-            idxLinesMatchFrames,
+            samplesTotal,
+            collectorFrameRows,
+            collectorRowsMatchFrames,
+            parameterRows,
+            parameterRowsMatchFrames,
+            sampleRows,
+            sampleRowsMatchTotal,
             segmentsCount,
             pointsCount,
             qualityCount,
@@ -191,10 +203,10 @@ public static class ArtifactCheck
         string SegmentId,
         ulong StartMonotonicNs,
         ulong EndMonotonicNs,
-        long RawOffsetStart,
-        long RawOffsetEnd,
-        long? FrameSeqStart,
-        long? FrameSeqEnd);
+        long? BlockSeqStart,
+        long? BlockSeqEnd,
+        long SampleIndexStart,
+        long SampleIndexEnd);
 
     private static IReadOnlyList<string> ValidateDeviceState(
         string pointsPath,
@@ -442,10 +454,10 @@ public static class ArtifactCheck
                 segmentId,
                 GetRequiredUInt64(root, "start_monotonic_ns", issues, $"segments point_id {pointId}"),
                 GetRequiredUInt64(root, "end_monotonic_ns", issues, $"segments point_id {pointId}"),
-                GetRequiredInt64(root, "raw_offset_start", issues, $"segments point_id {pointId}"),
-                GetRequiredInt64(root, "raw_offset_end", issues, $"segments point_id {pointId}"),
-                GetNullableInt64(root, "frame_seq_start"),
-                GetNullableInt64(root, "frame_seq_end")));
+                GetNullableInt64(root, "block_seq_start"),
+                GetNullableInt64(root, "block_seq_end"),
+                GetRequiredInt64(root, "sample_index_start", issues, $"segments point_id {pointId}"),
+                GetRequiredInt64(root, "sample_index_end", issues, $"segments point_id {pointId}")));
         }
 
         return result;
@@ -469,10 +481,10 @@ public static class ArtifactCheck
             issues.Add($"device_state point_id {pointId} segment_id {boundSegmentId} != segments {segment.SegmentId}");
         }
 
-        CompareInt64(binding, "raw_offset_start", segment.RawOffsetStart, pointId, issues);
-        CompareInt64(binding, "raw_offset_end", segment.RawOffsetEnd, pointId, issues);
-        CompareNullableInt64(binding, "frame_seq_start", segment.FrameSeqStart, pointId, issues);
-        CompareNullableInt64(binding, "frame_seq_end", segment.FrameSeqEnd, pointId, issues);
+        CompareInt64(binding, "sample_index_start", segment.SampleIndexStart, pointId, issues);
+        CompareInt64(binding, "sample_index_end", segment.SampleIndexEnd, pointId, issues);
+        CompareNullableInt64(binding, "block_seq_start", segment.BlockSeqStart, pointId, issues);
+        CompareNullableInt64(binding, "block_seq_end", segment.BlockSeqEnd, pointId, issues);
     }
 
     private static void ValidateRfExposure(
@@ -547,6 +559,12 @@ public static class ArtifactCheck
         }
 
         return count;
+    }
+
+    private static long CountCsvDataRows(string path)
+    {
+        var count = CountLines(path);
+        return count > 0 ? count - 1 : 0;
     }
 
     private static Dictionary<string, long> CountJsonlStringProperty(string path, string propertyName)

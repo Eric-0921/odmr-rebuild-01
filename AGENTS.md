@@ -41,7 +41,7 @@
 |------|------|
 | `tools/config-generator` | 离线生成 `plan.json` + `smb_profile.json` + `oe_profile.json` + `laser_profile.json` |
 | `tools/odmr-console-python` | PySide6 主 UI + 无 GUI core：组合配置、调用 C# CLI、tail progress、写 stop request |
-| `tools/odmr-postprocess` | 离线后处理参考，读取 `point_fields/*.npz` 生成 CSV/JSONL |
+| `tools/odmr-postprocess` | 离线后处理参考，直接读取 `sample_values.csv + segments.jsonl` 生成 CSV/JSONL |
 | `python/odmr_replay` | 当前源码为空，仅有 `__pycache__` |
 | `python/pyproject.toml` | 遗留配置，引用不存在的 `odmr_gui.app:main`，已不再使用 |
 
@@ -185,11 +185,11 @@ python tools/odmr-postprocess/build_odmr_samples.py --run runs/<run_id>
 write RALL?
 sleep 30ms
 blocking exact read 12288B
-append raw
-append frame index
+direct-decode
+append collector_frames + parameter_values + sample_values
 ```
 
-禁止在热路径中加入 parser、retry、deadline、GUI publish、quality/audit、多 reader。若必须修改，需重新跑 60s / 15min / repeat 15min 连续性验证。
+禁止在热路径中加入 retry、deadline、GUI publish、quality/audit、多 reader。若必须修改，需重新跑 60s / 15min / repeat 15min 连续性验证。
 
 ## 7. Artifact / Run 目录约定
 
@@ -206,17 +206,12 @@ plan_snapshot.json
 baseline_snapshot.json
 events.jsonl
 points.jsonl
-point_fields.jsonl
-point_fields/
-  seg_<point_id>_0000.npz
-  seg_<point_id>_0000.manifest.json
+collector_frames.jsonl
+parameter_values.csv
+sample_values.csv
 segments.jsonl
 quality.jsonl
 device_state.jsonl
-raw/
-  oe1022d.rall
-  oe1022d.frames.idx.jsonl
-  oe1022d.frames.parsed.jsonl   # 仅 --artifact-mode debug，默认不写
 summary.json
 continuity_audit.json
 control/                         # PySide6 console 生成
@@ -227,9 +222,9 @@ control/                         # PySide6 console 生成
   stderr.log
 ```
 
-- **最终事实层**：`raw/oe1022d.rall` + `raw/oe1022d.frames.idx.jsonl` + `segments.jsonl`。
+- **最终事实层**：`collector_frames.jsonl` + `parameter_values.csv` + `sample_values.csv` + `segments.jsonl`。
 - 每帧固定 **12288 B**；`payload[12287]` 作为 `device_packet_counter`，用于连续性审计。
-- `point_fields.jsonl` 只存轻量 metadata；完整 20 字段数组默认进 `point_fields/*.npz`。
+- `sample_values.csv` 是样本级 decoded truth；point 级后处理直接从它和 `segments.jsonl` 取窗口，不再回切 raw。
 - 同 `--out-dir` 复跑时，runtime 会覆盖/重建本次生成的 jsonl/raw/index，避免静默 append。
 - PySide6 console 的 stop 语义是 **stop-after-current-point**：写 `control/stop.request`，C# runtime 在 point 边界取消。
 

@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from decoded_truth import build_point_field_summaries, load_point_series_map
 from build_li_odmr_gpt_review import (
     build_frequency_grid,
     ensure_point_fields,
@@ -149,14 +150,15 @@ def build_dataset(args: argparse.Namespace) -> int:
     ensure_point_fields(run_dir, args.extract_missing_point_fields)
 
     points = load_jsonl(run_dir / "points.jsonl")
-    point_fields = load_jsonl(run_dir / "point_fields.jsonl")
     qualities = load_jsonl(run_dir / "quality.jsonl")
     if not points:
         raise ValueError(f"missing points.jsonl rows in {run_dir}")
-    if not point_fields:
-        raise ValueError(f"missing point_fields.jsonl rows in {run_dir}")
 
-    fields_by_point = index_by_point(point_fields)
+    traces_by_point = load_point_series_map(
+        run_dir,
+        ["b_x", "b_y", "b_noise", "b_input_overload", "b_gain_overload", "b_pll_locked"],
+    )
+    fields_by_point = build_point_field_summaries(traces_by_point)
     qualities_by_point = index_by_point(qualities) if qualities else {}
     smb = load_json(run_dir / "smb_profile_snapshot.json", {})
     oe = load_json(run_dir / "oe_profile_snapshot.json", {})
@@ -192,6 +194,10 @@ def build_dataset(args: argparse.Namespace) -> int:
         if field_row is None:
             skipped.append({"point_id": pid, "reason": "missing_point_fields"})
             continue
+        trace = traces_by_point.get(pid)
+        if not trace:
+            skipped.append({"point_id": pid, "reason": "missing_decoded_trace"})
+            continue
 
         rf = resolve_rf(point, smb)
         try:
@@ -204,19 +210,9 @@ def build_dataset(args: argparse.Namespace) -> int:
             skipped.append({"point_id": pid, "reason": "empty_frequency_grid"})
             continue
 
-        sidecar_rel = (field_row.get("sidecar") or {}).get("relative_path")
-        if not sidecar_rel:
-            skipped.append({"point_id": pid, "reason": "missing_sidecar_path"})
-            continue
-        sidecar_path = run_dir / str(sidecar_rel)
-        if not sidecar_path.exists():
-            skipped.append({"point_id": pid, "reason": "sidecar_not_found"})
-            continue
-
-        with np.load(sidecar_path, allow_pickle=False) as data:
-            bx_mean, bx_std, count, cycles, leftover = fold_trace(np, data["b_x"], len(frequency_hz), samples_per_freq)
-            by_mean, by_std, _, _, _ = fold_trace(np, data["b_y"], len(frequency_hz), samples_per_freq)
-            bnoise_mean, _, _, _, _ = fold_trace(np, data["b_noise"], len(frequency_hz), samples_per_freq)
+        bx_mean, bx_std, count, cycles, leftover = fold_trace(np, trace["b_x"], len(frequency_hz), samples_per_freq)
+        by_mean, by_std, _, _, _ = fold_trace(np, trace["b_y"], len(frequency_hz), samples_per_freq)
+        bnoise_mean, _, _, _, _ = fold_trace(np, trace["b_noise"], len(frequency_hz), samples_per_freq)
 
         freq = np.asarray(frequency_hz[: bx_mean.size], dtype=float)
         if frequency_ref is None:
@@ -364,7 +360,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--extract-missing-point-fields",
         action="store_true",
-        help="If point_fields sidecars are missing, reconstruct them from raw/frames.idx/segments first.",
+        help="Deprecated no-op. Direct-decode postprocess reads sample_values.csv + segments.jsonl directly.",
     )
     return parser.parse_args(argv)
 
