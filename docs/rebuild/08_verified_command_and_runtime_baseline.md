@@ -684,6 +684,45 @@ run 结束后额外只读核验：
 - `run-execute`、`artifact-check`、`audit-continuity` 仍然沿用现行 `raw + frames.idx + segments` 合同；
 - 是否正式把 runtime 从“raw truth”迁移到“direct decoded truth”，必须以这档实验的长跑结果为前置依据，而不是以当前代码改动本身作为依据。
 
+### `field-decode-csv` 180 秒真机结果
+
+命令：
+
+- `dotnet ... Odmr.WinProbe.dll oe-rall --resource ASRL8::INSTR --baud 921600 --in-thread-process-mode field-decode-csv --write-raw false --preview-field-index 8 --write-values true --duration-sec 180 --out-dir oe1022d_field_decode_180s`
+
+结果：
+
+- `frames_ok = 5668`
+- `timeout_count = 0`
+- `raw_len_bad_count = 0`
+- `delta_gt1_count = 0`
+- `processed_frames = 5668`
+- `mean_processing_us_per_frame = 69.754`
+- `write_raw = false`
+- `parameter_values.csv` 与 `preview_values.csv` 正常写出
+
+按 `device_packet_counter` 折算：
+
+- `delta0_count = 2073`
+- `delta1_count = 3594`
+- 唯一有效窗口数 = `1 + delta1_count = 3595`
+- 重复帧比例 = `2073 / 5668 = 36.57%`
+- 唯一有效窗口率 = `3595 / 180.023 s = 19.97 Hz`
+- 实际有效采样率 = `3595 * 50 / 180.023 s = 998.48 Hz/field`
+
+这说明第二档 direct-decode 比第一档 `measurement-means` 明显更重，但仍然远小于当前整帧周期：
+
+- `measurement-means`：约 `2.2 ~ 3.1 us/frame`
+- `field-decode-csv`：约 `69.8 us/frame`
+
+即便如此，在当前这台 `OE1022D` 和这轮 `180 s` 真机验证里，collector 线程仍然保持：
+
+- `timeout_count = 0`
+- `delta_gt1_count = 0`
+- 解析后有效样本率仍然约 `1.00 kHz/field`
+
+因此，对“按字段表真解析并直接落可用 CSV/JSON”这一档处理来说，至少在 probe 层已经有了真机证据：**放在 collector 同线程里仍然可行**。
+
 ## 当前参数归属结论
 
 ### point / run 允许变化

@@ -241,3 +241,43 @@ next round
 - **OE1300 设备层采样事实已经跑通**
 
 而不是 runtime 设计已经最终冻结。
+
+## 8. 2026-06-17：Windows `180 s` 无外部输入复测
+
+这轮复测的目标不是验证波形响应，而是把 `OE1300` 当前现成的 direct-decode 路径，与 `OE1022D field-decode-csv` 的 collector 同线程 direct-decode 路径放到同一个 Windows 真机环境里做对照。
+
+命令：
+
+- `dotnet ... Odmr.WinProbe.dll oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --write-values true --duration-sec 180 --out-dir oe1300_net_labview_180s`
+
+链路确认：
+
+- Windows `以太网` 口地址：`192.168.1.10/24`
+- `ping -S 192.168.1.10 192.168.1.1` 成功
+- `Test-NetConnection 192.168.1.1 -Port 10001` 返回 `TcpTestSucceeded = True`
+- `oe1300-net-idn` 返回：
+  - `SSI LIA-OE1301,SN:L2283261,Ver:V1.4h4-1.02-1.4.0.23B`
+
+结果：
+
+- `ralls_ok = 11559`
+- `timeout_count = 0`
+- `raw_len_bad_count = 0`
+- `decode_failures = 0`
+- `query_hz = 64.216`
+- 机械折算 `effective_sample_hz_per_parameter = 6421.60`
+
+但按 `parameter_values.csv` 相邻块去重后：
+
+- `adjacent_duplicate_blocks = 9758`
+- `unique_blocks = 1801`
+- 重复块比例 = `84.42%`
+- 唯一有效块率 = `1801 / 180.002 s = 10.01 Hz`
+- 实际有效采样率 = `1801 * 100 / 180.002 s = 1000.54 Hz/parameter`
+
+因此，这轮 `180 s` Windows 复测继续支持此前的结论：
+
+- 主机 `RALL?` 查询频率约 `64 Hz`
+- 但真正的新块频率仍然约 `10 Hz`
+- 每个新块 `100` 样本
+- 最终解析后的有效采样率仍然约 `1.00 kHz/parameter`
