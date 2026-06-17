@@ -570,6 +570,77 @@ run 结束后额外只读核验：
 - 真实无 timeout point 的帧数基线已重新校正
 - 但长跑下仍存在“连续 timeout -> collector 卡死 -> cleanup 挂起”的未解决故障
 
+## 2026-06-17：OE1022D collector 线程内增加一步原始数据处理的开销探针
+
+这轮验证不改 runtime 主 collector，也不把 parser 正式搬回采集线程，只是在 `Odmr.WinProbe oe-rall` 上增加一个可选实验模式：
+
+- `--in-thread-process-mode none`
+- `--in-thread-process-mode measurement-means`
+
+其中 `measurement-means` 的行为是：
+
+- 保持原有单线程 `write RALL? -> sleep 30ms -> exact read 12288B -> raw/index write`
+- 仅在每帧 exact read 成功后，额外扫描前 `8000 B` 测量区
+- 把该区按 `1000` 个连续 `f64` 槽位遍历一遍
+- 记录处理总耗时和每帧平均处理耗时
+
+### 180 秒基线对照
+
+基线命令：
+
+- `dotnet ... Odmr.WinProbe.dll oe-rall --resource ASRL8::INSTR --baud 921600 --duration-sec 180 --out-dir oe1022d_rall_baseline_180s`
+
+结果：
+
+- `frames_ok = 5687`
+- `frame_hz = 31.5766`
+- `timeout_count = 0`
+- `raw_len_bad_count = 0`
+- `delta_gt1_count = 1`
+
+处理命令：
+
+- `dotnet ... Odmr.WinProbe.dll oe-rall --resource ASRL8::INSTR --baud 921600 --in-thread-process-mode measurement-means --duration-sec 180 --out-dir oe1022d_rall_processed_180s`
+
+结果：
+
+- `frames_ok = 5692`
+- `frame_hz = 31.6089`
+- `timeout_count = 0`
+- `raw_len_bad_count = 0`
+- `delta_gt1_count = 0`
+- `processing_total_ms = 17.9127`
+- `mean_processing_us_per_frame = 3.147`
+
+### 15 分钟 processed 长跑
+
+命令：
+
+- `dotnet ... Odmr.WinProbe.dll oe-rall --resource ASRL8::INSTR --baud 921600 --in-thread-process-mode measurement-means --duration-sec 900 --out-dir oe1022d_rall_processed_15min`
+
+结果：
+
+- `frames_ok = 28503`
+- `frame_hz = 31.6665`
+- `timeout_count = 0`
+- `raw_len_bad_count = 0`
+- `delta_gt1_count = 0`
+- `processing_total_ms = 63.885`
+- `mean_processing_us_per_frame = 2.241`
+
+### 结论
+
+- 对当前这一步“扫描前 `8000 B`、遍历 `1000` 个 `f64` 槽位”的原始数据处理来说，collector 线程内开销非常小；
+- 在 `180 s` 和 `15 min` 两轮实测里，没有观察到它显著拉低 `frames_ok` 或引入 `timeout`；
+- `mean_processing_us_per_frame` 约为 `2.2 ~ 3.1 us`，远小于当前每帧的整体采集周期；
+- 因此至少对这一级别的轻量原始数据处理，可以认为“放在 collector 同线程里”不会特别影响当前 OE1022D 的采集性能。
+
+但这里要明确边界：
+
+- 这不等于“runtime 现在就应该把通用 parser 搬回 collector 线程”；
+- 这次验证的只是一个轻量、固定、可控的原始数据扫描步骤；
+- 当前 runtime 主链仍维持“collector 只拉 raw，不在采集线程做字段级解析”的冻结合同，除非后续有新的独立 gate 和长跑验证来支持变更。
+
 ## 当前参数归属结论
 
 ### point / run 允许变化
