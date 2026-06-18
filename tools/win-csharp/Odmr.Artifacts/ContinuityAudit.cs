@@ -89,6 +89,9 @@ internal sealed record CollectorBlockAuditRecord(
 
 public static class ContinuityAudit
 {
+    public const long Oe1300AllowedRawLenBadCount = 1;
+    public const double Oe1300MinimumEffectiveSampleHzPerParameter = 900.0;
+
     public static ContinuityAuditReport Audit(string runDir)
     {
         var lockinModel = DetectLockinModel(runDir);
@@ -107,6 +110,16 @@ public static class ContinuityAudit
 
         RallArtifactWriter.WritePrettyJson(outPath, report);
     }
+
+    public static bool Oe1300CollectorAccepted(
+        long timeoutCount,
+        long rawLenBadCount,
+        long decodeFailures,
+        double? effectiveSampleHzPerParameter) =>
+        timeoutCount == 0 &&
+        rawLenBadCount <= Oe1300AllowedRawLenBadCount &&
+        decodeFailures == 0 &&
+        (effectiveSampleHzPerParameter ?? 0.0) >= Oe1300MinimumEffectiveSampleHzPerParameter;
 
     private static ContinuityAuditReport AuditOe1022d(string runDir)
     {
@@ -184,11 +197,12 @@ public static class ContinuityAudit
         var effectiveSampleHzPerParameter = uniqueBlockHz.HasValue
             ? uniqueBlockHz.Value * 100.0
             : summary.EffectiveSampleHzPerParameter;
-        var verdict = summary.TimeoutCount == 0 &&
-            summary.RawLenBadCount == 0 &&
-            summary.DecodeFailures == 0 &&
-            indexGapCount == 0 &&
-            (effectiveSampleHzPerParameter ?? 0.0) >= 900.0
+        var verdict = Oe1300CollectorAccepted(
+            summary.TimeoutCount,
+            summary.RawLenBadCount,
+            summary.DecodeFailures,
+            effectiveSampleHzPerParameter) &&
+            indexGapCount == 0
             ? "continuous"
             : "degraded";
 

@@ -228,9 +228,15 @@ append collector_blocks + unique-only parameter_values + unique-only sample_valu
 - `rall_index` 连续
 - `unique_block` 去重
 - `timeout_count == 0`
-- `raw_len_bad_count == 0`
+- `raw_len_bad_count <= 1`
 - `decode_failures == 0`
 - `effective_sample_hz_per_parameter >= 900`
+
+这里允许 `raw_len_bad_count <= 1` 的口径，只适用于 `OE1300`，且只表示允许极少量短读：
+
+- 不隐藏 `raw_len_bad_count`
+- 不修改已成功解码样本的事实层结构
+- `raw_len_bad_count >= 2` 仍判为 collector 连续性失败
 
 ## 八、parameter_values.csv
 

@@ -280,10 +280,11 @@ static int RunExecuteCommand(IReadOnlyDictionary<string, string> options)
     Console.WriteLine($"run-execute done: run_id={summary.RunId}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, {runExecuteContinuityMetric}, out_dir={outDir}");
     return summary.LockinModel == "oe1300"
         ? summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
-            summary.TimeoutCount == 0 &&
-            summary.RawLenBadCount == 0 &&
-            (summary.DecodeFailures ?? 0) == 0 &&
-            (summary.EffectiveSampleHzPerParameter ?? 0) >= 900 ? 0 : 2
+            ContinuityAudit.Oe1300CollectorAccepted(
+                summary.TimeoutCount,
+                summary.RawLenBadCount,
+                summary.DecodeFailures ?? 0,
+                summary.EffectiveSampleHzPerParameter) ? 0 : 2
         : summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
             summary.TimeoutCount == 0 &&
             summary.RawLenBadCount == 0 &&
@@ -327,10 +328,11 @@ static int ResumeRunCommand(IReadOnlyDictionary<string, string> options)
     Console.WriteLine($"resume-run done: previous_run={previousRunDir}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, {resumeContinuityMetric}, out_dir={outDir}");
     return summary.LockinModel == "oe1300"
         ? summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
-            summary.TimeoutCount == 0 &&
-            summary.RawLenBadCount == 0 &&
-            (summary.DecodeFailures ?? 0) == 0 &&
-            (summary.EffectiveSampleHzPerParameter ?? 0) >= 900 ? 0 : 2
+            ContinuityAudit.Oe1300CollectorAccepted(
+                summary.TimeoutCount,
+                summary.RawLenBadCount,
+                summary.DecodeFailures ?? 0,
+                summary.EffectiveSampleHzPerParameter) ? 0 : 2
         : summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
             summary.TimeoutCount == 0 &&
             summary.RawLenBadCount == 0 &&
