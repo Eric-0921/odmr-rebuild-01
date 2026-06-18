@@ -53,6 +53,27 @@ collector.
 
 ## Commands
 
+### Formal runtime / artifact path
+
+These are the stable entry points for normal runs, pause/resume, and offline
+artifact checks.
+
+```powershell
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json --out-dir runs/win_csharp_run_execute_minimal
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- resume-run --previous-run runs/win_csharp_run_execute_minimal --out-dir runs/win_csharp_run_execute_minimal__resume_01
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- artifact-check --run runs/win_csharp_run_execute_minimal
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run runs/win_csharp_run_execute_minimal --out runs/win_csharp_run_execute_minimal/continuity_audit.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- device-command-check
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/win_csharp_run_execute_minimal
+```
+
+### Diagnostics / probe / demo path
+
+These commands are intentionally kept under diagnostics. They are for device
+identification, collector experiments, and LabVIEW-style decode validation. Do
+not treat them as the formal runtime contract.
+
 ```powershell
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- visa-list
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-idn --resource ASRL8::INSTR --baud 921600
@@ -69,13 +90,6 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --list-resource
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB::0x0AAD::0x0054::106789::INSTR
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/minimal_3point_runtime.json --smb-profile configs/profiles/smb100a_run_monitor_2830_2890_-10dbm.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json --out-dir runs/win_csharp_run_execute_minimal
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- resume-run --previous-run runs/win_csharp_run_execute_minimal --out-dir runs/win_csharp_run_execute_minimal__resume_01
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- artifact-check --run runs/win_csharp_run_execute_minimal
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run runs/win_csharp_run_execute_minimal --out runs/win_csharp_run_execute_minimal/continuity_audit.json
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- device-command-check
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/win_csharp_run_execute_minimal
 ```
 
 `oe-rall --in-thread-process-mode field-decode-csv --write-raw false` reflects the
