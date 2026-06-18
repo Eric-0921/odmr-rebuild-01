@@ -274,11 +274,20 @@ static int RunExecuteCommand(IReadOnlyDictionary<string, string> options)
         WaitForWatcher(emergencyWatcher);
     }
 
-    Console.WriteLine($"run-execute done: run_id={summary.RunId}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
-    return summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
-        summary.TimeoutCount == 0 &&
-        summary.RawLenBadCount == 0 &&
-        summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
+    var runExecuteContinuityMetric = summary.LockinModel == "oe1300"
+        ? $"effective_sample_hz_per_parameter={summary.EffectiveSampleHzPerParameter:0.###}"
+        : $"delta_gt1={summary.PacketCounter?.DeltaGt1Count ?? 0}";
+    Console.WriteLine($"run-execute done: run_id={summary.RunId}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, {runExecuteContinuityMetric}, out_dir={outDir}");
+    return summary.LockinModel == "oe1300"
+        ? summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
+            summary.TimeoutCount == 0 &&
+            summary.RawLenBadCount == 0 &&
+            (summary.DecodeFailures ?? 0) == 0 &&
+            (summary.EffectiveSampleHzPerParameter ?? 0) >= 900 ? 0 : 2
+        : summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
+            summary.TimeoutCount == 0 &&
+            summary.RawLenBadCount == 0 &&
+            (summary.PacketCounter?.DeltaGt1Count ?? 0) == 0 ? 0 : 2;
 }
 
 static int ResumeRunCommand(IReadOnlyDictionary<string, string> options)
@@ -312,11 +321,20 @@ static int ResumeRunCommand(IReadOnlyDictionary<string, string> options)
         WaitForWatcher(emergencyWatcher);
     }
 
-    Console.WriteLine($"resume-run done: previous_run={previousRunDir}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, delta_gt1={summary.PacketCounter.DeltaGt1Count}, out_dir={outDir}");
-    return summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
-        summary.TimeoutCount == 0 &&
-        summary.RawLenBadCount == 0 &&
-        summary.PacketCounter.DeltaGt1Count == 0 ? 0 : 2;
+    var resumeContinuityMetric = summary.LockinModel == "oe1300"
+        ? $"effective_sample_hz_per_parameter={summary.EffectiveSampleHzPerParameter:0.###}"
+        : $"delta_gt1={summary.PacketCounter?.DeltaGt1Count ?? 0}";
+    Console.WriteLine($"resume-run done: previous_run={previousRunDir}, status={summary.Status}, points={summary.PointsPassed}/{summary.PointsTotal}, frames_ok={summary.FramesTotal}, timeouts={summary.TimeoutCount}, raw_len_bad={summary.RawLenBadCount}, {resumeContinuityMetric}, out_dir={outDir}");
+    return summary.LockinModel == "oe1300"
+        ? summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
+            summary.TimeoutCount == 0 &&
+            summary.RawLenBadCount == 0 &&
+            (summary.DecodeFailures ?? 0) == 0 &&
+            (summary.EffectiveSampleHzPerParameter ?? 0) >= 900 ? 0 : 2
+        : summary.Status is "completed" or "completed_with_failed_points" or "paused" &&
+            summary.TimeoutCount == 0 &&
+            summary.RawLenBadCount == 0 &&
+            (summary.PacketCounter?.DeltaGt1Count ?? 0) == 0 ? 0 : 2;
 }
 
 static Task? StartRequestFileWatcher(string? requestPath, CancellationTokenSource requestCancellation, CancellationToken cancellationToken)
