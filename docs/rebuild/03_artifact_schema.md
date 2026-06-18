@@ -217,8 +217,9 @@ append collector_frames + parameter_values + sample_values
 write RALL?\r
 sleep 5ms
 read until 32768B
-decode 37 x 100 big-endian double
-append collector_blocks + parameter_values + sample_values
+detect unique block
+decode 37 x 100 big-endian double for unique blocks only
+append collector_blocks + unique-only parameter_values + unique-only sample_values
 ```
 
 当前 OE1300 连续性不依赖 packet counter，而依赖：
@@ -235,7 +236,7 @@ append collector_blocks + parameter_values + sample_values
 这是块级 / 帧级摘要表：
 
 - `OE1022D`：每帧一行，主字段均值 + 关键状态
-- `OE1300`：每块一行，`37` 个参数均值 + 状态区结构化字段
+- `OE1300`：每个 `unique_block` 一行，`37` 个参数均值 + 状态区结构化字段
 
 它是快速审阅表，不替代样本级真值。
 
@@ -244,7 +245,9 @@ append collector_blocks + parameter_values + sample_values
 这是样本级 decoded truth：
 
 - `OE1022D`：每 `1 ms` 样本一行，`20` 个主字段展开
-- `OE1300`：每 `1 ms` 样本一行，`37` 个参数展开
+- `OE1300`：每个 `unique_block` 内按 `1 ms` 展开，`37` 个参数展开
+
+`collector_blocks.jsonl` 仍保留所有 query 到的块，并通过 `unique_block` / `unique_block_index` 负责去重事实层；CSV 只保存去重后的有效样本。
 
 point 级离线后处理默认直接读取：
 
