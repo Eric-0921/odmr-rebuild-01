@@ -1033,6 +1033,7 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
     var drainBeforeWrite = GetBoolOption(options, "drain-before-write", false);
     var writeValues = GetBoolOption(options, "write-values", false);
     var previewParamIndex = GetIntOption(options, "preview-param-index", 0);
+    var csvWriteMode = GetOption(options, "csv-write-mode", "all").Trim().ToLowerInvariant();
 
     if (durationSec <= 0)
     {
@@ -1042,6 +1043,11 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
     if (previewParamIndex < 0 || previewParamIndex >= Oe1300Defaults.TcpRallLabviewParameterCount)
     {
         return Fail($"--preview-param-index must be between 0 and {Oe1300Defaults.TcpRallLabviewParameterCount - 1}");
+    }
+
+    if (csvWriteMode is not ("all" or "unique-only"))
+    {
+        return Fail("--csv-write-mode must be one of: all, unique-only");
     }
 
     Directory.CreateDirectory(outDir);
@@ -1061,6 +1067,10 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
     long decodeFailures = 0;
     long decodedSamplesPerParameter = 0;
     long globalSampleIndex = 0;
+    long uniqueBlocks = 0;
+    long duplicateBlocks = 0;
+    long writtenRalls = 0;
+    long writtenSamplesPerParameter = 0;
     long previewFiniteCount = 0;
     long previewNonFiniteCount = 0;
     double previewMin = double.PositiveInfinity;
@@ -1070,6 +1080,8 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
     string? lastStatusHex = null;
     byte? lastTrigCount = null;
     string? lastStatusZoneSha256 = null;
+    string? previousPayloadSha256 = null;
+    var writeUniqueOnly = string.Equals(csvWriteMode, "unique-only", StringComparison.Ordinal);
 
     using var oe = Oe1300Tcp.Open(host, port);
     using var previewWriter = writeValues
@@ -1118,8 +1130,6 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
                 continue;
             }
 
-            var namedSeries = Oe1300Parsers.DecodeTcpRallLabviewNamedSeries(payload);
-            var previewSeries = namedSeries[previewParamName];
             var monotonicNs = MonotonicNsSince(processStart);
             var statusHex = Convert.ToHexString(payload, Oe1300Defaults.TcpRallStatusOffset, Oe1300Defaults.TcpRallStatusByteCount).ToLowerInvariant();
             var statusByte = payload[Oe1300Defaults.TcpRallStatusOffset];
@@ -1127,88 +1137,109 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
             var statusZoneHex = Convert.ToHexString(payload, Oe1300Defaults.TcpRallPayloadBytes, payload.Length - Oe1300Defaults.TcpRallPayloadBytes).ToLowerInvariant();
             var statusZoneSha256 = Convert.ToHexString(SHA256.HashData(payload.AsSpan(Oe1300Defaults.TcpRallPayloadBytes, payload.Length - Oe1300Defaults.TcpRallPayloadBytes))).ToLowerInvariant();
             var payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.AsSpan(0, payload.Length))).ToLowerInvariant();
-
-            foreach (var value in previewSeries)
+            var uniqueBlock = !string.Equals(previousPayloadSha256, payloadSha256, StringComparison.Ordinal);
+            if (uniqueBlock)
             {
-                if (!double.IsFinite(value))
-                {
-                    previewNonFiniteCount++;
-                    continue;
-                }
-
-                previewFiniteCount++;
-
-                if (value < previewMin)
-                {
-                    previewMin = value;
-                }
-
-                if (value > previewMax)
-                {
-                    previewMax = value;
-                }
-
-                previewSum += value;
+                uniqueBlocks++;
+            }
+            else
+            {
+                duplicateBlocks++;
             }
 
-            for (var sampleIndexInRall = 0; sampleIndexInRall < previewSeries.Length; sampleIndexInRall++)
+            var sampleIndexStart = globalSampleIndex;
+            var writeCurrentBlock = !writeUniqueOnly || uniqueBlock;
+            if (writeCurrentBlock)
             {
-                if (previewWriter is not null)
+                var namedSeries = Oe1300Parsers.DecodeTcpRallLabviewNamedSeries(payload);
+                var previewSeries = namedSeries[previewParamName];
+
+                foreach (var value in previewSeries)
                 {
-                    previewWriter.Write(decodedRallsOk.ToString(CultureInfo.InvariantCulture));
-                    previewWriter.Write(',');
-                    previewWriter.Write(sampleIndexInRall.ToString(CultureInfo.InvariantCulture));
-                    previewWriter.Write(',');
-                    previewWriter.Write(globalSampleIndex.ToString(CultureInfo.InvariantCulture));
-                    previewWriter.Write(',');
-                    previewWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
-                    previewWriter.Write(',');
-                    previewWriter.Write(previewParamIndex.ToString(CultureInfo.InvariantCulture));
-                    previewWriter.Write(',');
-                    previewWriter.Write(previewParamName);
-                    previewWriter.Write(',');
-                    previewWriter.WriteLine(previewSeries[sampleIndexInRall].ToString("R", CultureInfo.InvariantCulture));
+                    if (!double.IsFinite(value))
+                    {
+                        previewNonFiniteCount++;
+                        continue;
+                    }
+
+                    previewFiniteCount++;
+
+                    if (value < previewMin)
+                    {
+                        previewMin = value;
+                    }
+
+                    if (value > previewMax)
+                    {
+                        previewMax = value;
+                    }
+
+                    previewSum += value;
                 }
 
-                sampleWriter.Write(decodedRallsOk.ToString(CultureInfo.InvariantCulture));
-                sampleWriter.Write(',');
-                sampleWriter.Write(sampleIndexInRall.ToString(CultureInfo.InvariantCulture));
-                sampleWriter.Write(',');
-                sampleWriter.Write(globalSampleIndex.ToString(CultureInfo.InvariantCulture));
-                sampleWriter.Write(',');
-                sampleWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
-                sampleWriter.Write(',');
-                sampleWriter.Write(statusHex);
-                sampleWriter.Write(',');
-                sampleWriter.Write(statusByte.ToString(CultureInfo.InvariantCulture));
-                sampleWriter.Write(',');
-                sampleWriter.Write(trigCount.ToString(CultureInfo.InvariantCulture));
+                for (var sampleIndexInRall = 0; sampleIndexInRall < previewSeries.Length; sampleIndexInRall++)
+                {
+                    if (previewWriter is not null)
+                    {
+                        previewWriter.Write(decodedRallsOk.ToString(CultureInfo.InvariantCulture));
+                        previewWriter.Write(',');
+                        previewWriter.Write(sampleIndexInRall.ToString(CultureInfo.InvariantCulture));
+                        previewWriter.Write(',');
+                        previewWriter.Write(globalSampleIndex.ToString(CultureInfo.InvariantCulture));
+                        previewWriter.Write(',');
+                        previewWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+                        previewWriter.Write(',');
+                        previewWriter.Write(previewParamIndex.ToString(CultureInfo.InvariantCulture));
+                        previewWriter.Write(',');
+                        previewWriter.Write(previewParamName);
+                        previewWriter.Write(',');
+                        previewWriter.WriteLine(previewSeries[sampleIndexInRall].ToString("R", CultureInfo.InvariantCulture));
+                    }
+
+                    sampleWriter.Write(decodedRallsOk.ToString(CultureInfo.InvariantCulture));
+                    sampleWriter.Write(',');
+                    sampleWriter.Write(sampleIndexInRall.ToString(CultureInfo.InvariantCulture));
+                    sampleWriter.Write(',');
+                    sampleWriter.Write(globalSampleIndex.ToString(CultureInfo.InvariantCulture));
+                    sampleWriter.Write(',');
+                    sampleWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+                    sampleWriter.Write(',');
+                    sampleWriter.Write(statusHex);
+                    sampleWriter.Write(',');
+                    sampleWriter.Write(statusByte.ToString(CultureInfo.InvariantCulture));
+                    sampleWriter.Write(',');
+                    sampleWriter.Write(trigCount.ToString(CultureInfo.InvariantCulture));
+                    foreach (var fieldName in Oe1300Defaults.SerialRallFieldNames)
+                    {
+                        sampleWriter.Write(',');
+                        sampleWriter.Write(namedSeries[fieldName][sampleIndexInRall].ToString("R", CultureInfo.InvariantCulture));
+                    }
+                    sampleWriter.WriteLine();
+                    globalSampleIndex++;
+                }
+
+                parameterWriter.Write(decodedRallsOk.ToString(CultureInfo.InvariantCulture));
+                parameterWriter.Write(',');
+                parameterWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+                parameterWriter.Write(',');
+                parameterWriter.Write(statusHex);
+                parameterWriter.Write(',');
+                parameterWriter.Write(statusByte.ToString(CultureInfo.InvariantCulture));
+                parameterWriter.Write(',');
+                parameterWriter.Write(trigCount.ToString(CultureInfo.InvariantCulture));
                 foreach (var fieldName in Oe1300Defaults.SerialRallFieldNames)
                 {
-                    sampleWriter.Write(',');
-                    sampleWriter.Write(namedSeries[fieldName][sampleIndexInRall].ToString("R", CultureInfo.InvariantCulture));
+                    var series = namedSeries[fieldName];
+                    var mean = series.Average();
+                    parameterWriter.Write(',');
+                    parameterWriter.Write(mean.ToString("R", CultureInfo.InvariantCulture));
                 }
-                sampleWriter.WriteLine();
-                globalSampleIndex++;
-            }
+                parameterWriter.WriteLine();
 
-            parameterWriter.Write(decodedRallsOk.ToString(CultureInfo.InvariantCulture));
-            parameterWriter.Write(',');
-            parameterWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
-            parameterWriter.Write(',');
-            parameterWriter.Write(statusHex);
-            parameterWriter.Write(',');
-            parameterWriter.Write(statusByte.ToString(CultureInfo.InvariantCulture));
-            parameterWriter.Write(',');
-            parameterWriter.Write(trigCount.ToString(CultureInfo.InvariantCulture));
-            foreach (var fieldName in Oe1300Defaults.SerialRallFieldNames)
-            {
-                var series = namedSeries[fieldName];
-                var mean = series.Average();
-                parameterWriter.Write(',');
-                parameterWriter.Write(mean.ToString("R", CultureInfo.InvariantCulture));
+                decodedSamplesPerParameter += previewSeries.Length;
+                writtenSamplesPerParameter += previewSeries.Length;
+                writtenRalls++;
             }
-            parameterWriter.WriteLine();
 
             collectorBlocksWriter.WriteLine(JsonSerializer.Serialize(new
             {
@@ -1216,23 +1247,25 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
                 source = "oe1300_main",
                 rall_index = decodedRallsOk,
                 monotonic_ns = monotonicNs,
-                sample_index_start = globalSampleIndex - previewSeries.Length,
+                sample_index_start = sampleIndexStart,
                 sample_index_end = globalSampleIndex,
-                samples_per_parameter = previewSeries.Length,
+                samples_per_parameter = Oe1300Defaults.TcpRallLabviewSamplesPerParameter,
                 parameter_count = Oe1300Defaults.TcpRallLabviewParameterCount,
                 status_hex = statusHex,
                 status_byte = statusByte,
                 trig_count = trigCount,
                 payload_sha256 = payloadSha256,
                 status_zone_sha256 = statusZoneSha256,
-                status_zone_hex = statusZoneHex
+                status_zone_hex = statusZoneHex,
+                unique_block = uniqueBlock,
+                unique_block_index = uniqueBlock ? uniqueBlocks - 1 : Math.Max(0, uniqueBlocks - 1)
             }, JsonOptions.Default));
 
-            decodedSamplesPerParameter += previewSeries.Length;
             lastStatus = statusByte;
             lastStatusHex = statusHex;
             lastTrigCount = trigCount;
             lastStatusZoneSha256 = statusZoneSha256;
+            previousPayloadSha256 = payloadSha256;
             decodedRallsOk++;
             stats.FramesOk++;
         }
@@ -1256,9 +1289,17 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
     var elapsedMs = (long)Stopwatch.GetElapsedTime(processStart).TotalMilliseconds;
     var meanRallMs = decodedRallsOk > 0 ? elapsedMs / (double)decodedRallsOk : 0.0;
     var queryHz = meanRallMs > 0 ? 1000.0 / meanRallMs : 0.0;
-    var effectivePerParameterHz = queryHz * Oe1300Defaults.TcpRallLabviewSamplesPerParameter;
+    var uniqueBlockHz = elapsedMs > 0 ? uniqueBlocks / (elapsedMs / 1000.0) : 0.0;
+    var writtenBlockHz = elapsedMs > 0 ? writtenRalls / (elapsedMs / 1000.0) : 0.0;
+    var queryBasedPerParameterHz = queryHz * Oe1300Defaults.TcpRallLabviewSamplesPerParameter;
+    var effectivePerParameterHz = uniqueBlockHz * Oe1300Defaults.TcpRallLabviewSamplesPerParameter;
+    var writtenPerParameterHz = writtenBlockHz * Oe1300Defaults.TcpRallLabviewSamplesPerParameter;
     var effectiveTotalScalarHz = effectivePerParameterHz * Oe1300Defaults.TcpRallLabviewParameterCount;
     var previewMean = previewFiniteCount > 0 ? previewSum / previewFiniteCount : 0.0;
+    var collectorBlocksBytes = new FileInfo(collectorBlocksPath).Length;
+    var parameterValuesBytes = new FileInfo(parameterValuesPath).Length;
+    var sampleValuesBytes = new FileInfo(sampleValuesPath).Length;
+    var previewValuesBytes = writeValues && File.Exists(valuesPath) ? new FileInfo(valuesPath).Length : 0L;
 
     var summary = new
     {
@@ -1270,6 +1311,7 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
         post_write_delay_ms = postWriteDelayMs,
         drain_before_write = drainBeforeWrite,
         write_values = writeValues,
+        csv_write_mode = csvWriteMode,
         preview_param_index = previewParamIndex,
         preview_param_name = previewParamName,
         decode_mode = "labview_37_parameters_x_100_samples_big_endian_v2",
@@ -1288,8 +1330,16 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
         raw_len_bad_count = stats.RawLenBadCount,
         decode_failures = decodeFailures,
         query_hz = queryHz,
+        unique_block_hz = uniqueBlockHz,
+        written_block_hz = writtenBlockHz,
+        unique_blocks = uniqueBlocks,
+        duplicate_blocks = duplicateBlocks,
+        written_ralls = writtenRalls,
         decoded_samples_per_parameter_total = decodedSamplesPerParameter,
+        written_samples_per_parameter_total = writtenSamplesPerParameter,
+        query_based_sample_hz_per_parameter = queryBasedPerParameterHz,
         effective_sample_hz_per_parameter = effectivePerParameterHz,
+        written_sample_hz_per_parameter = writtenPerParameterHz,
         effective_total_scalar_hz = effectiveTotalScalarHz,
         preview_finite_count = previewFiniteCount,
         preview_non_finite_count = previewNonFiniteCount,
@@ -1300,6 +1350,10 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
         last_status_byte = lastStatus,
         last_trig_count = lastTrigCount,
         last_status_zone_sha256 = lastStatusZoneSha256,
+        collector_blocks_bytes = collectorBlocksBytes,
+        parameter_values_bytes = parameterValuesBytes,
+        sample_values_bytes = sampleValuesBytes,
+        preview_values_bytes = writeValues ? previewValuesBytes : (long?)null,
         collector_blocks_path = PathRelative(outDir, collectorBlocksPath),
         parameter_values_path = PathRelative(outDir, parameterValuesPath),
         sample_values_path = PathRelative(outDir, sampleValuesPath),
@@ -1307,7 +1361,7 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
     };
 
     File.WriteAllText(summaryPath, JsonSerializer.Serialize(summary, JsonOptions.Pretty) + Environment.NewLine, new UTF8Encoding(false));
-    Console.WriteLine($"oe1300-net-labview-demo done: ralls_ok={decodedRallsOk}, query_hz={queryHz:0.###}, effective_sample_hz_per_parameter={effectivePerParameterHz:0.###}, out_dir={outDir}");
+    Console.WriteLine($"oe1300-net-labview-demo done: ralls_ok={decodedRallsOk}, unique_blocks={uniqueBlocks}, query_hz={queryHz:0.###}, effective_sample_hz_per_parameter={effectivePerParameterHz:0.###}, csv_write_mode={csvWriteMode}, out_dir={outDir}");
     return stats.TimeoutCount == 0 && stats.RawLenBadCount == 0 && decodeFailures == 0 ? 0 : 2;
 }
 
@@ -1457,7 +1511,7 @@ static void PrintUsage()
       Odmr.WinProbe oe1300-rall --port <COMx> [--baud 115200] [--count 1] --out-dir <dir>
       Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
       Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
-      Odmr.WinProbe oe1300-net-labview-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--drain-before-write true|false] [--preview-param-index 0] [--write-values true|false] --duration-sec 10 --out-dir <dir>
+      Odmr.WinProbe oe1300-net-labview-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--drain-before-write true|false] [--preview-param-index 0] [--write-values true|false] [--csv-write-mode all|unique-only] --duration-sec 10 --out-dir <dir>
       Odmr.WinProbe smb-probe [--list-resources] [--resource USB::0x0AAD::0x0054::106789::INSTR]
       Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--smb-resource USB::0x0AAD::0x0054::106789::INSTR] [--repeat 1] --out-dir <dir>
       Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--smb-resource USB::0x0AAD::0x0054::106789::INSTR] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>

@@ -61,7 +61,8 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-idn --port COM8 --
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-rall --port COM8 --baud 115200 --count 1 --out-dir runs/oe1300_serial_probe
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-idn --host 192.168.1.1 --port 10001
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-rall --host 192.168.1.1 --port 10001 --count 1 --out-dir runs/oe1300_net_probe
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --duration-sec 10 --out-dir runs/oe1300_net_labview_demo
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --csv-write-mode all --duration-sec 10 --out-dir runs/oe1300_net_labview_demo
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --csv-write-mode unique-only --duration-sec 10 --out-dir runs/oe1300_net_labview_demo_unique
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --list-resources
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB::0x0AAD::0x0054::106789::INSTR
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
@@ -140,7 +141,12 @@ Then it decodes the first `29600 B` as:
 The summary reports both:
 
 - `query_hz` for host-side `RALL?` loops
-- `effective_sample_hz_per_parameter` under the LabVIEW-style `37 x 100` decode assumption
+- `unique_block_hz` and `effective_sample_hz_per_parameter` after duplicate-block elimination
+
+`--csv-write-mode` controls how CSV payload rows are written:
+
+- `all` keeps the current behavior: every queried block expands into `parameter_values.csv` and `sample_values.csv`
+- `unique-only` still queries and records every block in `collector_blocks.jsonl`, but only writes CSV rows for `unique_block = true`
 
 It writes:
 
@@ -158,6 +164,15 @@ Current verified interpretation is:
 - each parameter contains `100` samples
 - each sample is one big-endian `double`
 - fixed offsets also expose `status` and `Trig_Count`
+
+For storage-pressure validation, the summary now also records:
+
+- `unique_blocks` / `duplicate_blocks`
+- `written_ralls`
+- `written_samples_per_parameter_total`
+- `collector_blocks_bytes`
+- `parameter_values_bytes`
+- `sample_values_bytes`
 
 For strict LabVIEW-style behavior, `--drain-before-write` now defaults to
 `false`. The pre-drain path should only be used as a socket-backlog diagnostic,
