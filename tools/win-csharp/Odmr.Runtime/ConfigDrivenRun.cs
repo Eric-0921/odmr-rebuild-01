@@ -1692,15 +1692,16 @@ public static class ConfigDrivenRun
                 ? (long)Math.Ceiling(sweep.EstimatedSweepDurationMs / (double)collector.PollIntervalMs)
                 : null;
             frameCoverage = estimatedFrames is > 0 ? framesInSegment / (double)estimatedFrames.Value : null;
-            framesUnique = framesInSegment;
-            duplicateCount = 0;
-            duplicateRatio = 0.0;
+            framesUnique = Math.Max(0, uniqueBlocksInSegment);
+            duplicateCount = Math.Max(0, framesInSegment - framesUnique);
+            duplicateRatio = framesInSegment > 0 ? duplicateCount / (double)framesInSegment : 1.0;
             collectorHealth = pointTimeouts == 0
                 ? "clean"
                 : pointTimeouts <= thresholds.MaxTimeoutCount ? "recovered_timeout" : "degraded_timeout";
             qualityStatus = framesInSegment == 0
                 ? "failed_no_frames"
-                : framesInSegment < thresholds.MinFrames ? "failed_min_frames"
+                : framesUnique == 0 ? "failed_duplicate_only"
+                : framesUnique < thresholds.MinFrames ? "failed_min_frames"
                 : pointTimeouts > thresholds.MaxTimeoutCount ? "failed_timeout"
                 : lastFrameAgeMs > thresholds.MaxLastFrameAgeMs ? "failed_quality"
                 : "passed";

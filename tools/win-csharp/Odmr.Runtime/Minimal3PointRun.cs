@@ -381,6 +381,7 @@ public static class Minimal3PointRun
         var timeoutsAfter = collector.Snapshot().Stats.TimeoutCount;
         var pointTimeouts = timeoutsAfter - timeoutsBefore;
         var framesInSegment = segmentEnd.NextFrameSeq - segmentStart.NextFrameSeq;
+        var uniqueFramesInSegment = segmentEnd.NextUniqueFrameSeq - segmentStart.NextUniqueFrameSeq;
         var globalIndex = cycle * Points.Length + index;
         var segmentId = $"seg_{point.PointId}_{globalIndex:0000}";
 
@@ -424,9 +425,13 @@ public static class Minimal3PointRun
                     "passed",
                     measuredCurrentA)));
 
-        var duplicateCount = 0L;
-        var duplicateRatio = 0.0;
-        var qualityStatus = framesInSegment >= MinFrames && pointTimeouts <= MaxTimeoutCount ? "passed" : "failed_min_frames";
+        var duplicateCount = Math.Max(0, framesInSegment - uniqueFramesInSegment);
+        var duplicateRatio = framesInSegment > 0 ? duplicateCount / (double)framesInSegment : 1.0;
+        var qualityStatus = uniqueFramesInSegment >= MinFrames && pointTimeouts <= MaxTimeoutCount
+            ? "passed"
+            : uniqueFramesInSegment == 0
+                ? "failed_duplicate_only"
+                : "failed_min_frames";
         RallArtifactWriter.AppendJsonl(
             qualityPath,
             new QualityRecord(
@@ -435,7 +440,7 @@ public static class Minimal3PointRun
                 point.PointId,
                 segmentId,
                 framesInSegment,
-                framesInSegment - duplicateCount,
+                uniqueFramesInSegment,
                 duplicateCount,
                 duplicateRatio,
                 pointTimeouts,

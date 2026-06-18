@@ -25,9 +25,20 @@ public sealed class PacketCounterAudit
     public long DeltaGt1Count { get; private set; }
     public long EstimatedMissingWindows { get; private set; }
 
-    public void Record(byte counter)
+    public bool WouldBeUnique(byte counter)
+    {
+        if (!previous.HasValue)
+        {
+            return true;
+        }
+
+        return (counter - previous.Value + 256) % 256 != 0;
+    }
+
+    public bool Record(byte counter)
     {
         FirstCounter ??= counter;
+        var uniqueFrame = true;
 
         if (previous.HasValue)
         {
@@ -36,6 +47,7 @@ public sealed class PacketCounterAudit
             {
                 case 0:
                     Delta0Count++;
+                    uniqueFrame = false;
                     break;
                 case 1:
                     Delta1Count++;
@@ -49,6 +61,7 @@ public sealed class PacketCounterAudit
 
         previous = counter;
         LastCounter = counter;
+        return uniqueFrame;
     }
 
     public PacketCounterSummary ToSummary() =>
@@ -117,7 +130,9 @@ public sealed record CollectorFrameRecord(
     [property: JsonPropertyName("b_ref_current_freq_hz")] double BRefCurrentFreqHz,
     [property: JsonPropertyName("b_input_overload")] byte BInputOverload,
     [property: JsonPropertyName("b_gain_overload")] byte BGainOverload,
-    [property: JsonPropertyName("b_pll_locked")] byte BPllLocked);
+    [property: JsonPropertyName("b_pll_locked")] byte BPllLocked,
+    [property: JsonPropertyName("unique_frame")] bool UniqueFrame,
+    [property: JsonPropertyName("unique_frame_index")] long UniqueFrameIndex);
 
 public sealed record CollectorBlockRecord(
     [property: JsonPropertyName("schema_version")] int SchemaVersion,

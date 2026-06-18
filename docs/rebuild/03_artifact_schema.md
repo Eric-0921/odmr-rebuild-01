@@ -68,7 +68,7 @@ runs/<run_id>/
   "operator": "local",
   "station_id": "lab_a",
   "lockin_model": "oe1022d",
-  "collector_contract": "write RALL? -> sleep 30ms -> exact read 12288B -> direct-decode -> append collector_frames + parameter_values + sample_values",
+  "collector_contract": "write RALL? -> sleep 30ms -> exact read 12288B -> detect duplicate by packet counter -> direct-decode unique frames only -> append collector_frames + unique-only parameter_values + unique-only sample_values",
   "runtime_version": "0.1.0",
   "calibration_id": "lab_a_para_xml_inverse_coil_constant",
   "status": "running",
@@ -169,6 +169,8 @@ point 是否真正成功，不看 `points.jsonl` 单文件，而看 `points + qu
 - `sample_index_start/end`
 - `samples_per_frame`
 - `device_packet_counter`
+- `unique_frame`
+- `unique_frame_index`
 - `b_ref_source_code`
 - `b_ref_slope_code`
 - `b_ref_current_freq_hz`
@@ -182,8 +184,9 @@ point 是否真正成功，不看 `points.jsonl` 单文件，而看 `points + qu
 write RALL?
 sleep 30ms
 exact read 12288B
-direct-decode
-append collector_frames + parameter_values + sample_values
+detect duplicate by packet counter
+direct-decode unique frames only
+append collector_frames + unique-only parameter_values + unique-only sample_values
 ```
 
 连续性审计仍以 `device_packet_counter` 为核心：
@@ -191,6 +194,12 @@ append collector_frames + parameter_values + sample_values
 - `delta0 = 重复窗口`
 - `delta1 = 正常新窗口`
 - `delta_gt1 = 疑似漏窗口`
+
+其中：
+
+- `collector_frames.jsonl` 保留所有 query 到的帧
+- `parameter_values.csv` 与 `sample_values.csv` 只写 `unique_frame = true` 的有效帧
+- `sample_index_start/end` 对重复帧不会前进，因此 sample truth 与 CSV 行数保持一致
 
 ### 2. OE1300: collector_blocks.jsonl
 
@@ -227,7 +236,7 @@ append collector_blocks + unique-only parameter_values + unique-only sample_valu
 
 这是块级 / 帧级摘要表：
 
-- `OE1022D`：每帧一行，主字段均值 + 关键状态
+- `OE1022D`：每个 `unique_frame` 一行，主字段均值 + 关键状态
 - `OE1300`：每个 `unique_block` 一行，`37` 个参数均值 + 状态区结构化字段
 
 它是快速审阅表，不替代样本级真值。
@@ -236,10 +245,10 @@ append collector_blocks + unique-only parameter_values + unique-only sample_valu
 
 这是样本级 decoded truth：
 
-- `OE1022D`：每 `1 ms` 样本一行，`20` 个主字段展开
+- `OE1022D`：每个 `unique_frame` 内按 `1 ms` 展开，`20` 个主字段展开
 - `OE1300`：每个 `unique_block` 内按 `1 ms` 展开，`37` 个参数展开
 
-`collector_blocks.jsonl` 仍保留所有 query 到的块，并通过 `unique_block` / `unique_block_index` 负责去重事实层；CSV 只保存去重后的有效样本。当前不再把状态区原始十六进制字节冗余写入 `collector_blocks.jsonl`。
+`collector_frames.jsonl` 与 `collector_blocks.jsonl` 都保留所有 query 到的设备块；CSV 只保存去重后的有效样本。当前不再把 `OE1300` 状态区原始十六进制字节冗余写入 `collector_blocks.jsonl`。
 
 point 级离线后处理默认直接读取：
 

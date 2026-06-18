@@ -97,8 +97,16 @@ public static class ArtifactCheck
         var collectorRows = File.Exists(collectorFramesPath) ? CountLines(collectorFramesPath) : 0;
         var parameterRows = File.Exists(parameterValuesPath) ? CountCsvDataRows(parameterValuesPath) : 0;
         var sampleRows = File.Exists(sampleValuesPath) ? CountCsvDataRows(sampleValuesPath) : 0;
-        var uniqueCollectorRows = lockinModel == "oe1300" && File.Exists(collectorFramesPath)
-            ? CountJsonlTrueProperty(collectorFramesPath, "unique_block")
+        var uniqueCollectorProperty = lockinModel switch
+        {
+            "oe1022d" => "unique_frame",
+            "oe1300" => "unique_block",
+            _ => null
+        };
+        var uniqueCollectorRows = uniqueCollectorProperty is not null &&
+            File.Exists(collectorFramesPath) &&
+            JsonlContainsProperty(collectorFramesPath, uniqueCollectorProperty)
+            ? CountJsonlTrueProperty(collectorFramesPath, uniqueCollectorProperty)
             : collectorRows;
         var segmentsCount = File.Exists(segmentsPath) ? CountLines(segmentsPath) : 0;
         var pointsCount = File.Exists(pointsPath) ? CountLines(pointsPath) : 0;
@@ -640,6 +648,25 @@ public static class ArtifactCheck
         }
 
         return count;
+    }
+
+    private static bool JsonlContainsProperty(string path, string propertyName)
+    {
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            using var document = JsonDocument.Parse(line);
+            if (document.RootElement.TryGetProperty(propertyName, out _))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static Dictionary<string, long> CountJsonlStringProperty(string path, string propertyName)

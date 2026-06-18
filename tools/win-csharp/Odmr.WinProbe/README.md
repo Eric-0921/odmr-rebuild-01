@@ -11,8 +11,9 @@ loop:
 write RALL?
 sleep 30ms
 blocking read 12288 bytes
-direct-decode in-thread
-append collector_frames + parameter_values + sample_values
+detect duplicate by packet counter
+direct-decode unique frames in-thread
+append collector_frames + unique-only parameter_values + unique-only sample_values
 ```
 
 ## Frozen RALL Hot Path
@@ -24,13 +25,14 @@ continuity run with `delta_gt1_count = 0` and `run audit-continuity` returning
 
 Allowed inside the loop:
 
-- write `RALL?\r`
+- write `RALL?`
 - sleep `30ms`
 - blocking exact read `12288` bytes
-- decode `20 x 50` big-endian `double`
+- detect duplicate by `payload[12287]`
+- decode `20 x 50` big-endian `double` for unique frames
 - append `collector_frames.jsonl`
-- append `parameter_values.csv`
-- append `sample_values.csv`
+- append unique-only `parameter_values.csv`
+- append unique-only `sample_values.csv`
 - update minimal counters from `payload[12287]`
 
 Forbidden inside the loop:

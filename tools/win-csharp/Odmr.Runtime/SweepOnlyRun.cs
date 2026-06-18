@@ -196,6 +196,7 @@ public sealed class OeRallCollector : ILockinCollector
     private Thread? thread;
     private Exception? failure;
     private long frameSeq;
+    private long nextUniqueFrameSeq;
     private long nextSampleIndex;
     private string lastTs;
     private ulong lastMonotonicNs;
@@ -246,7 +247,7 @@ public sealed class OeRallCollector : ILockinCollector
     {
         lock (sync)
         {
-            return new CollectorCursor(frameSeq, nextSampleIndex, lastTs, lastMonotonicNs, frameSeq);
+            return new CollectorCursor(frameSeq, nextSampleIndex, lastTs, lastMonotonicNs, nextUniqueFrameSeq);
         }
     }
 
@@ -270,19 +271,28 @@ public sealed class OeRallCollector : ILockinCollector
 
     LockinCollectorSnapshot ILockinCollector.Snapshot()
     {
-        var snapshot = Snapshot();
-        return new LockinCollectorSnapshot(
-            LockinModel,
-            snapshot.Stats,
-            snapshot.SamplesWritten,
-            Cursor().MonotonicNs,
-            snapshot.PacketCounter.ToSummary(),
-            null,
-            snapshot.Stats.FramesOk,
-            0,
-            null,
-            null,
-            null);
+        lock (sync)
+        {
+            return new LockinCollectorSnapshot(
+                LockinModel,
+                new ProbeStats
+                {
+                    ReadAttempts = stats.ReadAttempts,
+                    FramesOk = stats.FramesOk,
+                    ReadErrors = stats.ReadErrors,
+                    TimeoutCount = stats.TimeoutCount,
+                    RawLenBadCount = stats.RawLenBadCount
+                },
+                nextSampleIndex,
+                lastMonotonicNs,
+                packetAudit.ToSummary(),
+                null,
+                nextUniqueFrameSeq,
+                Math.Max(0, stats.FramesOk - nextUniqueFrameSeq),
+                null,
+                null,
+                null);
+        }
     }
 
     public void Stop()
@@ -334,7 +344,8 @@ public sealed class OeRallCollector : ILockinCollector
             sampleValues.WriteLine();
 
             // Frozen direct-decode hot path: write, 30ms delay, exact blocking read,
-            // same-thread decode, append decoded truth. No retry, GUI, or async fan-out here.
+            // same-thread判重 + decode，collector_frames保留全query轨迹，
+            // parameter/sample CSV只写unique frame。这里不引入retry、异步fan-out或第二线程。
             while (!stopRequested)
             {
                 lock (sync)
@@ -368,77 +379,87 @@ public sealed class OeRallCollector : ILockinCollector
                     var ts = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'", System.Globalization.CultureInfo.InvariantCulture);
                     var counter = payload[Oe1022dDefaults.DevicePacketCounterOffset];
                     var status = Oe1022dDirectDecode.ReadStatus(payload);
-                    Array.Clear(fieldSums, 0, fieldSums.Length);
-                    Array.Clear(fieldCounts, 0, fieldCounts.Length);
+                    var uniqueFrame = packetAudit.WouldBeUnique(counter);
                     var frameSampleStart = nextSampleIndex;
-                    var frameSampleEnd = frameSampleStart + Oe1022dDirectDecode.SamplesPerFrame;
+                    var frameSampleEnd = uniqueFrame
+                        ? frameSampleStart + Oe1022dDirectDecode.SamplesPerFrame
+                        : frameSampleStart;
+                    var uniqueFrameIndex = uniqueFrame
+                        ? nextUniqueFrameSeq
+                        : Math.Max(0, nextUniqueFrameSeq - 1);
 
-                    for (var sampleIndex = 0; sampleIndex < Oe1022dDirectDecode.SamplesPerFrame; sampleIndex++)
+                    if (uniqueFrame)
                     {
-                        sampleValues.Write(frameSeq.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(sampleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write((frameSampleStart + sampleIndex).ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(monotonicNs.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(counter.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(status.BRefSourceCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(status.BRefSlopeCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(status.BRefCurrentFreqHz.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(status.BInputOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(status.BGainOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                        sampleValues.Write(',');
-                        sampleValues.Write(status.BPllLocked.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        Array.Clear(fieldSums, 0, fieldSums.Length);
+                        Array.Clear(fieldCounts, 0, fieldCounts.Length);
 
-                        for (var fieldIndex = 0; fieldIndex < Oe1022dDirectDecode.MeasurementFields.Length; fieldIndex++)
+                        for (var sampleIndex = 0; sampleIndex < Oe1022dDirectDecode.SamplesPerFrame; sampleIndex++)
                         {
-                            var value = Oe1022dDirectDecode.ReadMeasurementValue(payload, fieldIndex, sampleIndex);
-                            if (double.IsFinite(value))
+                            sampleValues.Write(frameSeq.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(sampleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write((frameSampleStart + sampleIndex).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(monotonicNs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(counter.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(status.BRefSourceCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(status.BRefSlopeCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(status.BRefCurrentFreqHz.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(status.BInputOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(status.BGainOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.Write(',');
+                            sampleValues.Write(status.BPllLocked.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+                            for (var fieldIndex = 0; fieldIndex < Oe1022dDirectDecode.MeasurementFields.Length; fieldIndex++)
                             {
-                                fieldSums[fieldIndex] += value;
-                                fieldCounts[fieldIndex]++;
+                                var value = Oe1022dDirectDecode.ReadMeasurementValue(payload, fieldIndex, sampleIndex);
+                                if (double.IsFinite(value))
+                                {
+                                    fieldSums[fieldIndex] += value;
+                                    fieldCounts[fieldIndex]++;
+                                }
+
+                                sampleValues.Write(',');
+                                sampleValues.Write(value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
                             }
 
-                            sampleValues.Write(',');
-                            sampleValues.Write(value.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                            sampleValues.WriteLine();
                         }
 
-                        sampleValues.WriteLine();
-                    }
-
-                    parameterValues.Write(frameSeq.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    parameterValues.Write(',');
-                    parameterValues.Write(monotonicNs.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    parameterValues.Write(',');
-                    parameterValues.Write(counter.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    parameterValues.Write(',');
-                    parameterValues.Write(status.BRefSourceCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    parameterValues.Write(',');
-                    parameterValues.Write(status.BRefSlopeCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    parameterValues.Write(',');
-                    parameterValues.Write(status.BRefCurrentFreqHz.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
-                    parameterValues.Write(',');
-                    parameterValues.Write(status.BInputOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    parameterValues.Write(',');
-                    parameterValues.Write(status.BGainOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    parameterValues.Write(',');
-                    parameterValues.Write(status.BPllLocked.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                    for (var fieldIndex = 0; fieldIndex < Oe1022dDirectDecode.MeasurementFields.Length; fieldIndex++)
-                    {
-                        var mean = fieldCounts[fieldIndex] > 0
-                            ? fieldSums[fieldIndex] / fieldCounts[fieldIndex]
-                            : double.NaN;
+                        parameterValues.Write(frameSeq.ToString(System.Globalization.CultureInfo.InvariantCulture));
                         parameterValues.Write(',');
-                        parameterValues.Write(mean.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                        parameterValues.Write(monotonicNs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        parameterValues.Write(',');
+                        parameterValues.Write(counter.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        parameterValues.Write(',');
+                        parameterValues.Write(status.BRefSourceCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        parameterValues.Write(',');
+                        parameterValues.Write(status.BRefSlopeCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        parameterValues.Write(',');
+                        parameterValues.Write(status.BRefCurrentFreqHz.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                        parameterValues.Write(',');
+                        parameterValues.Write(status.BInputOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        parameterValues.Write(',');
+                        parameterValues.Write(status.BGainOverload.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        parameterValues.Write(',');
+                        parameterValues.Write(status.BPllLocked.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        for (var fieldIndex = 0; fieldIndex < Oe1022dDirectDecode.MeasurementFields.Length; fieldIndex++)
+                        {
+                            var mean = fieldCounts[fieldIndex] > 0
+                                ? fieldSums[fieldIndex] / fieldCounts[fieldIndex]
+                                : double.NaN;
+                            parameterValues.Write(',');
+                            parameterValues.Write(mean.ToString("R", System.Globalization.CultureInfo.InvariantCulture));
+                        }
+                        parameterValues.WriteLine();
                     }
-                    parameterValues.WriteLine();
 
                     lock (sync)
                     {
@@ -460,8 +481,14 @@ public sealed class OeRallCollector : ILockinCollector
                                 status.BRefCurrentFreqHz,
                                 status.BInputOverload,
                                 status.BGainOverload,
-                                status.BPllLocked));
-                        nextSampleIndex = frameSampleEnd;
+                                status.BPllLocked,
+                                uniqueFrame,
+                                uniqueFrameIndex));
+                        if (uniqueFrame)
+                        {
+                            nextSampleIndex = frameSampleEnd;
+                            nextUniqueFrameSeq++;
+                        }
                         frameSeq++;
                         stats.FramesOk++;
                         lastTs = ts;
