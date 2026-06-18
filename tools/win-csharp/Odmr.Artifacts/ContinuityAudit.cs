@@ -85,8 +85,7 @@ internal sealed record CollectorBlockAuditRecord(
     [property: JsonPropertyName("monotonic_ns")] ulong MonotonicNs,
     [property: JsonPropertyName("sample_index_start")] long SampleIndexStart,
     [property: JsonPropertyName("sample_index_end")] long SampleIndexEnd,
-    [property: JsonPropertyName("unique_block")] bool UniqueBlock,
-    [property: JsonPropertyName("payload_sha256")] string PayloadSha256);
+    [property: JsonPropertyName("unique_block")] bool UniqueBlock);
 
 public static class ContinuityAudit
 {

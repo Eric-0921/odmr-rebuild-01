@@ -224,12 +224,6 @@ public sealed class Oe1300TcpCollector : ILockinCollector
                         Oe1300Defaults.TcpRallStatusByteCount).ToLowerInvariant();
                     var statusByte = payload[Oe1300Defaults.TcpRallStatusOffset];
                     var trigCount = payload[Oe1300Defaults.TcpRallTrigCountOffset];
-                    var statusZoneHex = Convert.ToHexString(
-                        payload,
-                        Oe1300Defaults.TcpRallPayloadBytes,
-                        payload.Length - Oe1300Defaults.TcpRallPayloadBytes).ToLowerInvariant();
-                    var statusZoneSha256 = Convert.ToHexString(
-                        SHA256.HashData(payload.AsSpan(Oe1300Defaults.TcpRallPayloadBytes, payload.Length - Oe1300Defaults.TcpRallPayloadBytes))).ToLowerInvariant();
                     var payloadSha256 = Convert.ToHexString(SHA256.HashData(payload)).ToLowerInvariant();
                     var uniqueBlock = !string.Equals(previousPayloadSha256, payloadSha256, StringComparison.Ordinal);
                     var sampleIndexStart = nextSampleIndex;
@@ -294,14 +288,6 @@ public sealed class Oe1300TcpCollector : ILockinCollector
                             monotonicNs,
                             sampleIndexStart,
                             nextSampleIndex,
-                            collectorConfig.SamplesPerParameter,
-                            collectorConfig.ParameterCount,
-                            statusHex,
-                            statusByte,
-                            trigCount,
-                            payloadSha256,
-                            statusZoneSha256,
-                            statusZoneHex,
                             uniqueBlock,
                             uniqueBlock ? nextUniqueBlockIndex - 1 : Math.Max(0, nextUniqueBlockIndex - 1)));
 

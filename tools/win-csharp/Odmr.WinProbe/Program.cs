@@ -1079,7 +1079,6 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
     byte? lastStatus = null;
     string? lastStatusHex = null;
     byte? lastTrigCount = null;
-    string? lastStatusZoneSha256 = null;
     string? previousPayloadSha256 = null;
     var writeUniqueOnly = string.Equals(csvWriteMode, "unique-only", StringComparison.Ordinal);
 
@@ -1134,8 +1133,6 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
             var statusHex = Convert.ToHexString(payload, Oe1300Defaults.TcpRallStatusOffset, Oe1300Defaults.TcpRallStatusByteCount).ToLowerInvariant();
             var statusByte = payload[Oe1300Defaults.TcpRallStatusOffset];
             var trigCount = payload[Oe1300Defaults.TcpRallTrigCountOffset];
-            var statusZoneHex = Convert.ToHexString(payload, Oe1300Defaults.TcpRallPayloadBytes, payload.Length - Oe1300Defaults.TcpRallPayloadBytes).ToLowerInvariant();
-            var statusZoneSha256 = Convert.ToHexString(SHA256.HashData(payload.AsSpan(Oe1300Defaults.TcpRallPayloadBytes, payload.Length - Oe1300Defaults.TcpRallPayloadBytes))).ToLowerInvariant();
             var payloadSha256 = Convert.ToHexString(SHA256.HashData(payload.AsSpan(0, payload.Length))).ToLowerInvariant();
             var uniqueBlock = !string.Equals(previousPayloadSha256, payloadSha256, StringComparison.Ordinal);
             if (uniqueBlock)
@@ -1246,17 +1243,10 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
                 schema_version = 1,
                 source = "oe1300_main",
                 rall_index = decodedRallsOk,
+                ts = UtcNowString(),
                 monotonic_ns = monotonicNs,
                 sample_index_start = sampleIndexStart,
                 sample_index_end = globalSampleIndex,
-                samples_per_parameter = Oe1300Defaults.TcpRallLabviewSamplesPerParameter,
-                parameter_count = Oe1300Defaults.TcpRallLabviewParameterCount,
-                status_hex = statusHex,
-                status_byte = statusByte,
-                trig_count = trigCount,
-                payload_sha256 = payloadSha256,
-                status_zone_sha256 = statusZoneSha256,
-                status_zone_hex = statusZoneHex,
                 unique_block = uniqueBlock,
                 unique_block_index = uniqueBlock ? uniqueBlocks - 1 : Math.Max(0, uniqueBlocks - 1)
             }, JsonOptions.Default));
@@ -1264,7 +1254,6 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
             lastStatus = statusByte;
             lastStatusHex = statusHex;
             lastTrigCount = trigCount;
-            lastStatusZoneSha256 = statusZoneSha256;
             previousPayloadSha256 = payloadSha256;
             decodedRallsOk++;
             stats.FramesOk++;
@@ -1349,7 +1338,6 @@ static int Oe1300NetLabviewDemo(IReadOnlyDictionary<string, string> options)
         last_status_hex = lastStatusHex,
         last_status_byte = lastStatus,
         last_trig_count = lastTrigCount,
-        last_status_zone_sha256 = lastStatusZoneSha256,
         collector_blocks_bytes = collectorBlocksBytes,
         parameter_values_bytes = parameterValuesBytes,
         sample_values_bytes = sampleValuesBytes,

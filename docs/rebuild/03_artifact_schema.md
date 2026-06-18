@@ -200,14 +200,6 @@ append collector_frames + parameter_values + sample_values
 - `ts`
 - `monotonic_ns`
 - `sample_index_start/end`
-- `samples_per_parameter`
-- `parameter_count`
-- `status_hex`
-- `status_byte`
-- `trig_count`
-- `payload_sha256`
-- `status_zone_sha256`
-- `status_zone_hex`
 - `unique_block`
 - `unique_block_index`
 
@@ -247,7 +239,7 @@ append collector_blocks + unique-only parameter_values + unique-only sample_valu
 - `OE1022D`：每 `1 ms` 样本一行，`20` 个主字段展开
 - `OE1300`：每个 `unique_block` 内按 `1 ms` 展开，`37` 个参数展开
 
-`collector_blocks.jsonl` 仍保留所有 query 到的块，并通过 `unique_block` / `unique_block_index` 负责去重事实层；CSV 只保存去重后的有效样本。
+`collector_blocks.jsonl` 仍保留所有 query 到的块，并通过 `unique_block` / `unique_block_index` 负责去重事实层；CSV 只保存去重后的有效样本。当前不再把状态区原始十六进制字节冗余写入 `collector_blocks.jsonl`。
 
 point 级离线后处理默认直接读取：
 

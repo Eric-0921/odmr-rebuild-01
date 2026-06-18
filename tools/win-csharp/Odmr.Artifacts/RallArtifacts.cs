@@ -127,14 +127,6 @@ public sealed record CollectorBlockRecord(
     [property: JsonPropertyName("monotonic_ns")] ulong MonotonicNs,
     [property: JsonPropertyName("sample_index_start")] long SampleIndexStart,
     [property: JsonPropertyName("sample_index_end")] long SampleIndexEnd,
-    [property: JsonPropertyName("samples_per_parameter")] int SamplesPerParameter,
-    [property: JsonPropertyName("parameter_count")] int ParameterCount,
-    [property: JsonPropertyName("status_hex")] string StatusHex,
-    [property: JsonPropertyName("status_byte")] byte StatusByte,
-    [property: JsonPropertyName("trig_count")] byte TrigCount,
-    [property: JsonPropertyName("payload_sha256")] string PayloadSha256,
-    [property: JsonPropertyName("status_zone_sha256")] string StatusZoneSha256,
-    [property: JsonPropertyName("status_zone_hex")] string StatusZoneHex,
     [property: JsonPropertyName("unique_block")] bool UniqueBlock,
     [property: JsonPropertyName("unique_block_index")] long UniqueBlockIndex);
 
