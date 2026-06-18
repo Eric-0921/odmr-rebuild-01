@@ -2,6 +2,12 @@
 
 这个目录放离线后处理参考程序。它只读取 run artifact，不修改采集数据，不进入 runtime 热路径。
 
+另一个 agent 如果只是想知道如何读取 run 数据，先看：
+
+```text
+docs/rebuild/18_run_data_reading_guide.md
+```
+
 ## 输入
 
 程序默认读取：
