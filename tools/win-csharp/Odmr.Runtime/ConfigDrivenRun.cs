@@ -1311,13 +1311,13 @@ public static class ConfigDrivenRun
             opc_wait_ms = sweepObservation.OpcWaitMs,
             fallback_used = sweepObservation.FallbackUsed
         });
-        var segmentEndTs = UtcNowString();
-        var segmentEndMonotonicNs = MonotonicNsSince(processStart);
-        var segmentEnd = collector.Cursor();
         StopSmbRfAfterSegment(smb, bundle.SmbProfile, sweep);
         ThrowIfEmergencyRequested(options);
         var rfExposureEndedTs = UtcNowString();
         var rfExposureEndedMonotonicNs = MonotonicNsSince(processStart);
+        var segmentEndTs = rfExposureEndedTs;
+        var segmentEndMonotonicNs = rfExposureEndedMonotonicNs;
+        var segmentEnd = collector.Cursor();
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_exposure_ended", "rf", point.PointId, "smb100a_main", new
         {
             segment_id = segmentId,
