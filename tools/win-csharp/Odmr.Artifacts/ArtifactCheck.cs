@@ -97,6 +97,9 @@ public static class ArtifactCheck
         var collectorRows = File.Exists(collectorFramesPath) ? CountLines(collectorFramesPath) : 0;
         var parameterRows = File.Exists(parameterValuesPath) ? CountCsvDataRows(parameterValuesPath) : 0;
         var sampleRows = File.Exists(sampleValuesPath) ? CountCsvDataRows(sampleValuesPath) : 0;
+        var uniqueCollectorRows = lockinModel == "oe1300" && File.Exists(collectorFramesPath)
+            ? CountJsonlTrueProperty(collectorFramesPath, "unique_block")
+            : collectorRows;
         var segmentsCount = File.Exists(segmentsPath) ? CountLines(segmentsPath) : 0;
         var pointsCount = File.Exists(pointsPath) ? CountLines(pointsPath) : 0;
         var qualityCount = File.Exists(qualityPath) ? CountLines(qualityPath) : 0;
@@ -150,7 +153,7 @@ public static class ArtifactCheck
         }
 
         var collectorRowsMatchFrames = collectorRows == framesTotal;
-        var parameterRowsMatchFrames = parameterRows == framesTotal;
+        var parameterRowsMatchFrames = parameterRows == uniqueCollectorRows;
         var sampleRowsMatchTotal = sampleRows == samplesTotal;
         var recordCountsConsistent = aborted
             ? segmentsCount == pointsCount &&
@@ -616,6 +619,27 @@ public static class ArtifactCheck
     {
         var count = CountLines(path);
         return count > 0 ? count - 1 : 0;
+    }
+
+    private static long CountJsonlTrueProperty(string path, string propertyName)
+    {
+        var count = 0L;
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            using var document = JsonDocument.Parse(line);
+            if (document.RootElement.TryGetProperty(propertyName, out var property) &&
+                property.ValueKind == JsonValueKind.True)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private static Dictionary<string, long> CountJsonlStringProperty(string path, string propertyName)

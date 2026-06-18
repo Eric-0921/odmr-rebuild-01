@@ -216,7 +216,6 @@ public sealed class Oe1300TcpCollector : ILockinCollector
                         continue;
                     }
 
-                    var namedSeries = Oe1300Parsers.DecodeTcpRallLabviewNamedSeries(payload);
                     var monotonicNs = MonotonicNsSince(processStart);
                     var ts = SweepOnlyRunCollectorTime.ExecuteTimestampForCollector();
                     var statusHex = Convert.ToHexString(
@@ -235,48 +234,49 @@ public sealed class Oe1300TcpCollector : ILockinCollector
                     var uniqueBlock = !string.Equals(previousPayloadSha256, payloadSha256, StringComparison.Ordinal);
                     var sampleIndexStart = nextSampleIndex;
 
-                    for (var sampleIndexInRall = 0; sampleIndexInRall < collectorConfig.SamplesPerParameter; sampleIndexInRall++)
-                    {
-                        sampleWriter.Write(rallIndex.ToString(CultureInfo.InvariantCulture));
-                        sampleWriter.Write(',');
-                        sampleWriter.Write(sampleIndexInRall.ToString(CultureInfo.InvariantCulture));
-                        sampleWriter.Write(',');
-                        sampleWriter.Write(nextSampleIndex.ToString(CultureInfo.InvariantCulture));
-                        sampleWriter.Write(',');
-                        sampleWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
-                        sampleWriter.Write(',');
-                        sampleWriter.Write(statusHex);
-                        sampleWriter.Write(',');
-                        sampleWriter.Write(statusByte.ToString(CultureInfo.InvariantCulture));
-                        sampleWriter.Write(',');
-                        sampleWriter.Write(trigCount.ToString(CultureInfo.InvariantCulture));
-                        foreach (var fieldName in Oe1300Defaults.SerialRallFieldNames)
-                        {
-                            sampleWriter.Write(',');
-                            sampleWriter.Write(namedSeries[fieldName][sampleIndexInRall].ToString("R", CultureInfo.InvariantCulture));
-                        }
-                        sampleWriter.WriteLine();
-                        nextSampleIndex++;
-                    }
-
-                    parameterWriter.Write(rallIndex.ToString(CultureInfo.InvariantCulture));
-                    parameterWriter.Write(',');
-                    parameterWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
-                    parameterWriter.Write(',');
-                    parameterWriter.Write(statusHex);
-                    parameterWriter.Write(',');
-                    parameterWriter.Write(statusByte.ToString(CultureInfo.InvariantCulture));
-                    parameterWriter.Write(',');
-                    parameterWriter.Write(trigCount.ToString(CultureInfo.InvariantCulture));
-                    foreach (var fieldName in Oe1300Defaults.SerialRallFieldNames)
-                    {
-                        parameterWriter.Write(',');
-                        parameterWriter.Write(namedSeries[fieldName].Average().ToString("R", CultureInfo.InvariantCulture));
-                    }
-                    parameterWriter.WriteLine();
-
                     if (uniqueBlock)
                     {
+                        var namedSeries = Oe1300Parsers.DecodeTcpRallLabviewNamedSeries(payload);
+                        for (var sampleIndexInRall = 0; sampleIndexInRall < collectorConfig.SamplesPerParameter; sampleIndexInRall++)
+                        {
+                            sampleWriter.Write(rallIndex.ToString(CultureInfo.InvariantCulture));
+                            sampleWriter.Write(',');
+                            sampleWriter.Write(sampleIndexInRall.ToString(CultureInfo.InvariantCulture));
+                            sampleWriter.Write(',');
+                            sampleWriter.Write(nextSampleIndex.ToString(CultureInfo.InvariantCulture));
+                            sampleWriter.Write(',');
+                            sampleWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+                            sampleWriter.Write(',');
+                            sampleWriter.Write(statusHex);
+                            sampleWriter.Write(',');
+                            sampleWriter.Write(statusByte.ToString(CultureInfo.InvariantCulture));
+                            sampleWriter.Write(',');
+                            sampleWriter.Write(trigCount.ToString(CultureInfo.InvariantCulture));
+                            foreach (var fieldName in Oe1300Defaults.SerialRallFieldNames)
+                            {
+                                sampleWriter.Write(',');
+                                sampleWriter.Write(namedSeries[fieldName][sampleIndexInRall].ToString("R", CultureInfo.InvariantCulture));
+                            }
+                            sampleWriter.WriteLine();
+                            nextSampleIndex++;
+                        }
+
+                        parameterWriter.Write(rallIndex.ToString(CultureInfo.InvariantCulture));
+                        parameterWriter.Write(',');
+                        parameterWriter.Write(monotonicNs.ToString(CultureInfo.InvariantCulture));
+                        parameterWriter.Write(',');
+                        parameterWriter.Write(statusHex);
+                        parameterWriter.Write(',');
+                        parameterWriter.Write(statusByte.ToString(CultureInfo.InvariantCulture));
+                        parameterWriter.Write(',');
+                        parameterWriter.Write(trigCount.ToString(CultureInfo.InvariantCulture));
+                        foreach (var fieldName in Oe1300Defaults.SerialRallFieldNames)
+                        {
+                            parameterWriter.Write(',');
+                            parameterWriter.Write(namedSeries[fieldName].Average().ToString("R", CultureInfo.InvariantCulture));
+                        }
+                        parameterWriter.WriteLine();
+
                         nextUniqueBlockIndex++;
                     }
                     else

@@ -22,7 +22,7 @@ public static class RuntimeContracts
         "write RALL?, sleep 30ms, blocking exact read 12288B, direct-decode, append collector_frames + parameter_values + sample_values";
 
     public const string Oe1300FrozenRallHotPath =
-        "write RALL?\\r, sleep 5ms, read until 32768B, decode 37 x 100 big-endian double, append collector_blocks + parameter_values + sample_values";
+        "write RALL?\\r, sleep 5ms, read until 32768B, detect unique block, decode 37 x 100 big-endian double for unique blocks only, append collector_blocks + unique-only parameter_values + unique-only sample_values";
 }
 
 public sealed record RunProgressEvent(
