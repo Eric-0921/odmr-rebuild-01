@@ -7,9 +7,9 @@
       "required": true,
       "transport_hint": {
         "transport": "visa_resource",
-        "resource": "USB::0x0AAD::0x0054::106789::INSTR",
+        "resource": "USB0::0x0AAD::0x0054::101623::INSTR",
         "resource_candidates": [
-          "USB::0x0AAD::0x0054::101623::INSTR"
+          "USB0::0x0AAD::0x0054::106789::INSTR"
         ]
       },
       "identity": {
