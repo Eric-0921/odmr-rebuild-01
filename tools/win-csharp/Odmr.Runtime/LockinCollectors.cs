@@ -202,6 +202,11 @@ public sealed class Oe1300TcpCollector : ILockinCollector
                         collectorConfig.DrainBeforeWrite);
                     if (bytesRead != collectorConfig.TcpExpectedBytes)
                     {
+                        if (stopRequested)
+                        {
+                            break;
+                        }
+
                         lock (sync)
                         {
                             stats.RawLenBadCount++;
@@ -314,6 +319,11 @@ public sealed class Oe1300TcpCollector : ILockinCollector
                 }
                 catch (IOException)
                 {
+                    if (stopRequested)
+                    {
+                        break;
+                    }
+
                     lock (sync)
                     {
                         stats.TimeoutCount++;
@@ -322,6 +332,11 @@ public sealed class Oe1300TcpCollector : ILockinCollector
                 }
                 catch (Exception)
                 {
+                    if (stopRequested)
+                    {
+                        break;
+                    }
+
                     lock (sync)
                     {
                         decodeFailures++;

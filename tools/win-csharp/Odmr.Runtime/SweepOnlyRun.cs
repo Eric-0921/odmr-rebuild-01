@@ -350,6 +350,11 @@ public sealed class OeRallCollector : ILockinCollector
                     var bytesRead = oe.ReadRallFrame(payload);
                     if (bytesRead != Oe1022dDefaults.RallFrameBytes)
                     {
+                        if (stopRequested)
+                        {
+                            break;
+                        }
+
                         lock (sync)
                         {
                             stats.RawLenBadCount++;
@@ -467,6 +472,11 @@ public sealed class OeRallCollector : ILockinCollector
                 }
                 catch (IOTimeoutException)
                 {
+                    if (stopRequested)
+                    {
+                        break;
+                    }
+
                     lock (sync)
                     {
                         stats.TimeoutCount++;
