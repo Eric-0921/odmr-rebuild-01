@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -25,6 +26,8 @@ if str(CONFIG_GENERATOR_DIR) not in sys.path:
     sys.path.insert(0, str(CONFIG_GENERATOR_DIR))
 
 from odmr_config_core import AxisSpec, GeneratorRequest, ScanBlock, write_generated_bundle  # noqa: E402
+
+TAG_PATTERN = re.compile(r"(?<!\S)#([^\s#]+)")
 
 
 @dataclass(frozen=True)
@@ -63,6 +66,31 @@ class ResumeHandle:
     previous_run_dir: str
     resume_out_dir: str
     resume_from_run_id: str | None
+
+
+def parse_operator_tags(notes: str) -> list[str]:
+    tags: list[str] = []
+    seen: set[str] = set()
+    for match in TAG_PATTERN.finditer(notes):
+        tag = match.group(1).strip()
+        if tag and tag not in seen:
+            tags.append(tag)
+            seen.add(tag)
+    return tags
+
+
+def build_operator_metadata(probe_id: str = "", notes: str = "") -> dict[str, Any] | None:
+    normalized_probe_id = probe_id.strip()
+    normalized_notes = notes.strip()
+    tags = parse_operator_tags(normalized_notes)
+    if not normalized_probe_id and not normalized_notes and not tags:
+        return None
+    return {
+        "schema_version": 1,
+        "probe_id": normalized_probe_id or None,
+        "notes": normalized_notes or None,
+        "tags": tags,
+    }
 
 
 def utc_now() -> str:
@@ -254,6 +282,7 @@ def start_run(
     out_dir: str | Path,
     repo_root: str | Path | None = None,
     dotnet: str = "dotnet",
+    operator_metadata: dict[str, Any] | None = None,
 ) -> LaunchHandle:
     repo = Path(repo_root) if repo_root else REPO_ROOT
     out_path = Path(out_dir)
@@ -283,19 +312,19 @@ def start_run(
         control_paths=control_paths,
         metadata_path=control_paths.launch_metadata,
     )
-    write_json(
-        control_paths.launch_metadata,
-        {
-            "schema_version": 1,
-            "started_at": utc_now(),
-            "pid": handle.pid,
-            "command": handle.command,
-            "cwd": handle.cwd,
-            "out_dir": handle.out_dir,
-            "bundle": asdict(bundle),
-            "control_paths": asdict(control_paths),
-        },
-    )
+    metadata = {
+        "schema_version": 1,
+        "started_at": utc_now(),
+        "pid": handle.pid,
+        "command": handle.command,
+        "cwd": handle.cwd,
+        "out_dir": handle.out_dir,
+        "bundle": asdict(bundle),
+        "control_paths": asdict(control_paths),
+    }
+    if operator_metadata:
+        metadata["operator_metadata"] = operator_metadata
+    write_json(control_paths.launch_metadata, metadata)
     return handle
 
 

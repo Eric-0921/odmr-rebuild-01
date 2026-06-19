@@ -72,6 +72,7 @@ resume-run --previous-run <dir> --out-dir <dir> --progress-jsonl <path> --stop-r
 - tail `control/progress.jsonl`
 - 写 `control/stop.request` 做 point 边界暂停
 - 写 `control/emergency_stop.request` 做立即安全停机
+- 可选写入操作者备注到 `launch_metadata.json.operator_metadata`
 
 恢复时 Python core 负责：
 
@@ -89,6 +90,21 @@ resume-run --previous-run <dir> --out-dir <dir> --progress-jsonl <path> --stop-r
 ```
 
 这不是 runtime schema，C# runtime 不读取这些控制文件。
+
+`launch_metadata.json` 可包含轻量操作者元数据：
+
+```json
+{
+  "operator_metadata": {
+    "schema_version": 1,
+    "probe_id": "P-013",
+    "notes": "偏置加在样品左上角 #偏置 #低激光功率 #空气环境",
+    "tags": ["偏置", "低激光功率", "空气环境"]
+  }
+}
+```
+
+其中只有 `probe_id` 是固定字段；其他实验上下文直接写入中文 `notes`，并用 `#标签` 解析出 `tags`。该字段只属于 Python launch 元数据，不改变 C# `run-execute` 参数、设备控制逻辑或 collector 热路径。
 
 ## 边界
 

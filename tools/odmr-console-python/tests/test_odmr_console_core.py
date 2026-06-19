@@ -11,10 +11,14 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools" / "odmr-console-python"))
 
 from odmr_console_core import (  # noqa: E402
+    RunBundle,
+    build_operator_metadata,
     control_paths_for_out_dir,
     demo_generator_request,
     generate_config_bundle,
+    load_json,
     next_resume_out_dir,
+    parse_operator_tags,
     process_is_running,
     read_progress,
     read_progress_since,
@@ -24,10 +28,50 @@ from odmr_console_core import (  # noqa: E402
     request_stop,
     resume_run_command,
     run_execute_command,
+    start_run,
 )
+import odmr_console_core  # noqa: E402
 
 
 class OdmrConsoleCoreTests(unittest.TestCase):
+    def test_operator_metadata_parses_chinese_hash_tags(self) -> None:
+        notes = "偏置加在样品左上角 #偏置 #低激光功率 #空气环境 #偏置"
+        self.assertEqual(parse_operator_tags(notes), ["偏置", "低激光功率", "空气环境"])
+        metadata = build_operator_metadata(" P-013 ", notes)
+        self.assertEqual(metadata["probe_id"], "P-013")
+        self.assertEqual(metadata["notes"], notes)
+        self.assertEqual(metadata["tags"], ["偏置", "低激光功率", "空气环境"])
+        self.assertIsNone(build_operator_metadata())
+
+    def test_start_run_writes_operator_metadata(self) -> None:
+        class FakeProcess:
+            pid = 12345
+
+        def fake_popen(*args, **kwargs):  # noqa: ANN001, ANN202
+            return FakeProcess()
+
+        original_popen = odmr_console_core.subprocess.Popen
+        odmr_console_core.subprocess.Popen = fake_popen
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                bundle = RunBundle(
+                    station_path="station.json",
+                    calibration_path="calibration.json",
+                    plan_path="plan.json",
+                    smb_profile_path="smb.json",
+                    oe_profile_path="oe.json",
+                    laser_profile_path="laser.json",
+                )
+                out_dir = Path(tmp) / "run"
+                operator_metadata = build_operator_metadata("P-013", "中文备注 #偏置")
+                handle = start_run(bundle, out_dir, ROOT, "dotnet", operator_metadata)
+                metadata = load_json(handle.metadata_path)
+                self.assertEqual(metadata["operator_metadata"]["probe_id"], "P-013")
+                self.assertEqual(metadata["operator_metadata"]["notes"], "中文备注 #偏置")
+                self.assertEqual(metadata["operator_metadata"]["tags"], ["偏置"])
+        finally:
+            odmr_console_core.subprocess.Popen = original_popen
+
     def test_generate_config_bundle_reuses_config_generator_core(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             bundle = generate_config_bundle(demo_generator_request("console_core_test"), tmp, ROOT)

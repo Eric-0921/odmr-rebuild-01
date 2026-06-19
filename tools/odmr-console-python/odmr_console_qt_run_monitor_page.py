@@ -46,11 +46,13 @@ class RunMonitorPage(QWidget):
         bundle_provider: Callable[[], RunBundle],
         out_dir_provider: Callable[[], str],
         validate_provider: Callable[[], bool] | None = None,
+        metadata_provider: Callable[[], dict[str, Any] | None] | None = None,
     ) -> None:
         super().__init__()
         self.bundle_provider = bundle_provider
         self.out_dir_provider = out_dir_provider
         self.validate_provider = validate_provider
+        self.metadata_provider = metadata_provider
         self.worker: WorkerThread | None = None
         self.handle: Any | None = None
         self.progress_offset = 0
@@ -136,9 +138,10 @@ class RunMonitorPage(QWidget):
             return
         bundle = self.bundle_provider()
         out_dir = self.out_dir_provider()
+        operator_metadata = self.metadata_provider() if self.metadata_provider else None
         self.log.setPlainText(f"正在启动运行：{out_dir}...")
         self.start_button.setEnabled(False)
-        self.worker = WorkerThread(lambda: start_run(bundle, out_dir))
+        self.worker = WorkerThread(lambda: start_run(bundle, out_dir, operator_metadata=operator_metadata))
         self.worker.completed.connect(self._started)
         self.worker.failed.connect(self._failed)
         self.worker.start()

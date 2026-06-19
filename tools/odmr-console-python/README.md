@@ -28,7 +28,7 @@ python3 tools/odmr-console-python/odmr_console_qt.py
 
 The UI pages are:
 
-- `Run Bundle`: choose station, calibration, plan, SMB profile, OE profile, laser profile, and output.
+- `Run Bundle`: choose station, calibration, plan, SMB profile, OE profile, laser profile, output, and lightweight operator metadata.
 - `Config Generator`: generate plan/profile JSON with the existing config-generator core.
 - `Resolve / Estimate`: call C# `run-resolve`.
 - `Run Monitor`: call C# `run-execute` / `resume-run` with `progress JSONL + stop/emergency request files`.
@@ -76,6 +76,24 @@ This writes launch control files under:
   stdout.log
   stderr.log
 ```
+
+PySide6 also writes optional operator metadata into `launch_metadata.json` when
+filled in on the Run Bundle page:
+
+```json
+{
+  "operator_metadata": {
+    "schema_version": 1,
+    "probe_id": "P-013",
+    "notes": "偏置加在样品左上角 #偏置 #低激光功率 #空气环境",
+    "tags": ["偏置", "低激光功率", "空气环境"]
+  }
+}
+```
+
+Only `probe_id` is a fixed field. Free-form Chinese notes are preserved as-is,
+and tags are parsed from `#标签`. This metadata is launch-side context only; C#
+runtime device control and collector hot paths do not read it.
 
 If a run stops at a point boundary, C# writes terminal status `paused`. The
 PySide6 `Resume` button then allocates a sibling output directory like

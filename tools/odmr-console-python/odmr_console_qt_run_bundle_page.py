@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
 )
 
-from odmr_console_core import RunBundle, default_bundle, load_json
+from odmr_console_core import RunBundle, build_operator_metadata, default_bundle, load_json
 from odmr_console_qt_shared import (
     REPO_ROOT,
     PathSelector,
@@ -71,6 +71,21 @@ class RunBundlePage(QWidget):
         self.out_dir.textChanged.connect(lambda _text: self.bundle_changed.emit())
         root.addWidget(output)
 
+        metadata_group = QGroupBox("实验备注")
+        metadata_layout = QGridLayout(metadata_group)
+        metadata_layout.setColumnStretch(1, 1)
+        self.probe_id = QLineEdit()
+        self.operator_notes = QPlainTextEdit()
+        self.operator_notes.setPlaceholderText("可直接写中文备注，例如：偏置加在样品左上角 #偏置 #低激光功率 #空气环境")
+        self.operator_notes.setMaximumHeight(95)
+        metadata_layout.addWidget(QLabel("探头编号"), 0, 0)
+        metadata_layout.addWidget(self.probe_id, 0, 1)
+        metadata_layout.addWidget(QLabel("备注 / #标签"), 1, 0)
+        metadata_layout.addWidget(self.operator_notes, 1, 1)
+        self.probe_id.textChanged.connect(lambda _text: self.bundle_changed.emit())
+        self.operator_notes.textChanged.connect(self.bundle_changed.emit)
+        root.addWidget(metadata_group)
+
         actions = QHBoxLayout()
         validate = QPushButton("检查配置")
         validate.clicked.connect(self.validate_local)
@@ -103,6 +118,12 @@ class RunBundlePage(QWidget):
             smb_profile_path=self.smb.path(),
             oe_profile_path=self.oe.path(),
             laser_profile_path=self.laser.path(),
+        )
+
+    def operator_metadata(self) -> dict[str, Any] | None:
+        return build_operator_metadata(
+            probe_id=self.probe_id.text(),
+            notes=self.operator_notes.toPlainText(),
         )
 
     def set_bundle(self, bundle: RunBundle) -> None:
@@ -183,5 +204,9 @@ class RunBundlePage(QWidget):
                 ok = False
         out_dir = self.out_dir.text().strip()
         rows.append(f"out_dir: {out_dir}")
+        operator_metadata = self.operator_metadata()
+        if operator_metadata:
+            rows.append(f"probe_id: {operator_metadata.get('probe_id') or '<empty>'}")
+            rows.append(f"tags: {', '.join(operator_metadata.get('tags') or []) or '<none>'}")
         self.summary.setPlainText("\n".join(rows))
         return ok

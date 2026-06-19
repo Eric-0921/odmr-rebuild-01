@@ -44,7 +44,12 @@ class MainWindow(QMainWindow):
         self.run_bundle = RunBundlePage()
         self.config_generator = ConfigGeneratorPage()
         self.resolve_page = ResolvePage(self.run_bundle.bundle)
-        self.monitor_page = RunMonitorPage(self.run_bundle.bundle, self.current_out_dir, self.run_bundle.validate_local)
+        self.monitor_page = RunMonitorPage(
+            self.run_bundle.bundle,
+            self.current_out_dir,
+            self.run_bundle.validate_local,
+            self.run_bundle.operator_metadata,
+        )
         self.review_page = ArtifactReviewPage(self.current_out_dir)
 
         for page in [
