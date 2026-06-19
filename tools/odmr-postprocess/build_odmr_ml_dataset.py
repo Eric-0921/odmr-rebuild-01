@@ -264,7 +264,7 @@ def build_dataset(args: argparse.Namespace) -> int:
             "edge_noise_bx": finite_float(noise),
             "span_bx_detrended": finite_float(span),
             "snr_like_bx": finite_float(snr),
-            "sidecar_npz": str(sidecar_rel),
+            "sidecar_npz": "sample_values.csv",
         }
         row.update(peak_features(np, freq, bx_smooth_z, "bx_smooth_z"))
         row.update(peak_features(np, freq, by_smooth_z, "by_smooth_z"))

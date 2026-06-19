@@ -56,7 +56,7 @@ class GeneratorRequest:
     smb_error_check_after_write: bool = True
     smb_fixed: dict[str, Any] = field(default_factory=dict)
     smb_sweep: dict[str, Any] = field(default_factory=dict)
-    oe_model: str = "oe1022d"
+    oe_model: str | None = None
     oe_profile_id: str = "oe1022d_generated"
     oe_command_settle_ms: int = 500
     oe_fixed: dict[str, Any] = field(default_factory=dict)
@@ -122,24 +122,32 @@ def build_smb_profile(template: dict[str, Any], request: GeneratorRequest) -> di
 
 def build_oe_profile(template: dict[str, Any], request: GeneratorRequest) -> dict[str, Any]:
     profile = copy.deepcopy(template)
-    model = str(profile.get("model") or request.oe_model or "oe1022d").strip().lower()
+    template_model = optional_oe_model(profile.get("model"))
+    request_model = optional_oe_model(request.oe_model)
+    model = request_model or template_model or "oe1022d"
+    if model not in {"oe1022d", "oe1300"}:
+        raise ValueError(f"unsupported oe_model: {model}")
     profile["model"] = model
     profile["profile_id"] = sanitize_id(request.oe_profile_id)
     profile["command_settle_ms"] = non_negative_int(request.oe_command_settle_ms, "oe_command_settle_ms")
-    fixed = profile.setdefault("fixed", {})
-    collector = profile.setdefault("collector", {})
+    use_template_schema = template_model in {None, model}
+    fixed_source = dict(profile.get("fixed") or {}) if use_template_schema else {}
+    fixed_source.update(request.oe_fixed)
+    collector_source = dict(profile.get("collector") or {}) if use_template_schema else {}
+    collector_source.update(request.oe_collector)
     if model == "oe1300":
-        fixed.update(normalize_oe1300_fixed(request.oe_fixed))
-        collector.update(normalize_oe1300_collector(request.oe_collector or collector))
+        collector = normalize_oe1300_collector(collector_source)
+        profile["fixed"] = normalize_oe1300_fixed(fixed_source)
+        profile["collector"] = collector
         if collector.get("tcp_expected_bytes") != 32768:
             raise ValueError("oe1300 collector tcp_expected_bytes must remain 32768")
         if collector.get("rall_post_write_delay_ms") != 5:
             raise ValueError("oe1300 collector rall_post_write_delay_ms must remain 5")
         return profile
 
-    fixed.update(normalize_oe1022d_fixed(request.oe_fixed))
-    collector.update(normalize_oe1022d_collector(request.oe_collector or collector))
-    collector = profile.get("collector", {})
+    collector = normalize_oe1022d_collector(collector_source)
+    profile["fixed"] = normalize_oe1022d_fixed(fixed_source)
+    profile["collector"] = collector
     if collector.get("frame_exact_bytes") != 12288:
         raise ValueError("oe collector frame_exact_bytes must remain 12288")
     if collector.get("rall_post_write_delay_ms") != 30:
@@ -438,6 +446,13 @@ def nullable_float(value: Any) -> float | None:
     if isinstance(value, str) and not value.strip():
         return None
     return float(value)
+
+
+def optional_oe_model(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    return text or None
 
 
 def sanitize_id(value: str) -> str:

@@ -173,6 +173,67 @@ class ConfigCoreTests(unittest.TestCase):
         self.assertEqual(laser["power_mw"], 50)
         self.assertEqual(laser["mode"], "on_background")
 
+    def test_explicit_oe1300_model_overrides_oe1022d_template(self) -> None:
+        request = self.request()
+        request.oe_model = "oe1300"
+        request.oe_fixed = {
+            "input_source": 0,
+            "input_coupling": 0,
+            "input_range": 1,
+            "reference_source": 0,
+            "reference_frequency_hz": 1000.0,
+            "reference_slope": 0,
+            "sensitivity_index": 24,
+            "time_constant_seconds": 0.1,
+            "filter_slope": 1,
+            "sync_enabled": False,
+            "sine_output_enabled": False,
+            "sine_output_voltage_vrms": 1.0,
+        }
+        request.oe_collector = {
+            "tcp_expected_bytes": 32768,
+            "tcp_payload_bytes": 29600,
+            "parameter_count": 37,
+            "samples_per_parameter": 100,
+            "rall_post_write_delay_ms": 5,
+            "drain_before_write": True,
+        }
+        oe = build_oe_profile(load_json(ROOT / "configs" / "profiles" / "oe1022d_run_ch_b_observed.json"), request)
+        self.assertEqual(oe["model"], "oe1300")
+        self.assertEqual(oe["collector"]["tcp_expected_bytes"], 32768)
+        self.assertEqual(oe["collector"]["rall_post_write_delay_ms"], 5)
+        self.assertEqual(oe["fixed"]["input_range"], 1)
+        self.assertNotIn("frame_exact_bytes", oe["collector"])
+        self.assertNotIn("channel", oe["fixed"])
+
+    def test_oe_template_model_applies_when_request_model_is_not_explicit(self) -> None:
+        request = self.request()
+        request.oe_model = None
+        request.oe_fixed = {}
+        request.oe_collector = {}
+        oe = build_oe_profile(load_json(ROOT / "configs" / "profiles" / "oe1300_run_tcp_default.json"), request)
+        self.assertEqual(oe["model"], "oe1300")
+        self.assertEqual(oe["collector"]["tcp_expected_bytes"], 32768)
+        self.assertEqual(oe["collector"]["rall_post_write_delay_ms"], 5)
+        self.assertNotIn("frame_exact_bytes", oe["collector"])
+
+    def test_explicit_oe1022d_model_overrides_oe1300_template(self) -> None:
+        request = self.request()
+        request.oe_model = "oe1022d"
+        request.oe_fixed = {}
+        request.oe_collector = {}
+        oe = build_oe_profile(load_json(ROOT / "configs" / "profiles" / "oe1300_run_tcp_default.json"), request)
+        self.assertEqual(oe["model"], "oe1022d")
+        self.assertEqual(oe["collector"]["frame_exact_bytes"], 12288)
+        self.assertEqual(oe["collector"]["rall_post_write_delay_ms"], 30)
+        self.assertNotIn("tcp_expected_bytes", oe["collector"])
+
+    def test_unknown_oe_model_fails(self) -> None:
+        request = self.request()
+        request.oe_model = "oe1400"
+        with self.assertRaisesRegex(ValueError, "unsupported oe_model"):
+            build_oe_profile(load_json(ROOT / "configs" / "profiles" / "oe1022d_run_ch_b_observed.json"), request)
+
     def test_write_generated_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             paths = write_generated_bundle(

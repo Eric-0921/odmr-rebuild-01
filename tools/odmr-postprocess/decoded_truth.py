@@ -42,10 +42,19 @@ def load_segments_by_point(run_dir: Path) -> dict[str, dict[str, Any]]:
     ensure_decoded_truth(run_dir)
     rows = load_jsonl(run_dir / "segments.jsonl")
     result: dict[str, dict[str, Any]] = {}
-    for row in rows:
+    required_fields = ["point_id", "sample_index_start", "sample_index_end"]
+    for row_number, row in enumerate(rows, start=1):
+        missing = [key for key in required_fields if key not in row]
+        if missing:
+            raise ValueError(f"segments.jsonl row {row_number} missing fields: {', '.join(missing)}")
         point_id = str(row.get("point_id") or "")
         if not point_id:
-            continue
+            raise ValueError(f"segments.jsonl row {row_number} has empty point_id")
+        for key in ("sample_index_start", "sample_index_end"):
+            try:
+                int(row[key])
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"segments.jsonl row {row_number} field {key} must be an integer") from exc
         result[point_id] = row
     return result
 
@@ -79,6 +88,9 @@ def load_point_series_map(
     current_index = 0
     with (run_dir / "sample_values.csv").open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
+        missing_columns = [key for key in requested_keys if key not in (reader.fieldnames or [])]
+        if missing_columns:
+            raise ValueError(f"sample_values.csv missing columns: {', '.join(missing_columns)}")
         for row in reader:
             if current_index >= len(ordered):
                 break
@@ -95,7 +107,7 @@ def load_point_series_map(
 
             point_series = series_by_point[point_id]
             for key in requested_keys:
-                point_series[key].append(parse_numeric(row.get(key)))
+                point_series[key].append(parse_numeric(row[key]))
 
     return series_by_point
 
