@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 from typing import Any, Callable
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
@@ -27,6 +27,7 @@ from odmr_console_core import (
     discard_run_dir,
     load_json,
     process_is_running,
+    read_jsonl,
     read_progress_since,
     read_text_tail,
     request_emergency_stop,
@@ -38,10 +39,18 @@ from odmr_console_qt_shared import WorkerThread, add_display_row, format_duratio
 
 
 class RunMonitorPage(QWidget):
-    def __init__(self, bundle_provider: Callable[[], RunBundle], out_dir_provider: Callable[[], str]) -> None:
+    active_out_dir_changed = Signal(str)
+
+    def __init__(
+        self,
+        bundle_provider: Callable[[], RunBundle],
+        out_dir_provider: Callable[[], str],
+        validate_provider: Callable[[], bool] | None = None,
+    ) -> None:
         super().__init__()
         self.bundle_provider = bundle_provider
         self.out_dir_provider = out_dir_provider
+        self.validate_provider = validate_provider
         self.worker: WorkerThread | None = None
         self.handle: Any | None = None
         self.progress_offset = 0
@@ -121,6 +130,8 @@ class RunMonitorPage(QWidget):
         self.timer.timeout.connect(self.refresh_progress)
 
     def start_run(self) -> None:
+        if not self._validate_before_launch():
+            return
         bundle = self.bundle_provider()
         out_dir = self.out_dir_provider()
         self.log.setPlainText(f"正在启动运行：{out_dir}...")
@@ -132,6 +143,7 @@ class RunMonitorPage(QWidget):
 
     def _started(self, handle: Any) -> None:
         self.handle = handle
+        self.active_out_dir_changed.emit(str(handle.out_dir))
         self.progress_offset = 0
         self.latest_progress = None
         self.run_started_monotonic = time.monotonic()
@@ -167,6 +179,8 @@ class RunMonitorPage(QWidget):
 
     def resume_run(self) -> None:
         if not self.handle:
+            return
+        if not self._validate_before_launch():
             return
         previous_out_dir = self.handle.out_dir
         self.log.appendPlainText(f"\n正在继续未完成 run：{previous_out_dir}")
@@ -331,6 +345,19 @@ class RunMonitorPage(QWidget):
         )
         return has_partial_facts and self._has_remaining_points(out_dir)
 
+    def _validate_before_launch(self) -> bool:
+        if self.validate_provider is None:
+            return True
+        try:
+            valid = self.validate_provider()
+        except Exception as exc:
+            QMessageBox.warning(self, "配置检查失败", str(exc))
+            return False
+        if not valid:
+            QMessageBox.warning(self, "配置检查失败", "当前 station/profile/bundle 本地检查未通过，已阻止启动。")
+            return False
+        return True
+
     def _load_run_status(self, out_dir: str) -> str | None:
         for filename in ["summary.json", "run_manifest.json"]:
             path = Path(out_dir) / filename
@@ -421,15 +448,7 @@ class RunMonitorPage(QWidget):
         }
 
     def _read_jsonl(self, path: Path) -> list[dict[str, Any]]:
-        if not path.exists():
-            return []
-        records: list[dict[str, Any]] = []
-        with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                stripped = line.strip()
-                if stripped:
-                    records.append(json.loads(stripped))
-        return records
+        return read_jsonl(path)
 
     def _append_backend_log_tail(self) -> None:
         if not self.handle:

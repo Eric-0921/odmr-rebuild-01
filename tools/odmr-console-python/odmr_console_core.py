@@ -388,15 +388,11 @@ def discard_run_dir(run_dir: str | Path) -> Path:
 
 
 def read_progress(path: str | Path) -> list[dict[str, Any]]:
-    progress_path = Path(path)
-    if not progress_path.exists():
-        return []
-    records = []
-    with progress_path.open("r", encoding="utf-8") as handle:
-        for line in handle:
-            stripped = line.strip()
-            if stripped:
-                records.append(json.loads(stripped))
+    return read_jsonl(path)
+
+
+def read_jsonl(path: str | Path) -> list[dict[str, Any]]:
+    records, _offset = read_jsonl_since(path)
     return records
 
 
@@ -404,28 +400,29 @@ def read_jsonl_since(path: str | Path, offset: int = 0) -> tuple[list[dict[str, 
     target = Path(path)
     if not target.exists():
         return [], offset
+    if offset > target.stat().st_size:
+        offset = 0
     records: list[dict[str, Any]] = []
     with target.open("r", encoding="utf-8") as handle:
         handle.seek(offset)
-        for line in handle:
+        while True:
+            line_start = handle.tell()
+            line = handle.readline()
+            if line == "":
+                return records, handle.tell()
             stripped = line.strip()
-            if stripped:
+            if not stripped:
+                continue
+            try:
                 records.append(json.loads(stripped))
-        return records, handle.tell()
+            except json.JSONDecodeError:
+                if not line.endswith("\n"):
+                    return records, line_start
+                continue
 
 
 def read_progress_since(path: str | Path, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
-    progress_path = Path(path)
-    if not progress_path.exists():
-        return [], offset
-    records = []
-    with progress_path.open("r", encoding="utf-8") as handle:
-        handle.seek(offset)
-        for line in handle:
-            stripped = line.strip()
-            if stripped:
-                records.append(json.loads(stripped))
-        return records, handle.tell()
+    return read_jsonl_since(path, offset)
 
 
 def process_is_running(pid: int) -> bool:
@@ -460,14 +457,8 @@ def tail_progress(path: str | Path, poll_sec: float = 0.2) -> Iterator[dict[str,
     progress_path = Path(path)
     offset = 0
     while True:
-        if progress_path.exists():
-            with progress_path.open("r", encoding="utf-8") as handle:
-                handle.seek(offset)
-                for line in handle:
-                    stripped = line.strip()
-                    if stripped:
-                        yield json.loads(stripped)
-                offset = handle.tell()
+        records, offset = read_jsonl_since(progress_path, offset)
+        yield from records
         time.sleep(poll_sec)
 
 

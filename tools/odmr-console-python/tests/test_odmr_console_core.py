@@ -18,6 +18,7 @@ from odmr_console_core import (  # noqa: E402
     process_is_running,
     read_progress,
     read_progress_since,
+    read_jsonl_since,
     read_text_tail,
     request_emergency_stop,
     request_stop,
@@ -87,6 +88,23 @@ class OdmrConsoleCoreTests(unittest.TestCase):
             next_records, next_offset = read_progress_since(progress, offset)
             self.assertEqual([record["event_name"] for record in next_records], ["point_completed"])
             self.assertGreater(next_offset, offset)
+
+    def test_jsonl_reader_skips_bad_complete_lines_and_holds_incomplete_tail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "progress.jsonl"
+            path.write_text('{"event_name":"run_opened"}\nnot json\n{"event_name":"half"', encoding="utf-8")
+            records, offset = read_jsonl_since(path)
+            self.assertEqual([record["event_name"] for record in records], ["run_opened"])
+            self.assertLess(offset, path.stat().st_size)
+
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write('}\n{"event_name":"collector_started"}\n')
+            next_records, next_offset = read_jsonl_since(path, offset)
+            self.assertEqual(
+                [record["event_name"] for record in next_records],
+                ["half", "collector_started"],
+            )
+            self.assertEqual(next_offset, path.stat().st_size)
 
     def test_process_status_and_text_tail_helpers(self) -> None:
         self.assertTrue(process_is_running(os.getpid()))

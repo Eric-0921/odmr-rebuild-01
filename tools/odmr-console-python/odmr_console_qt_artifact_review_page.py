@@ -67,32 +67,47 @@ class ArtifactReviewPage(QWidget):
     def audit(self) -> None:
         run_dir = self._run_dir()
         out_path = run_dir / "continuity_audit.json"
-        command = ["dotnet", "run", "--project", winprobe_project(), "--", "audit-continuity", "--run", str(run_dir), "--out", str(out_path)]
-        self._run_command(command, out_path)
+        pending_path = run_dir / "continuity_audit.pending.json"
+        if pending_path.exists():
+            pending_path.unlink()
+        command = ["dotnet", "run", "--project", winprobe_project(), "--", "audit-continuity", "--run", str(run_dir), "--out", str(pending_path)]
+        self._run_command(command, pending_path, out_path)
+
+    def set_current_out_dir(self, out_dir: str) -> None:
+        self.run_dir.setText(out_dir)
 
     def _run_dir(self) -> Path:
         text = self.run_dir.text().strip() or self.out_dir_provider()
         self.run_dir.setText(text)
         return Path(text)
 
-    def _run_command(self, command: list[str], json_out: Path | None = None) -> None:
+    def _run_command(self, command: list[str], json_out: Path | None = None, final_json_out: Path | None = None) -> None:
         self.output.setPlainText(command_to_text(command))
         self._set_running(True)
         self.worker = WorkerThread(lambda: subprocess.run(command, cwd=REPO_ROOT, text=True, capture_output=True, check=False))
-        self.worker.completed.connect(lambda result: self._done(result, json_out))
+        self.worker.completed.connect(lambda result: self._done(result, json_out, final_json_out))
         self.worker.failed.connect(self._failed)
         self.worker.start()
 
-    def _done(self, result: subprocess.CompletedProcess[str], json_out: Path | None) -> None:
+    def _done(self, result: subprocess.CompletedProcess[str], json_out: Path | None, final_json_out: Path | None = None) -> None:
         self._set_running(False)
         text = [f"returncode={result.returncode}"]
         if result.stdout:
             text.append("\nSTDOUT:\n" + result.stdout)
         if result.stderr:
             text.append("\nSTDERR:\n" + result.stderr)
-        if json_out and json_out.exists():
+        summary_path = json_out
+        if final_json_out is not None:
+            if result.returncode == 0 and json_out and json_out.exists():
+                json_out.replace(final_json_out)
+                summary_path = final_json_out
+            else:
+                if json_out and json_out.exists():
+                    json_out.unlink()
+                summary_path = None
+        if result.returncode == 0 and summary_path and summary_path.exists():
             try:
-                audit = load_json(json_out)
+                audit = load_json(summary_path)
                 text.insert(1, "\nAudit summary:\n" + json.dumps({
                     "verdict": audit.get("verdict"),
                     "frames_total": audit.get("frames_total"),

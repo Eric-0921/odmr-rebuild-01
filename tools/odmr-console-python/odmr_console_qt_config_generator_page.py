@@ -395,8 +395,6 @@ class ConfigGeneratorPage(QWidget):
             "sine_output_voltage_vrms": NumberUnitInput(1, None, "Vrms"),
         }
         rows: list[tuple[str, QWidget]] = [
-            ("配置 ID", self.oe_profile_id),
-            ("命令等待时间", self.oe_command_settle),
             ("通道", self.oe_fields["channel"]),
             ("输入信号源", self.oe_fields["input_source"]),
             ("输入屏蔽接地", self.oe_fields["input_grounding"]),
@@ -652,7 +650,9 @@ class ConfigGeneratorPage(QWidget):
         self.laser_power.set_canonical(laser.get("power_mw", 0), "power_mw")
         self.laser_settle.set_canonical(laser.get("settle_ms", 1000), "time_ms")
 
-    def _refresh_block_list(self) -> None:
+    def _refresh_block_list(self, selected_row: int | None = None) -> None:
+        if selected_row is None:
+            selected_row = self.block_list.currentRow()
         self.block_list.blockSignals(True)
         self.block_list.clear()
         for block in self.blocks:
@@ -665,8 +665,9 @@ class ConfigGeneratorPage(QWidget):
             self.block_list.addItem(item)
         self.block_list.blockSignals(False)
         if self.blocks:
-            self.block_list.setCurrentRow(0)
-            self._load_block(0)
+            row = min(max(0, selected_row), len(self.blocks) - 1)
+            self.block_list.setCurrentRow(row)
+            self._load_block(row)
 
     def _load_block(self, index: int) -> None:
         if index < 0 or index >= len(self.blocks) or self._building_block:
@@ -718,9 +719,11 @@ class ConfigGeneratorPage(QWidget):
             row = self.block_list.currentRow()
             if row < 0:
                 self.blocks.append(block)
+                selected_row = len(self.blocks) - 1
             else:
                 self.blocks[row] = block
-            self._refresh_block_list()
+                selected_row = row
+            self._refresh_block_list(selected_row)
             return True
         except Exception as exc:
             if show_error:
@@ -733,15 +736,16 @@ class ConfigGeneratorPage(QWidget):
             del self.blocks[row]
         if not self.blocks:
             self.blocks.append(self.default_block("x_line", "x"))
-        self._refresh_block_list()
+        self._refresh_block_list(min(max(row, 0), len(self.blocks) - 1))
 
     def _add_xyz_blocks(self) -> None:
+        first_new_row = len(self.blocks)
         self.blocks.extend([
             self.default_block("x_line", "x"),
             self.default_block("y_line", "y"),
             self.default_block("z_line", "z"),
         ])
-        self._refresh_block_list()
+        self._refresh_block_list(first_new_row)
 
     def _request(self) -> GeneratorRequest:
         plan_kind = choice_token(self.plan_kind.currentText())

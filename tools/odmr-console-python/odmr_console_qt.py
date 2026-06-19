@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         self.run_bundle = RunBundlePage()
         self.config_generator = ConfigGeneratorPage()
         self.resolve_page = ResolvePage(self.run_bundle.bundle)
-        self.monitor_page = RunMonitorPage(self.run_bundle.bundle, self.current_out_dir)
+        self.monitor_page = RunMonitorPage(self.run_bundle.bundle, self.current_out_dir, self.run_bundle.validate_local)
         self.review_page = ArtifactReviewPage(self.current_out_dir)
 
         for page in [
@@ -58,13 +58,19 @@ class MainWindow(QMainWindow):
 
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
         self.config_generator.bundle_generated.connect(self._bind_generated_bundle)
+        self.monitor_page.active_out_dir_changed.connect(self.set_current_out_dir)
 
     def current_out_dir(self) -> str:
         return self.run_bundle.out_dir.text().strip()
 
+    def set_current_out_dir(self, out_dir: str) -> None:
+        self.run_bundle.set_out_dir(out_dir)
+        self.review_page.set_current_out_dir(out_dir)
+
     def _bind_generated_bundle(self, bundle: RunBundle) -> None:
         self.run_bundle.set_bundle(bundle)
         self.run_bundle.make_new_out_dir()
+        self.review_page.set_current_out_dir(self.current_out_dir())
         self.nav.setCurrentRow(0)
 
 

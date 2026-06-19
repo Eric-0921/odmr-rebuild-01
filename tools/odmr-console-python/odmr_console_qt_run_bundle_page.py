@@ -115,6 +115,11 @@ class RunBundlePage(QWidget):
         self.validate_local()
         self.bundle_changed.emit()
 
+    def set_out_dir(self, out_dir: str) -> None:
+        out_path = Path(out_dir)
+        self.output_root.setText(str(out_path.parent))
+        self.out_dir.setText(str(out_path))
+
     def make_new_out_dir(self) -> None:
         run_id = "pyside6_run"
         try:
