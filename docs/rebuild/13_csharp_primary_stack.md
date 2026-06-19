@@ -42,14 +42,26 @@ Rust 工程本体保留在 `win-csharp-rebuild` 分支作为归档参考：
 
 ## Collector 边界
 
+collector 热路径按 `lockin_model` 分支。
+
 OE1022D `RALL?` collector 热路径保持：
 
 ```text
 write RALL?
 sleep 30ms
 blocking exact read 12288B
-append raw
-append frame index
+direct-decode
+append collector_frames + unique-only parameter_values + unique-only sample_values
+```
+
+OE1300 `RALL?` collector 热路径保持：
+
+```text
+write RALL?\r
+sleep 5ms
+read until 32768B
+direct-decode
+append collector_blocks + unique-only parameter_values + unique-only sample_values
 ```
 
 以下能力只允许在 collector 外侧实现：

@@ -7,21 +7,31 @@
 `main` 分支的主运行栈是 Windows C#：
 
 - 主入口：`tools/win-csharp/Odmr.WinProbe`
-- 主命令：`run-execute`、`run-resolve`、`artifact-check`、`audit-continuity`、各设备 probe、`device-command-check`
-- 主设备链路：OE1022D 走 NI-VISA ASRL，SMB100A 走 Raw TCP 5025，M8812/CNI Laser 走 Windows Serial
+- 主命令：`run-resolve`、`run-execute`、`resume-run`、`artifact-check`、`audit-continuity`、`live-replay`、各设备 probe、`device-command-check`
+- 主设备链路：OE1022D 走 NI-VISA ASRL，OE1300 走 TCP，SMB100A 走 C# VISA USB resource，M8812/CNI Laser 走 Windows Serial
 - Rust 工程本体保留在 `win-csharp-rebuild` 分支作为归档参考，不在 `main` 日常主栈中保留
 
-OE1022D `RALL?` collector 热路径仍是项目内唯一冻结链路：
+collector 按 `lockin_model` 分支，各自有冻结合同。OE1022D `RALL?` 热路径：
 
 ```text
 write RALL?
 sleep 30ms
 blocking exact read 12288B
-append raw
-append frame index
+direct-decode
+append collector_frames + unique-only parameter_values + unique-only sample_values
 ```
 
-artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 collector 外侧。
+OE1300 `RALL?` 热路径：
+
+```text
+write RALL?\r
+sleep 5ms
+read until 32768B
+direct-decode
+append collector_blocks + unique-only parameter_values + unique-only sample_values
+```
+
+artifact 审查、连续性 audit、quality、GUI/live 都必须放在 collector 外侧。
 
 当前 `main` 仓库包含三类内容：
 
@@ -66,7 +76,7 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 - 串口路径不是设备真值，只是当前 Windows 实验机上已经验证过的连接事实
 - 当前日常验证入口是 C# probe：`visa-list`、`oe-idn`、`smb-probe`、`m8812-probe`、`laser-probe`
 - 当前实验入口是 C# `run-resolve` / `run-execute`
-- 真实实验 provenance 来自 snapshots、`device_state.jsonl`、`segments.jsonl`、`frames.idx.jsonl` 和离线审查工具
+- 真实实验 provenance 来自 snapshots、`device_state.jsonl`、`segments.jsonl`、型号对应的 collector truth（OE1022D `collector_frames.jsonl` / OE1300 `collector_blocks.jsonl`）、`parameter_values.csv`、`sample_values.csv` 和离线审查工具
 
 当前已经打通的 C# 主链路：
 
@@ -92,7 +102,7 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
   - blocking exact read `12288B`
   - 读完立即进入下一轮
 - `poll_interval_ms` 不再参与定长 `RALL?` 热路径；旧的 first-byte deadline、frame deadline、zero-byte retry 旋钮已经从 runtime collector 配置中移除。
-- `payload[12287]` 作为 `device_packet_counter` 写入 frame index，并由 C# `audit-continuity` 做 `delta=1/0/>1` 连续性审计。
+- `payload[12287]` 作为 `device_packet_counter` 写入 `collector_frames.jsonl`，并由 C# `audit-continuity` 做 `delta=1/0/>1` 连续性审计。
 - `quality` 用 unique RALL windows 判断 `min_frames`，重复窗口只记录为诊断字段，不再因为 duplicate ratio 单独失败。
 - `quality.jsonl` 现在额外输出：
   - `collector_health = clean | recovered_timeout | degraded_timeout`
@@ -179,15 +189,15 @@ artifact 审查、连续性 audit、quality、GUI/live、parser 都必须放在 
 
 - 固定 profile + SMB100A 浮动参数
 - `Laser` 作为 run 固定背景条件开启，不进入 point 变量
-- `OE1022D` 采用 run 级单 reader `RALL?` collector
+- `OE1022D` / `OE1300` 都采用 run 级单 reader `RALL?` collector，按 `lockin_model` 选择不同 collector 合同
 - collector 只在 C# `run-execute` 打开后启动，不在“仅连接设备”阶段常驻拉取
-- point 真值已切到 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切；ring buffer 只做实时观察
-- 当前 C# `run-execute` 默认 artifact：`raw + frames.idx + segments + points + quality + device_state + events + snapshots + manifest + summary`
-- 旧 Rust `raw/oe1022d.frames.parsed.jsonl` 重型调试产物不属于当前 C# 默认 artifact 合同
+- point 真值已切到 decoded truth：OE1022D `collector_frames.jsonl`，OE1300 `collector_blocks.jsonl`，两者共同使用 `parameter_values.csv + sample_values.csv + segments.jsonl`
+- 当前 C# `run-execute` 默认 artifact：型号对应 collector truth + `parameter_values.csv + sample_values.csv + segments + points + quality + device_state + events + snapshots + manifest + summary`
+- 旧 Rust `raw/oe1022d.frames.parsed.jsonl` 和早期 `raw/frames.idx` 产物不属于当前 C# 默认 artifact 合同
 - 当前实验室真机已证明：`*OPC?` 不能单独作为 sweep 结束信号，runtime 已改为 `*OPC?` + sweep 时长估算 fallback
 - 当前已经接入 `target_b_nt -> calibration -> target_current_a -> measured_current_a` 链路
 - 当前零场锁定语义是“零偏电流锁定 + 复现电流叠加”，不是物理零磁场已证明
 - 当前磁场电源第一版只支持非负目标电流；默认 1D/2D/3D 示例网格已全部改成非负值
-- 当前 `point_fields.jsonl` 已改成轻量 metadata；完整 20 字段数组和必要状态数组进入每个 point 的 `NPZ` sidecar
+- 当前后处理直接读取 `sample_values.csv + segments.jsonl`，不再要求 `point_fields.jsonl` 或每 point `NPZ` sidecar
 - 当前 `runs/grid_3d_raster_0_50_100ut_validation_live` 已完成 `3D 0/50/100 nT` 单轮真机验证：`27/27 points passed`、`collector_timeout_total=0`
-- continuity audit 现在即使没有 `frames.parsed`，也能直接从 `raw + frames.idx` 重建逐帧结构化数据做审计
+- continuity audit 现在直接读取 decoded collector truth：OE1022D 用 `collector_frames.jsonl`，OE1300 用 `collector_blocks.jsonl`

@@ -109,6 +109,41 @@ runs/<run_id>/
 - `run_manifest.json`、`summary.json`、`control/progress.jsonl` 也必须带 `lockin_model`
 - station 与 oe_profile 的型号必须一致；不允许 `lab_a.json + oe1300 profile` 这种交叉组合
 
+## 四点五、control/progress.jsonl
+
+`progress.jsonl` 是 UI/console 的低频状态通道，不是样本事实层。当前每行至少包含：
+
+- `schema_version`
+- `ts`
+- `pid`
+- `run_id`
+- `state`
+- `event_name`
+- `message`
+- `point_id`
+- `point_index`
+- `points_total`
+- `frames_total`
+- `samples_total`
+- `timeout_count`
+- `raw_len_bad_count`
+- `delta_gt1_count`
+- `quality_status`
+- `estimated_run_duration_ms`
+- `estimated_point_duration_ms`
+- `estimated_sweep_duration_ms`
+- `sweep_points`
+- `start_hz`
+- `stop_hz`
+- `step_hz`
+- `dwell_ms`
+- `lockin_model`
+- `collector_contract`
+- `decode_failures`
+- `effective_sample_hz_per_parameter`
+
+这些字段只用于 UI 进度、resume 观察和人工诊断；最终验收仍以 decoded truth、`artifact-check`、`audit-continuity` 为准。
+
 ## 五、events.jsonl
 
 每行一个 runtime 事件。当前双型号共用同一套 point 级状态机，至少会出现：

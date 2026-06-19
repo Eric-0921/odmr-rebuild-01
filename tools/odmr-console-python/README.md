@@ -82,11 +82,20 @@ PySide6 `Resume` button then allocates a sibling output directory like
 `<run-dir>__resume_01` and launches C# `resume-run --previous-run <run-dir>`.
 Resume only supports the current direct-decode artifact contract; it does not
 reopen historical raw-truth runs.
+The Python CLI does not expose a separate `resume` command; resume is available
+through PySide6 UI/core and the C# `resume-run` command.
 
 Request stop-after-current-point:
 
 ```bash
 python3 tools/odmr-console-python/odmr_console.py stop \
+  --metadata runs/python_console_demo/control/launch_metadata.json
+```
+
+Request emergency safe stop:
+
+```bash
+python3 tools/odmr-console-python/odmr_console.py emergency-stop \
   --metadata runs/python_console_demo/control/launch_metadata.json
 ```
 

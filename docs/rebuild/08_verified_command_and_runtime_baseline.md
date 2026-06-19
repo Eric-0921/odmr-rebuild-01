@@ -410,12 +410,12 @@ run 结束后额外只读核验：
 - 第一版 runtime 不是“所有设备都可调”，而是“磁场点 + SMB sweep 变量，其余设备按 profile 固定”
 - `OE1022D` 不是 point 级设备，而是 run 级固定观测器
 - `RALL?` 必须由单一 run 级 reader 线程持续执行
-- point 线程不直接碰 OE 串口；point 完整帧序列按 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切恢复
-- 默认不再同步落 `raw/oe1022d.frames.parsed.jsonl`；只有 debug 模式才写
-- point 级完整 20 字段数组默认进入 `point_fields/*.npz`
-- `point_fields.jsonl` 只保留 metadata、摘要统计和 sidecar 路径
+- 历史基线：point 线程不直接碰 OE 串口；当时 point 完整帧序列按 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切恢复
+- 历史基线：默认不再同步落 `raw/oe1022d.frames.parsed.jsonl`；只有 debug 模式才写
+- 历史基线：point 级完整 20 字段数组默认进入 `point_fields/*.npz`
+- 历史基线：`point_fields.jsonl` 只保留 metadata、摘要统计和 sidecar 路径
 - ring buffer 只保留最近窗口观察和 collector 健康摘要，不再决定 point 完整性
-- `continuous raw + frame index + segment boundary` 才是最终事实来源
+- 当前基线已经升级为 direct-decode：型号对应 collector truth + `parameter_values.csv + sample_values.csv + segments.jsonl` 才是最终事实来源
 - `frames.parsed` 是 companion truth，不替代 raw
 
 ## 当前 Windows / LabVIEW-like RALL 基线（2026-06-13）
@@ -448,7 +448,7 @@ run 结束后额外只读核验：
 - `delta=1`：新 50ms 窗口连续到达
 - `delta=0`：重复窗口，tight loop 读得比设备窗口更新更快时可出现
 - `delta>1`：疑似漏 50ms 窗口
-- `run audit-continuity` 用该 counter 审计窗口连续性；quality 仍以 point 内 timeout、unique windows、last frame age 为主
+- `audit-continuity` 用该 counter 审计窗口连续性；quality 仍以 point 内 timeout、unique windows、last frame age 为主
 
 当前 `quality` / 诊断语义：
 
@@ -477,7 +477,7 @@ run 结束后额外只读核验：
 - collector timeout 全程 `0`
 - `raw/oe1022d.frames.idx.jsonl` 行数 `28534`
 - `raw/oe1022d.rall` 大小 `350625792 = 28534 * 12288`
-- `run audit-continuity`：
+- `audit-continuity`：
   - `verdict = continuous`
   - `delta_gt1_count = 0`
   - `estimated_missing_windows = 0`
@@ -681,7 +681,8 @@ run 结束后额外只读核验：
 当前边界仍然明确：
 
 - `field-decode-csv` 只属于 `Odmr.WinProbe oe-rall` 的 probe/实验路径；
-- `run-execute`、`artifact-check`、`audit-continuity` 仍然沿用现行 `raw + frames.idx + segments` 合同；
+- 历史记录：当时 `run-execute`、`artifact-check`、`audit-continuity` 仍沿用 `raw + frames.idx + segments` 旧合同；
+- 当前实现已切到 `docs/rebuild/03_artifact_schema.md` 记录的 direct-decode 合同；
 - 是否正式把 runtime 从“raw truth”迁移到“direct decoded truth”，必须以这档实验的长跑结果为前置依据，而不是以当前代码改动本身作为依据。
 
 ### `field-decode-csv` 180 秒真机结果

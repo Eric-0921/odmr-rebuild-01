@@ -129,7 +129,7 @@ Runtime 是核心执行层。
 - resolve station。
 - preflight。
 - 打开 run directory。
-- 启动 OE1022D run 级 collector。
+- 按 `lockin_model` 启动 run 级 collector（OE1022D `collector_frames`，OE1300 `collector_blocks`）。
 - 执行 point list。
 - 等待磁场稳定。
 - 创建 segment 边界。
@@ -148,35 +148,32 @@ Artifact 是 run 的事实记录。
 - 保存输入 snapshot。
 - 保存事件流。
 - 保存 point/segment/quality。
-- 保存连续 raw。
+- 保存 decoded collector truth。
 - 支持 replay 和分析。
 
 ## 数据流
 
 ```text
-OE1022D serial
-  -> OE collector producer
-  -> raw writer
-  -> frames.idx writer
-  -> ring buffer
+lock-in collector
+  -> OE1022D collector_frames.jsonl 或 OE1300 collector_blocks.jsonl
+  -> unique-only parameter_values.csv
+  -> unique-only sample_values.csv
   -> segment indexer
-point raw replay
-  -> raw/frames.idx segment replay
-  -> minimal RALL parser
-  -> point field extractor
+point decoded truth window
+  -> segments.jsonl + sample_values.csv
   -> point quality evaluator
+  -> postprocess / ML dataset builder
 ```
 
 关键约束：
 
-- OE1022D 串口只有一个 producer 读取。
-- collector 不知道当前 point。
-- collector 只负责 `RALL?`、raw、frames.idx、timestamp、ring buffer，不在采集线程里做字段级解析。
-- segmenter 负责把 frame offset 和时间窗归属给 point。
-- point 真值窗口来自 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 的回切恢复。
-- ring buffer 只负责最近窗口观察、CLI 摘要和 collector 健康状态，不再承担 point 完整性保真。
-- viewer 只能订阅 ring buffer 或 artifact tail。
-- raw writer 是最终事实来源，不依赖 viewer 存活。
+- 每个 lock-in 只有一个 producer 读取。
+- collector 不知道当前 point，只持续执行本型号冻结的 `RALL?` 热路径。
+- collector 直接写 decoded truth，不再把 raw/frames.idx 当正式事实层。
+- segmenter 负责把 decoded collector 序号、sample index 和时间窗归属给 point。
+- point 真值窗口来自 `segments.jsonl + sample_values.csv`，必要时结合型号对应 collector truth 审计。
+- viewer 只能订阅 artifact tail 或 progress JSONL。
+- decoded truth 是最终事实来源，不依赖 viewer 存活。
 
 ## 控制流
 
@@ -203,20 +200,20 @@ point loop 内部顺序：
 6. 记录 segment 起点。
 7. 发送 `SWE:FREQ:EXEC` 并用 `*OPC?` 等待单次 sweep 完成。
 8. 记录 segment 终点。
-9. 先写 `segments.jsonl`，再按 committed `frame_seq/raw_offset` 从 `raw + frames.idx` 回切 point 时间窗。
+9. 先写 `segments.jsonl`，再按 decoded collector 序号和 sample index 绑定 point 时间窗。
 10. 计算 point quality 和 point 摘要。
 11. 记录 `point_completed` 或 `point_failed`。
 
 ## CLI 边界
 
 ```bash
-odmr station verify --station configs/stations/lab_a.json
-odmr run execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/test.json
-odmr run watch --run runs/<run_id>
-odmr run replay --run runs/<run_id>
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --station configs/stations/lab_a.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/test.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-execute --station configs/stations/lab_a.json --calibration configs/calibrations/main.json --plan configs/plans/test.json --smb-profile configs/profiles/smb100a_run_pll_default.json --oe-profile configs/profiles/oe1022d_run_ch_b_observed.json --laser-profile configs/profiles/cni_laser_run_off_background.json --out-dir runs/<run_id>
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- live-replay --run runs/<run_id>
 ```
 
-`execute` 必须依赖 `verify` 结果。设备解析不唯一时必须失败，不允许猜。串口设备一律走“先枚举当前串口池，再按身份认领”的路径，hint 只用于候选排序。
+`run-execute` 必须依赖当次 station/profile resolve 结果。设备解析不唯一时必须失败，不允许猜。串口/VISA/TCP 设备都按 station hint 排序，再用协议身份认领。
 
 ## 失败模型
 

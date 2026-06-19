@@ -37,7 +37,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
 输出行为：
 
 - probes 直接输出设备身份、连接和最小状态
-- `run-execute` 写出 snapshots、manifest、events、raw、frames.idx、segments、points、quality、device_state、summary
+- `run-execute` 写出 snapshots、manifest、events、型号对应 collector truth、`parameter_values.csv`、`sample_values.csv`、segments、points、quality、device_state、summary
 - `artifact-check` 和 `audit-continuity` 只读 artifact，不碰设备
 
 串口路径规则：
@@ -45,14 +45,14 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
 - 当前 Windows 实验机固定事实是：OE `ASRL8::INSTR`，SMB USB VISA resource，M8812 `COM4/COM6/COM3`，Laser `COM9`
 - SMB100A resource 在 NI-VISA 环境中可能显示为 `USB0::...`，在文档/示例中也常见 `USB::...`；C# resolver 两种前缀都接受，最终以 `*IDN?` 身份匹配为准。
 - `station.json` 保存这些事实和 identity 条件
-- 真机 run 的 provenance 来自 snapshots、`device_state.jsonl`、segments/raw/frame index 和离线审查
+- 真机 run 的 provenance 来自 snapshots、`device_state.jsonl`、`segments.jsonl`、型号对应 collector truth 和离线审查
 - 端口变化时先跑 C# probes，不回到旧 Rust `station verify`
 
 ## C# probes 当前做什么
 
 ### SMB100A
 
-- 使用 VISA USB resource 建连到 `USB::...::INSTR`
+- 使用 VISA USB resource 建连到 `USB0::...::INSTR` 或 `USB::...::INSTR`
 - 发送 `*IDN?`
 - 发送 `SYST:ERR?`
 - 发送 `OUTP?`
@@ -109,7 +109,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
   - `SWE:FREQ:EXEC + *OPC?`
   - sweep 完成后回到 `FREQ:MODE CW + FREQ start_hz`
   - segment 覆盖真实 RF exposure window
-  - 再按 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 回切 point 窗口
+  - 再按 decoded truth（OE1022D `collector_frames.jsonl`，OE1300 `collector_blocks.jsonl`）和 `segments.jsonl` 绑定 point 窗口
   - 写 `device_state.jsonl` 绑定 intended/measured/current/sweep/RF exposure/segment
 - cleanup 后确认：
   - `OUTP? -> 0`
@@ -141,12 +141,12 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
 1. SMB100A
 2. 单台 M8812
 3. 其余两台 M8812
-4. OE1022D
+4. 当前 station 选择的 lock-in（OE1022D 或 OE1300）
 5. CNI Laser
 
 原因：
 
-- 先验证 TCP socket 和 SCPI query 路径
+- 先验证 SMB100A VISA USB resource 和 SCPI query 路径
 - 再验证串口 SCPI 路径
 - 最后再碰二进制 laser 帧
 
@@ -156,16 +156,16 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
 
 通过标准：
 
-- TCP 可连接
+- VISA USB resource 可打开；`USB0::...` / `USB::...` 前缀差异不作为身份真值
 - `*IDN?` 返回包含 `Rohde&Schwarz` 和 `SMB100A`
 - `SYST:ERR?` 可读且无致命错误
 - `OUTP? / FREQ? / POW? / SWE:FREQ:STEP? / SWE:FREQ:DWEL?` 可读
 
 失败时先查：
 
-- IP 是否变了
-- 5025 端口是否可达
-- 设备是否在 remote 可访问网络上
+- `visa-list` 是否能枚举 SMB100A resource
+- station 中的 `resource/resource_candidates` 是否覆盖当前枚举值
+- `*IDN?` 中的序列段是否被 station `identity.contains_any` 接受
 
 ### M8812
 
@@ -197,6 +197,19 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
 - 当场跑长时间 `RALL?` 稳定性
 
 那是下一阶段。
+
+### OE1300
+
+通过标准：
+
+- TCP `192.168.1.1:10001` 可连接
+- `*IDN?` 返回包含 `SSI LIA-OE130`
+- `RALL?\r` 返回 `32768B` 二进制块
+
+当前阶段不要求：
+
+- 把 OE1300 串口命令混入 OE1022D profile
+- 用 OE1022D packet counter 规则审计 OE1300
 
 ### CNI Laser
 

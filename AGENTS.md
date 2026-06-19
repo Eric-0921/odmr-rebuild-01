@@ -32,7 +32,7 @@
 | `Odmr.ControlPanel.WinForms` | `tools/win-csharp/Odmr.ControlPanel.WinForms` | legacy/fallback WinForms 控制面板 |
 
 - 目标框架：`net8.0`（WinForms 项目为 `net8.0-windows`）
-- 关键 NuGet 包：`NationalInstruments.Visa`（OE1022D VISA）、`System.IO.Ports`（M8812 / Laser 串口）
+- 关键 NuGet 包：`NationalInstruments.Visa`（SMB100A / OE1022D VISA）、`System.IO.Ports`（M8812 / Laser 串口）
 - 解决方案文件：`tools/win-csharp/Odmr.Win.sln`
 
 ### Python 边界
@@ -140,6 +140,7 @@ python tools/odmr-console-python/odmr_console.py generate-demo-bundle --out-dir 
 python tools/odmr-console-python/odmr_console.py resolve --plan ...
 python tools/odmr-console-python/odmr_console.py start-run --plan ... --out-dir runs/demo
 python tools/odmr-console-python/odmr_console.py stop --metadata runs/demo/control/launch_metadata.json
+python tools/odmr-console-python/odmr_console.py emergency-stop --metadata runs/demo/control/launch_metadata.json
 python tools/odmr-console-python/odmr_console.py read-progress --progress-jsonl runs/demo/control/progress.jsonl
 
 # 离线后处理
@@ -207,6 +208,7 @@ baseline_snapshot.json
 events.jsonl
 points.jsonl
 collector_frames.jsonl
+collector_blocks.jsonl
 parameter_values.csv
 sample_values.csv
 segments.jsonl
@@ -217,13 +219,14 @@ continuity_audit.json
 control/                         # PySide6 console 生成
   progress.jsonl
   stop.request
+  emergency_stop.request
   launch_metadata.json
   stdout.log
   stderr.log
 ```
 
-- **最终事实层**：`collector_frames.jsonl` + `parameter_values.csv` + `sample_values.csv` + `segments.jsonl`。
-- 每帧固定 **12288 B**；`payload[12287]` 作为 `device_packet_counter`，用于连续性审计。
+- **最终事实层**：按 `lockin_model` 分支，OE1022D 使用 `collector_frames.jsonl`，OE1300 使用 `collector_blocks.jsonl`，两者共同使用 `parameter_values.csv` + `sample_values.csv` + `segments.jsonl`。
+- OE1022D 每帧固定 **12288 B**；`payload[12287]` 作为 `device_packet_counter`，用于连续性审计。OE1300 使用 `collector_blocks.jsonl` 的块序和有效采样率做连续性审计。
 - `sample_values.csv` 是样本级 decoded truth；point 级后处理直接从它和 `segments.jsonl` 取窗口，不再回切 raw。
 - 同 `--out-dir` 复跑时，runtime 会覆盖/重建本次生成的 jsonl/raw/index，避免静默 append。
 - PySide6 console 的 stop 语义是 **stop-after-current-point**：写 `control/stop.request`，C# runtime 在 point 边界取消。

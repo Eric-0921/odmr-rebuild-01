@@ -41,14 +41,14 @@
 
 当前 station 配置补充约定：
 
-- SMB100A 可以配置 `host_candidates`，按顺序尝试多个固定实验台地址
-- OE1022D 可以配置 `identity.contains_any`，接受同型号下多台已知 SN
+- SMB100A 当前主路径是 `visa_resource`，可以配置 `resource_candidates` 并按顺序尝试多个 USB VISA resource；旧 TCP `host_candidates` 只作为兼容/诊断路径保留。
+- OE1022D 可以配置 `identity.contains_any`，但当前 `lab_a.json` 只启用 `SN:D6522078`。
 
 当前代码基线已经进一步收紧为：
 
 - 当前 C# 默认连接事实是：OE `ASRL8::INSTR`，SMB USB VISA resource，M8812 `COM4/COM6/COM3`，Laser `COM9`
 - C# probes 负责验证这些连接事实
-- run provenance 由 snapshots、`device_state.jsonl`、segments/raw/frame index 和离线审查工具给出
+- run provenance 由 snapshots、`device_state.jsonl`、`segments.jsonl`、型号对应的 collector truth 和离线审查工具给出
 
 ### 本次 rebuild 真机已验证结果
 
@@ -118,8 +118,8 @@
 
 ### 连接约束
 
-- 第一版主 transport 固定为 Raw Socket，不以 VISA 作为必需依赖。
-- auto-discovery 可以做有限 TCP 探测，但 runtime 不应依赖全网扫描。
+- 当前主 transport 是 VISA USB resource；Raw TCP 5025 只保留为兼容诊断路径，不作为默认 runtime 事实。
+- auto-discovery 只允许在显式 probe/diagnostics 中做有限资源枚举，runtime 仍以 station hint + `*IDN?` 身份认领为准。
 - query interrupted 会污染 error queue，因此连接层必须提供“清空错误队列直到 `0,\"No error\"`”的能力。
 
 ### 新项目应直接继承的事实
@@ -139,9 +139,9 @@
 - run 级核心读取命令：`RALL?`
 - 真机快照中的身份响应示例：
   - `SSI LIA-OE1022D,SN:D6522078,Version:Ver6.3200831`
-- 当前 station 已接受双实验台已知 SN：
+- 当前 `lab_a.json` station 启用的 OE1022D SN：
   - `SN:D6522078`
-  - `SN:D6130220`
+- `SN:D6130220` 是历史/可选候选，只有加入对应 station 的 `identity.contains_any` 后才参与认领。
 
 ### 已验证最小探测顺序
 
@@ -185,6 +185,28 @@
 - OE 连接、collector、cleanup 由 C# NI-VISA ASRL 实现。
 - Python 不直接碰 OE 串口。
 - point 切换不允许重启 collector。
+
+## OE1300
+
+### 已验证连接事实
+
+- 当前独立 station：`configs/stations/lab_a_oe1300_tcp.json`
+- station 中 `kind = "oe1300"`
+- transport：TCP socket
+- 默认 host/port：`192.168.1.1:10001`
+- 身份 token：`SSI LIA-OE130`
+- run 级核心读取命令：`RALL?\r`
+
+### 已验证采集约束
+
+- OE1300 与 OE1022D 不共用串口命令或帧格式。
+- 当前冻结 collector 合同是：
+  - 写 `RALL?\r`
+  - 等 `5ms`
+  - 读到 `32768B`
+  - 解码前 `29600B` 为 `37 x 100` big-endian double
+  - 对 unique block 写 `parameter_values.csv` 和 `sample_values.csv`
+- 连续性审计使用 `collector_blocks.jsonl`、块序、去重、`raw_len_bad_count`、`decode_failures` 和有效采样率，不使用 OE1022D 的 packet counter。
 
 ## M8812
 

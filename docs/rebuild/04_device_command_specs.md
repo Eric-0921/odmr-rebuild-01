@@ -117,6 +117,26 @@
   - `runtime_exact_frame`：run 级 collector 已用定长 `12288 bytes` 真机打通
 - 第一版 runtime parser、raw offset 和 segment 逻辑一律以 `12288` 为准
 
+## OE1300 第一版命令
+
+用途：TCP lock-in 数据源，与 OE1022D 串口命令和帧格式严格分离。
+
+允许命令：
+
+| 动作 | Helper | 命令形态 | 类别 | 验证状态 |
+| --- | --- | --- | --- | --- |
+| 查询身份 | transport 内 `*IDN?` | `*IDN?` | read_only | `rebuild_smoke_verified` |
+| 读取全局块 | `oe1300_rall_query` | `RALL?\r` | acquisition | `rebuild_smoke_verified` |
+
+运行约束：
+
+- setup 只允许来自 `oe1300` profile 的固定字段，不允许复用 OE1022D 的 `FMODD/RSLPD/...` 串口命令。
+- run 中只允许 collector 按 LabVIEW-like TCP loop 持续执行 `RALL?\r`。
+- 当前冻结块合同：`32768B` 总读长，前 `29600B` 解码为 `37 x 100` big-endian `double`。
+- point 不允许修改 OE1300 配置。
+- 任何 viewer 不允许直接查询 OE1300 TCP socket。
+- OE1300 连续性审计基于 `collector_blocks.jsonl`、块序、去重、`raw_len_bad_count`、`decode_failures` 和有效采样率；不使用 OE1022D 的 `device_packet_counter`。
+
 ## M8812 第一版命令
 
 用途：三轴磁场执行器。

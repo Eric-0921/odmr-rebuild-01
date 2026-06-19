@@ -31,8 +31,8 @@
 - preflight 失败时不启动 collector。
 - collector 是 run 级单实例。
 - point 切换不会重启 OE collector。
-- `RALL?` frame 能持续进入 raw writer。
-- segment 起止 offset 正确。
+- `RALL?` frame/block 能持续进入型号对应 collector truth。
+- segment 起止 collector 序号和 sample index 正确。
 - SMB100A readback 不符时 point 失败。
 - M8812 settle 不达标时 point 失败。
 - OE timeout 超阈值时 point quality 失败。

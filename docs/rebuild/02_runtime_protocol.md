@@ -93,10 +93,9 @@ OE1022D collector 是 run 级单实例。
 - 读取完整 frame。
 - 打 monotonic timestamp 和 wall timestamp。
 - 分配连续 frame sequence。
-- 写入 raw log。
-- 写入 `raw/oe1022d.frames.idx.jsonl`。
-- 更新 ring buffer。
-- 报告 timeout、parse error、duplicate、last frame age。
+- 直接写入 `collector_frames.jsonl`。
+- 对 unique frame 写入 `parameter_values.csv` 和 `sample_values.csv`。
+- 报告 timeout、decode failure、duplicate、last frame age。
 - 提供 committed cursor，作为 point durable 边界记录基础。
 
 约束：
@@ -105,15 +104,14 @@ OE1022D collector 是 run 级单实例。
 - OE1022D collector 只在打开串口后清一次输入缓冲区；热循环内不逐帧清输入。
 - `RALL` 设备采样间隔按 `1ms/sample` 处理；host poll interval 不反推出采样点间隔。
 - 定长 `RALL?` 热路径不使用 `poll_interval_ms` 做额外 sleep，不使用 first-byte deadline、frame deadline、zero-byte retry 或 timeout 后 clear/retry。
-- `payload[12287]` 当前作为 `device_packet_counter` 进入 frame index 和 continuity audit：`delta=1` 是新窗口，`delta=0` 是重复窗口，`delta>1` 是疑似漏 50ms 窗口。
+- `payload[12287]` 当前作为 `device_packet_counter` 进入 `collector_frames.jsonl` 和 continuity audit：`delta=1` 是新窗口，`delta=0` 是重复窗口，`delta>1` 是疑似漏 50ms 窗口。
 - producer 不使用 `try_send` 静默丢帧作为主链策略。
-- raw writer / health consumer 必须持续 drain。
+- decoded truth writer / health consumer 必须持续 drain。
 - stop 必须包含 request、observed、port close、thread joined 四个阶段。
 - `Drop` 不等于线程已经退出。
-- 最小 `RALL` 字段解析不在 collector 线程执行，而在 point 从 `raw + frames.idx + segments` 回切之后执行。
-- ring buffer 只是即时消费层，不是最终事实层。
-- ring buffer 容量仍按估算值加 guard 动态规划，但只服务观察体验，不再承担 point 保真。
-- point 真值边界必须取 committed cursor，不能取 ring cursor。
+- `RALL` 字段解析已经是 collector direct-decode 合同的一部分，但 quality/audit/postprocess 仍在 collector 外侧。
+- progress / live 只是即时消费层，不是最终事实层。
+- point 真值边界必须取 committed decoded cursor，不能取 UI/progress cursor。
 
 ## Point 执行协议
 
@@ -126,13 +124,13 @@ OE1022D collector 是 run 级单实例。
 5. 配置 SMB100A sweep 和功率。
 6. readback 校验 `OUTP ON` 与 `FREQ:MODE SWE` 等关键参数。
 7. 写 `point_stable`。
-8. 记录 segment start timestamp 和 raw offset。
+8. 记录 segment start timestamp 和 decoded sample index。
 9. 发送 `SWE:FREQ:EXEC`。
 10. 先观察 `*OPC?` 的实际等待时长；若明显早于基于 `start/stop/step/dwell` 的 sweep 估算时长，则退回到“估算时长 + guard”。
-11. 记录 segment end timestamp 和 raw offset。
-12. 先把 `segment_start/end + frame_seq/raw_offset` 写入 `segments.jsonl`。
-13. 再按 committed `frame_seq/raw_offset` 从 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl` 回切 point 帧序列。
-14. 把窗口内每帧解析成 `20 x 50` double matrix，并抽出当前关心字段。
+11. 记录 segment end timestamp 和 decoded sample index。
+12. 先把 `segment_start/end + collector seq + sample_index` 写入 `segments.jsonl`。
+13. 再按 `segments.jsonl + sample_values.csv` 绑定 point 样本窗口。
+14. 从 decoded truth 抽出当前关心字段。
 15. 计算 quality 和即时摘要。
 16. 写 `point_completed` 或 `point_failed`。
 

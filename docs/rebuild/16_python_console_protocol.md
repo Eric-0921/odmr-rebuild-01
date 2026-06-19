@@ -80,6 +80,8 @@ resume-run --previous-run <dir> --out-dir <dir> --progress-jsonl <path> --stop-r
 - 在 metadata 中补 `resume.previous_run_dir` / `resume.resume_out_dir`
 - 继续复用相同的 progress / stop / emergency-stop 文件协议
 
+注意：`tools/odmr-console-python/odmr_console.py` 当前没有单独的 `resume` 子命令；resume 由 PySide6 UI/core 调用 C# `resume-run`，或由操作者直接使用 C# CLI。
+
 控制文件默认放在：
 
 ```text
@@ -179,6 +181,6 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run <r
 write RALL?
 sleep 30ms
 blocking exact read 12288B
-append raw
-append frame index
+direct-decode
+append collector_frames + unique-only parameter_values + unique-only sample_values
 ```

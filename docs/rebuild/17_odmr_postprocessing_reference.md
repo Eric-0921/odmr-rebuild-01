@@ -23,17 +23,17 @@
 
 | 论文需要的数据 | 当前 artifact | 说明 |
 |---|---|---|
-| 原始 ODMR 信号 | `raw/oe1022d.rall`, `point_fields/*.npz` 里的 `b_x` | `raw` 是最终事实层，`npz` 是 point 级结构化 sidecar |
+| 原始 ODMR 信号 | `sample_values.csv` 里的 `b_x` / `b_y` / `b_r` 等 decoded samples | `sample_values.csv + segments.jsonl` 是当前 point 级后处理事实层 |
 | 频率轴 | `points.jsonl.rf`, `smb_profile_snapshot.json` | 后处理阶段物化为 `frequency_hz[]` |
 | 微波功率 | `points.jsonl.rf.power_dbm`, SMB snapshot | 作为 condition metadata |
 | dwell/扫描步进 | `points.jsonl.rf.dwell_ms`, `start_hz`, `stop_hz`, `step_hz` | 用于理论频率网格和样本数审计 |
-| 采样时间轴 | `raw/oe1022d.frames.idx.jsonl`, `point_fields.samples_total`, 设备语义 `1ms/sample` | host poll interval 不能反推采样间隔 |
+| 采样时间轴 | `sample_values.csv.sample_index`、`segments.jsonl.sample_index_start/end`、设备语义 `1ms/sample` | host poll interval 不能反推采样间隔 |
 | 磁场标签 | `points.jsonl.target_b_nt` | 当前三轴亥姆霍兹线圈已经校验，setpoint 作为标准实际磁场标签 |
 | 设备质量 | `quality.jsonl`, `b_pll_locked_ratio`, overload ratio, frame duplicate/timeout | 作为筛选或训练权重，不参与谱线强度归一化 |
 | OE 设置 | `oe_profile_snapshot.json` | `time_constant_index/filter_slope` 需要在后处理中映射为物理量 |
 | 激光功率 | `laser_profile_snapshot.json` | 作为 condition metadata |
 
-结论：当前采集设计没有严重偏离论文范式。它没有只保存拟合结果，而是保留了连续 raw、frame index、segments、point sidecar 和设备快照。真正需要补的是离线样本构建层。
+结论：当前采集设计没有严重偏离论文范式。它没有只保存拟合结果，而是保留了 decoded sample truth、segments、collector truth 和设备快照。离线样本构建层直接消费这些 decoded truth 文件。
 
 ## 3. 展示数据和训练数据是否会不同
 
@@ -138,8 +138,8 @@ label_source = helmholtz_setpoint_calibrated
 runs/<run_id>/
   points.jsonl
   quality.jsonl
-  point_fields.jsonl
-  point_fields/*.npz
+  segments.jsonl
+  sample_values.csv
   smb_profile_snapshot.json
   oe_profile_snapshot.json
   laser_profile_snapshot.json
@@ -158,8 +158,8 @@ runs/<run_id>/postprocess/
 处理步骤：
 
 1. 读取 `points.jsonl`，拿到 `point_id`、`target_b_nt` 和 RF sweep 参数。
-2. 读取 `quality.jsonl` 和 `point_fields.jsonl`，连接到 sidecar `npz`。
-3. 从 `npz` 读取 `b_x` 数组，作为该 point 的原始 ODMR trace。
+2. 读取 `quality.jsonl`、`segments.jsonl` 和 `sample_values.csv`。
+3. 按 segment 的 sample index 窗口提取该 point 的 `b_x`/`b_y` trace。
 4. 按 `start_hz/stop_hz/step_hz` 构建理论 `frequency_hz[]`。
 5. 按 `dwell_ms` 和 `sample_interval_ms=1` 把 trace 聚合成频率 bin 均值。
 6. 用谱线两端频点估计 baseline。
@@ -192,19 +192,19 @@ frequency_hz = start_hz + frequency_index * step_hz
 
 ```bash
 python3 tools/odmr-postprocess/build_li_odmr_gpt_review.py \
-  --run runs/<run_id> \
-  --extract-missing-point-fields
+  --run runs/<run_id>
 ```
 
 该工具会：
 
-1. 检查 `point_fields.jsonl` 和 `point_fields/*.npz` 是否存在。
-2. 如果缺失，用 `raw/oe1022d.rall + raw/oe1022d.frames.idx.jsonl + segments.jsonl` 离线重建 sidecar。
-3. 从 `points.jsonl` 和 SMB snapshot 构建 `frequency_hz/frequency_ghz`。
-4. 按 `dwell_ms / 1ms` 把 `B-X/B-Y/B-Noise` 折叠成每个频点的均值。
-5. 对 `B-X/B-Y/R=sqrt(X^2+Y^2)` 做线性去趋势。
-6. 输出 `smooth9`、`smooth21` 和 robust Z-score 列。
-7. 输出 `peak_hint_b_x_smooth9`，用于快速定位局部极大/极小。
+1. 直接读取 `sample_values.csv + segments.jsonl`。
+2. 从 `points.jsonl` 和 SMB snapshot 构建 `frequency_hz/frequency_ghz`。
+3. 按 `dwell_ms / 1ms` 把 `B-X/B-Y/B-Noise` 折叠成每个频点的均值。
+4. 对 `B-X/B-Y/R=sqrt(X^2+Y^2)` 做线性去趋势。
+5. 输出 `smooth9`、`smooth21` 和 robust Z-score 列。
+6. 输出 `peak_hint_b_x_smooth9`，用于快速定位局部极大/极小。
+
+`--extract-missing-point-fields` 仍被脚本接受，但当前只是兼容旧调用的 no-op，不再重建 `point_fields` sidecar。
 
 输出文件：
 
@@ -235,8 +235,7 @@ runs/<run_id>/postprocess/li_odmr_gpt_review_<run_id>_summary.json
 
 ```bash
 python3 tools/odmr-postprocess/build_odmr_ml_dataset.py \
-  --run runs/<run_id> \
-  --extract-missing-point-fields
+  --run runs/<run_id>
 ```
 
 输出：

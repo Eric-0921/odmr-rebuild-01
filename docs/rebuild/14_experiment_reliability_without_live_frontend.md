@@ -82,7 +82,7 @@ device_state.jsonl
 - `raw_offset_start`
 - `raw_offset_end`
 
-本阶段不做 SMB 全量逐参数 readback。point 的可信性来自 intended config、批次 `SYST:ERR?`、`SWE:FREQ:EXEC` / `*OPC?` 结果、M8812 measured current、RF exposure 时间戳和 segment/raw/frame 绑定。
+本阶段不做 SMB 全量逐参数 readback。point 的可信性来自 intended config、批次 `SYST:ERR?`、`SWE:FREQ:EXEC` / `*OPC?` 结果、M8812 measured current、RF exposure 时间戳和 segment/decoded collector 绑定。
 
 OE1022D 运行状态仍以 `RALL?` artifact 为主，不把 OE parser 或 fixed readback 插入 collector 热路径。
 
@@ -94,8 +94,9 @@ OE1022D 运行状态仍以 `RALL?` artifact 为主，不把 OE parser 或 fixed 
 - `run_manifest.json`
 - snapshots
 - `events.jsonl`
-- `raw/oe1022d.rall`
-- `raw/oe1022d.frames.idx.jsonl`
+- 型号对应 collector truth：OE1022D `collector_frames.jsonl` 或 OE1300 `collector_blocks.jsonl`
+- `parameter_values.csv`
+- `sample_values.csv`
 - `segments.jsonl`
 - `points.jsonl`
 - `quality.jsonl`
@@ -103,11 +104,10 @@ OE1022D 运行状态仍以 `RALL?` artifact 为主，不把 OE parser 或 fixed 
 
 核心条件：
 
-- `raw size == frames_total * 12288`
-- `idx lines == frames_total`
+- collector 行数与 `summary.frames_total` / `summary.samples_total` 一致
 - `segments/points/quality/device_state` 行数一致
 - 每个 `point_id` 都有 matching segment 和 device_state
-- `device_state.segment` 与 `segments.jsonl` 的 segment id、frame range、raw offset range 一致
+- `device_state.segment` 与 `segments.jsonl` 的 segment id、collector range、sample index range 一致
 - `rf_exposure.started_monotonic_ns >= segment.start_monotonic_ns`
 - `rf_exposure.ended_monotonic_ns <= segment.end_monotonic_ns`
 - `summary.status == run_manifest.status`
@@ -123,8 +123,8 @@ OE1022D 运行状态仍以 `RALL?` artifact 为主，不把 OE parser 或 fixed 
 write RALL?
 sleep 30ms
 blocking exact read 12288B
-append raw
-append frame index
+direct-decode
+append collector_frames + unique-only parameter_values + unique-only sample_values
 ```
 
 禁止放入热路径：

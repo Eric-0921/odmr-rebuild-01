@@ -20,7 +20,7 @@ append collector_frames + unique-only parameter_values + unique-only sample_valu
 
 The `oe-rall` loop is a frozen LabVIEW-like contract. Do not change its order
 or add work inside the loop unless the change is followed by a new 15-minute
-continuity run with `delta_gt1_count = 0` and `run audit-continuity` returning
+continuity run with `delta_gt1_count = 0` and `audit-continuity` returning
 `verdict = continuous`.
 
 Allowed inside the loop:
@@ -91,6 +91,8 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB0
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --station configs/stations/lab_a.json
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-validate --smb-profile configs/profiles/smb100a_run_pll_default.json --station configs/stations/lab_a.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- sweep-only-run --resource ASRL8::INSTR --baud 921600 --smb-resource USB0::0x0AAD::0x0054::106789::INSTR --repeat 1 --out-dir runs/sweep_only_probe
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- minimal-3point-run --resource ASRL8::INSTR --baud 921600 --smb-resource USB0::0x0AAD::0x0054::106789::INSTR --x COM4 --y COM6 --z COM3 --cycles 1 --out-dir runs/minimal_3point_probe
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 ```
@@ -229,7 +231,7 @@ frequency mode to CW/FIX.
 - snapshots: station, plan, calibration, SMB, OE, laser
 - `run_manifest.json`
 - `events.jsonl`
-- `collector_frames.jsonl`
+- `collector_frames.jsonl` for OE1022D or `collector_blocks.jsonl` for OE1300
 - `parameter_values.csv`
 - `sample_values.csv`
 - `segments.jsonl`
@@ -259,10 +261,13 @@ artifacts only and does not open instruments or touch the collector. A terminal
 point/segment/device-state facts are self-consistent.
 
 `audit-continuity` is an offline device-packet-counter audit over
-`collector_frames.jsonl`. It does not reopen raw binary files.
+`collector_frames.jsonl` for OE1022D. For OE1300 it audits `collector_blocks.jsonl`,
+block sequence, duplicate handling, decode failures, and effective sample rate.
+It does not reopen raw binary files.
 
 `device-command-check` lists the migrated C# command catalog and the archived
 `win-csharp-rebuild` Rust command source each entry came from.
 
-`live-replay` reduces existing `events.jsonl`, `collector_frames.jsonl`, and
-summary files into a current live snapshot. It does not connect to hardware.
+`live-replay` reduces existing `events.jsonl`, OE1022D `collector_frames.jsonl`
+or OE1300 `collector_blocks.jsonl`, and summary files into a current live
+snapshot. It does not connect to hardware.
