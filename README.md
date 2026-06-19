@@ -123,6 +123,113 @@ artifact 审查、连续性 audit、quality、GUI/live 都必须放在 collector
 - `tools/win-csharp/Odmr.WinProbe/README.md`
 - `docs/rebuild/13_csharp_primary_stack.md`
 
+## Agent / Harness Engineering 操作指南
+
+推荐把 agent 操作固定成“只改 JSON、固定 CLI 流程、离线审查收口”。不要让 agent 临场改 C# runtime 或设备 helper；除非明确进入开发任务，否则实验任务只生成配置文件并执行现有 CLI。
+
+参数分层规则：
+
+- point 级参数可以放在同一个 `plan.json` 的 `points[]` 中逐点变化：`target_b_nt`、`magnetic_mode`、`smb_override.start_hz / stop_hz / step_hz / dwell_ms / power_dbm`。
+- run/profile 级参数不要塞进 point；需要变化时拆成多个 run，每个 run 使用一套 profile JSON：OE fixed profile、OE collector、SMB fixed LF/FM profile、Laser profile、station、calibration、baseline policy。
+- `point_source.cartesian_grid` 适合规则网格；非规则、agent 编排、混合 sweep 的任务优先生成显式 `points[]`。
+- OE1022D / OE1300 collector 是 run 级单实例；不要在一个 run 内动态切 OE fixed 参数或 collector 参数。
+
+固定 harness 流程：
+
+```text
+1. 读取现有 station / calibration / profile JSON
+2. 按 run/profile 级参数分组；每组生成独立 run bundle
+3. 每组内部只用 plan.points[] 表达 point 级磁场和 SMB sweep 变化
+4. 先执行 run-resolve，保存/检查解析摘要
+5. 再执行 run-execute，必须指定唯一 out-dir
+6. 执行 artifact-check
+7. 执行 audit-continuity
+8. 汇总 summary.json、continuity_audit.json、operator_metadata 和关键事件
+```
+
+最小显式 point 示例：
+
+```json
+{
+  "run_id": "agent_custom_run",
+  "operator": "agent",
+  "acquisition_window_ms": 0,
+  "point_settle_ms": 1000,
+  "failure_policy": "continue",
+  "mag_baseline_policy": {
+    "baseline_current_a": [0.0, 0.0, 0.0],
+    "settle_ms": 1000,
+    "readback_samples": 3,
+    "settle_tolerance_a": 0.002,
+    "voltage_v": 75.0,
+    "voltage_protection_v": 75.0,
+    "output_enabled": true
+  },
+  "quality_thresholds": {
+    "min_frames": 10,
+    "max_timeout_count": 2,
+    "max_duplicate_ratio": 0.3,
+    "max_last_frame_age_ms": 500
+  },
+  "points": [
+    {
+      "point_id": "custom_a",
+      "target_b_nt": [0.0, 0.0, 0.0],
+      "smb_override": {
+        "start_hz": 2800000000.0,
+        "stop_hz": 2810000000.0,
+        "step_hz": 1000000.0,
+        "dwell_ms": 20,
+        "power_dbm": -20.0
+      }
+    },
+    {
+      "point_id": "no_mag",
+      "magnetic_mode": "none",
+      "smb_override": {
+        "start_hz": 2700000000.0,
+        "stop_hz": 2705000000.0,
+        "step_hz": 500000.0,
+        "dwell_ms": 10,
+        "power_dbm": -30.0
+      }
+    }
+  ]
+}
+```
+
+推荐 agent 提示词模板：
+
+```text
+你是 ODMR 实验 harness agent。只允许生成或修改 JSON 配置，不允许修改 C# / Python runtime 代码。
+
+目标：
+- 根据实验意图生成一个或多个 run bundle。
+- 如果参数属于 point 级：写入 plan.points[]。
+- 如果参数属于 run/profile 级：拆成多个 run，每个 run 绑定独立 profile JSON。
+- 每个 run 都必须使用唯一 out-dir，并写清 run_id。
+
+参数边界：
+- point 级允许：target_b_nt、magnetic_mode、smb_override.start_hz、stop_hz、step_hz、dwell_ms、power_dbm。
+- run/profile 级必须拆 run：OE sensitivity/time constant/filter/reference/collector、SMB fixed LF/FM、Laser、station、calibration、baseline policy。
+- 不要在同一个 run 内动态改变 OE fixed profile 或 collector 参数。
+- 磁场电源当前只支持非负目标电流；不要生成需要负电流的 target_b_nt。
+
+执行顺序：
+1. 写入 JSON 到 configs/generated/ 或用户指定目录。
+2. 先运行 dotnet run --project tools/win-csharp/Odmr.WinProbe -- run-resolve ...
+3. run-resolve 成功后再运行 run-execute ...
+4. run 完成后运行 artifact-check。
+5. 再运行 audit-continuity。
+6. 汇总 points_passed、timeout_count、raw_len_bad_count、delta_gt1_count 或 decode_failures、artifact-check status、continuity verdict。
+
+禁止：
+- 不要跳过 run-resolve。
+- 不要把备注塞进文件名；备注写入 GUI 的 operator_metadata 或单独 JSON。
+- 不要直接调用 VISA/Serial/TCP；设备访问只能通过 Odmr.WinProbe CLI。
+- 不要修改 collector 热路径。
+```
+
 当前 UI 边界：
 
 - PySide6 console 是当前主 UI，负责组合一次 run 所需的六个 JSON：`station`、`calibration`、`plan`、`smb-profile`、`oe-profile`、`laser-profile`，并显示解析摘要、启动 run、tail progress、触发 artifact 审查。
