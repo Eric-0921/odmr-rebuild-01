@@ -22,7 +22,7 @@ dotnet build tools/win-csharp/Odmr.Win.sln
 
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- visa-list
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe-idn --resource ASRL8::INSTR --baud 921600
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB::0x0AAD::0x0054::106789::INSTR
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB0::0x0AAD::0x0054::106789::INSTR
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 
@@ -42,7 +42,8 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run ru
 
 串口路径规则：
 
-- 当前 Windows 实验机固定事实是：OE `ASRL8::INSTR`，SMB `USB::0x0AAD::0x0054::106789::INSTR`，M8812 `COM4/COM6/COM3`，Laser `COM9`
+- 当前 Windows 实验机固定事实是：OE `ASRL8::INSTR`，SMB USB VISA resource，M8812 `COM4/COM6/COM3`，Laser `COM9`
+- SMB100A resource 在 NI-VISA 环境中可能显示为 `USB0::...`，在文档/示例中也常见 `USB::...`；C# resolver 两种前缀都接受，最终以 `*IDN?` 身份匹配为准。
 - `station.json` 保存这些事实和 identity 条件
 - 真机 run 的 provenance 来自 snapshots、`device_state.jsonl`、segments/raw/frame index 和离线审查
 - 端口变化时先跑 C# probes，不回到旧 Rust `station verify`

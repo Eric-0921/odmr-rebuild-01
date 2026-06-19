@@ -87,7 +87,7 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-rall --host 19
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --csv-write-mode all --duration-sec 10 --out-dir runs/oe1300_net_labview_demo
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --csv-write-mode unique-only --duration-sec 10 --out-dir runs/oe1300_net_labview_demo_unique
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --list-resources
-dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB::0x0AAD::0x0054::106789::INSTR
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB0::0x0AAD::0x0054::106789::INSTR
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --station configs/stations/lab_a.json
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-validate --smb-profile configs/profiles/smb100a_run_pll_default.json --station configs/stations/lab_a.json
@@ -200,6 +200,9 @@ not as the default collector behavior.
 `smb-probe` accepts exactly one connection source: `--resource` for VISA,
 `--host [--port]` for TCP, or `--station` for station transport hints. Each
 path only sends:
+
+SMB100A USB VISA resources may be reported as either `USB::...` or `USB0::...`;
+the resolver accepts both forms and validates the device with `*IDN?`.
 
 - `*IDN?`
 - `SYST:ERR?`

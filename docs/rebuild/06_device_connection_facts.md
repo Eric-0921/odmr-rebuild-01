@@ -46,7 +46,7 @@
 
 当前代码基线已经进一步收紧为：
 
-- 当前 C# 默认连接事实是：OE `ASRL8::INSTR`，SMB `USB::0x0AAD::0x0054::106789::INSTR`，M8812 `COM4/COM6/COM3`，Laser `COM9`
+- 当前 C# 默认连接事实是：OE `ASRL8::INSTR`，SMB USB VISA resource，M8812 `COM4/COM6/COM3`，Laser `COM9`
 - C# probes 负责验证这些连接事实
 - run provenance 由 snapshots、`device_state.jsonl`、segments/raw/frame index 和离线审查工具给出
 
@@ -80,7 +80,8 @@
 ### 已验证连接事实
 
 - transport：VISA USB resource
-- 默认 resource：`USB::0x0AAD::0x0054::106789::INSTR`
+- 默认 resource 当前按 NI-VISA 枚举值记录为 `USB0::0x0AAD::0x0054::101623::INSTR`
+- C# resolver 同时接受 `USB::...` 和 `USB0::...` 形式；以当次 VISA 枚举和 `*IDN?` 身份匹配为准，不依赖字符串前缀作为设备真值
 - 最小身份命令：`*IDN?`
 - 最小健康查询：
   - `SYST:ERR?`
@@ -88,8 +89,8 @@
 - 真实快照中的身份响应：
   - `Rohde&Schwarz,SMB100A,1406.6000k02/101623,3.1.19.15-3.20.390.24`
 - 当前 station 已支持双实验台 USB 资源候选：
-  - `USB::0x0AAD::0x0054::106789::INSTR`
-  - `USB::0x0AAD::0x0054::101623::INSTR`
+  - `USB0::0x0AAD::0x0054::101623::INSTR` / `USB::0x0AAD::0x0054::101623::INSTR`
+  - `USB0::0x0AAD::0x0054::106789::INSTR` / `USB::0x0AAD::0x0054::106789::INSTR`
 - 当前 station 已接受双实验台已知 SMB 序列段：
   - `1406.6000k02/101623`
   - `1406.6000k02/106789`
@@ -123,7 +124,7 @@
 
 ### 新项目应直接继承的事实
 
-- `smb100a` transport 现以 C# VISA USB 为默认路径。
+- `smb100a` transport 现以 C# VISA USB 为默认路径，resource 字符串允许 `USB::` 与 `USB0::` 两种 NI-VISA 表达。
 - 最小 verify 以 query-only 为主，不在 verify 阶段发 `OUTP ON`、`SWE:EXEC` 等状态改变命令。
 
 ## OE1022D
