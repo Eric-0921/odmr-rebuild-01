@@ -78,6 +78,50 @@ class OdmrConsoleQtPageTests(unittest.TestCase):
 
             self.assertEqual(observed, [str(out_dir)])
 
+    def test_progress_samples_total_is_visible(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "run_a"
+            progress = out_dir / "control" / "progress.jsonl"
+            progress.parent.mkdir(parents=True)
+            control = ControlPaths(
+                control_dir=str(out_dir / "control"),
+                progress_jsonl=str(progress),
+                stop_request_file=str(out_dir / "control" / "stop.request"),
+                emergency_stop_file=str(out_dir / "control" / "emergency_stop.request"),
+                launch_metadata=str(out_dir / "control" / "launch_metadata.json"),
+                stdout_log=str(out_dir / "control" / "stdout.log"),
+                stderr_log=str(out_dir / "control" / "stderr.log"),
+            )
+            handle = LaunchHandle(
+                pid=os.getpid(),
+                command=["dotnet"],
+                cwd=str(ROOT),
+                out_dir=str(out_dir),
+                control_paths=control,
+                metadata_path=control.launch_metadata,
+            )
+            progress.write_text(
+                json.dumps({
+                    "ts": "2026-06-19T00:00:00Z",
+                    "state": "Completed",
+                    "event_name": "run_completed",
+                    "point_id": None,
+                    "point_index": None,
+                    "points_total": 1,
+                    "frames_total": 7,
+                    "samples_total": 700,
+                    "quality_status": None,
+                }) + "\n",
+                encoding="utf-8",
+            )
+            page = RunMonitorPage(lambda: self.fail("unused"), lambda: self.fail("unused"), lambda: True)
+            page._started(handle)
+            page.refresh_progress()
+            page.timer.stop()
+
+            self.assertEqual(page.samples.text(), "700")
+            self.assertEqual(page.table.item(0, 6).text(), "700")
+
     def test_artifact_audit_failure_does_not_read_stale_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             run_dir = Path(tmp)
@@ -133,6 +177,28 @@ class OdmrConsoleQtPageTests(unittest.TestCase):
         first_new_row = len(page.blocks)
         page._add_xyz_blocks()
         self.assertEqual(page.block_list.currentRow(), first_new_row)
+
+    def test_cartesian_grid_template_updates_scan_blocks(self) -> None:
+        page = ConfigGeneratorPage()
+        plan = json.loads((ROOT / "configs" / "plans" / "grid_3d_example.json").read_text(encoding="utf-8"))
+
+        page._set_plan_values(plan)
+
+        self.assertEqual(len(page.blocks), 1)
+        block = page.blocks[0]
+        self.assertEqual(block.traversal, "raster")
+        self.assertEqual(block.total_points, 27)
+        self.assertTrue(block.axes["x"].enabled)
+        self.assertTrue(block.axes["y"].enabled)
+        self.assertTrue(block.axes["z"].enabled)
+        self.assertEqual(page.block_list.currentRow(), 0)
+
+    def test_explicit_points_with_overrides_are_not_silently_reused_as_blocks(self) -> None:
+        page = ConfigGeneratorPage()
+        plan = json.loads((ROOT / "configs" / "plans" / "minimal_3point_runtime.json").read_text(encoding="utf-8"))
+
+        with self.assertRaises(ValueError):
+            page._set_plan_values(plan)
 
 
 if __name__ == "__main__":

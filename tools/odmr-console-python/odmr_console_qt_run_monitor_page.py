@@ -90,6 +90,7 @@ class RunMonitorPage(QWidget):
         self.terminal_status_label = QLabel("-")
         self.point = QLabel("-")
         self.frames = QLabel("-")
+        self.samples = QLabel("-")
         self.counts = QLabel("-")
         self.elapsed = QLabel("-")
         self.remaining = QLabel("-")
@@ -100,9 +101,10 @@ class RunMonitorPage(QWidget):
         add_display_row(status_layout, 4, "Terminal", self.terminal_status_label)
         add_display_row(status_layout, 5, "Point", self.point)
         add_display_row(status_layout, 6, "Frames", self.frames)
-        add_display_row(status_layout, 7, "计数", self.counts)
-        add_display_row(status_layout, 8, "已用时间", self.elapsed)
-        add_display_row(status_layout, 9, "预计剩余", self.remaining)
+        add_display_row(status_layout, 7, "Samples", self.samples)
+        add_display_row(status_layout, 8, "计数", self.counts)
+        add_display_row(status_layout, 9, "已用时间", self.elapsed)
+        add_display_row(status_layout, 10, "预计剩余", self.remaining)
         layout.addWidget(status)
         progress_group = QGroupBox("预计进度")
         progress_layout = QGridLayout(progress_group)
@@ -118,7 +120,7 @@ class RunMonitorPage(QWidget):
         progress_layout.addWidget(self.point_progress, 1, 1)
         layout.addWidget(progress_group)
         self.table = QTableWidget(0, 8)
-        self.table.setHorizontalHeaderLabels(["ts", "state", "event", "point", "idx", "frames", "delta_gt1", "quality"])
+        self.table.setHorizontalHeaderLabels(["ts", "state", "event", "point", "idx", "frames", "samples", "quality"])
         self.table.setMinimumHeight(260)
         layout.addWidget(self.table, 1)
         self.log = QPlainTextEdit()
@@ -157,6 +159,7 @@ class RunMonitorPage(QWidget):
         self.lockin_model_label.setText("-")
         self.collector_contract_label.setText("-")
         self.terminal_status_label.setText("-")
+        self.samples.setText("-")
         self.stop_button.setEnabled(True)
         self.resume_button.setEnabled(False)
         self.emergency_button.setEnabled(True)
@@ -231,6 +234,7 @@ class RunMonitorPage(QWidget):
             self.terminal_status_label.setText(self._load_run_status(self.handle.out_dir) or "-")
             self.point.setText(f"{latest.get('point_id') or '-'}  {latest.get('point_index') or '-'} / {latest.get('points_total') or '-'}")
             self.frames.setText(str(latest.get("frames_total") or "-"))
+            self.samples.setText(str(latest.get("samples_total") or "-"))
             self.counts.setText(
                 f"timeout={latest.get('timeout_count')} raw_len_bad={latest.get('raw_len_bad_count')} delta_gt1={latest.get('delta_gt1_count')} decode={latest.get('decode_failures')}"
             )
@@ -472,7 +476,7 @@ class RunMonitorPage(QWidget):
             record.get("point_id"),
             record.get("point_index"),
             record.get("frames_total"),
-            record.get("delta_gt1_count"),
+            record.get("samples_total"),
             record.get("quality_status"),
         ]
         for column, value in enumerate(values):

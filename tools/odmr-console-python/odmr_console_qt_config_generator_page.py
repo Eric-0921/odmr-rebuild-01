@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import json
+import re
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -541,6 +542,7 @@ class ConfigGeneratorPage(QWidget):
         self.acquisition_window.set_canonical(plan.get("acquisition_window_ms", 0), "time_ms")
         self.point_settle.set_canonical(plan.get("point_settle_ms", 500), "time_ms")
         points = plan.get("points") if isinstance(plan.get("points"), list) else []
+        point_source = plan.get("point_source") if isinstance(plan.get("point_source"), dict) else None
         if points and all(point.get("magnetic_mode") == "none" for point in points if isinstance(point, dict)):
             self.plan_kind.setCurrentText(find_choice_by_token("no_magnetic_control", PLAN_KIND_CHOICES))
             self.acquisition_step_count.setText(str(len(points)))
@@ -551,7 +553,10 @@ class ConfigGeneratorPage(QWidget):
             self.fixed_y.set_canonical(target[1] if len(target) > 1 else 0, "field")
             self.fixed_z.set_canonical(target[2] if len(target) > 2 else 0, "field")
         else:
+            blocks = self._blocks_from_plan_geometry(point_source, points)
+            self.blocks = blocks
             self.plan_kind.setCurrentText(find_choice_by_token("magnetic_scan", PLAN_KIND_CHOICES))
+            self._refresh_block_list(0)
         baseline = plan.get("mag_baseline_policy", {})
         currents = baseline.get("baseline_current_a", [0, 0, 0])
         self.baseline_x.set_canonical(currents[0] if len(currents) > 0 else 0, "current_a")
@@ -568,6 +573,89 @@ class ConfigGeneratorPage(QWidget):
         self.max_timeout.setText(str(quality.get("max_timeout_count", 2)))
         self.max_duplicate.setText(str(quality.get("max_duplicate_ratio", 0.3)))
         self.max_last_age.set_canonical(quality.get("max_last_frame_age_ms", 500), "time_ms")
+
+    def _blocks_from_plan_geometry(self, point_source: dict[str, Any] | None, points: list[Any]) -> list[ScanBlock]:
+        if point_source is not None:
+            if point_source.get("kind") != "cartesian_grid":
+                raise ValueError(f"unsupported point_source.kind for UI回填: {point_source.get('kind')}")
+            return [self._block_from_cartesian_grid(point_source)]
+
+        if not points:
+            return [self.default_block("x_line", "x")]
+
+        if any(not isinstance(point, dict) or point.get("target_b_nt") is None for point in points):
+            raise ValueError("显式 points 模板无法无损回填到扫描块；请使用 cartesian_grid 模板")
+        if any(point.get("smb_override") for point in points if isinstance(point, dict)):
+            raise ValueError("含 per-point smb_override 的显式 points 模板无法无损回填到扫描块")
+
+        return [self._block_from_explicit_points(points)]
+
+    def _block_from_cartesian_grid(self, point_source: dict[str, Any]) -> ScanBlock:
+        axes = point_source.get("axes_nt")
+        if not isinstance(axes, dict):
+            raise ValueError("cartesian_grid.axes_nt missing")
+        traversal = str(point_source.get("cycle_mode") or "raster")
+        if traversal not in {"raster", "bounce_1d_x"}:
+            raise ValueError(f"unsupported cartesian_grid.cycle_mode for UI回填: {traversal}")
+        stop_condition = point_source.get("stop_condition") if isinstance(point_source.get("stop_condition"), dict) else {}
+        total_points = int(stop_condition.get("total_points") or 0) if stop_condition.get("kind") == "fixed_total_points" else 0
+        block = ScanBlock(
+            prefix="template_grid",
+            traversal=traversal,
+            total_points=total_points,
+            axes={
+                axis: self._axis_spec_from_values(axes.get(axis, [0.0]))
+                for axis in ("x", "y", "z")
+            },
+        )
+        expand_block(block)
+        return block
+
+    def _block_from_explicit_points(self, points: list[Any]) -> ScanBlock:
+        targets = [self._target_triplet(point.get("target_b_nt")) for point in points if isinstance(point, dict)]
+        axes = {
+            axis: self._axis_spec_from_values(self._unique_values(target[index] for target in targets))
+            for index, axis in enumerate(("x", "y", "z"))
+        }
+        prefix = self._point_prefix(str(points[0].get("point_id") or "template_points")) if isinstance(points[0], dict) else "template_points"
+        raster = ScanBlock(prefix=prefix, traversal="raster", total_points=len(points), axes=axes)
+        if [point["target_b_nt"] for point in expand_block(raster)] == targets:
+            return raster
+        bounce = ScanBlock(prefix=prefix, traversal="bounce_1d_x", total_points=len(points), axes=axes)
+        if [point["target_b_nt"] for point in expand_block(bounce)] == targets:
+            return bounce
+        raise ValueError("显式 points 顺序无法无损回填到当前扫描块模型")
+
+    def _axis_spec_from_values(self, raw_values: Any) -> AxisSpec:
+        values = self._unique_values(float(value) for value in raw_values) if isinstance(raw_values, list) else [float(raw_values or 0.0)]
+        if len(values) == 1:
+            return AxisSpec(enabled=False, fixed=values[0], values_text=format_number(values[0]))
+        return AxisSpec(
+            enabled=True,
+            mode="list",
+            fixed=values[0],
+            values_text=", ".join(format_number(value) for value in values),
+        )
+
+    @staticmethod
+    def _target_triplet(value: Any) -> list[float]:
+        if not isinstance(value, list) or len(value) != 3:
+            raise ValueError("target_b_nt must contain exactly 3 values")
+        return [float(value[0]), float(value[1]), float(value[2])]
+
+    @staticmethod
+    def _unique_values(values: Any) -> list[float]:
+        result: list[float] = []
+        for value in values:
+            numeric = float(value)
+            if not any(abs(existing - numeric) < 1e-9 for existing in result):
+                result.append(numeric)
+        return result
+
+    @staticmethod
+    def _point_prefix(point_id: str) -> str:
+        match = re.match(r"(.+)_p\d+$", point_id)
+        return match.group(1) if match else "template_points"
 
     def _set_smb_values(self, smb: dict[str, Any]) -> None:
         fixed = smb.get("fixed", {})
