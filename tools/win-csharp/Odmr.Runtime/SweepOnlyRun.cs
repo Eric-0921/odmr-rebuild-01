@@ -118,7 +118,7 @@ public static class SweepOnlyRun
                         segmentEndTs,
                         segmentStartMonotonicNs,
                         segmentEndMonotonicNs,
-                        "sample_values.csv",
+                        "collector_frames.jsonl",
                         framesInSegment > 0 ? segmentStart.NextFrameSeq : null,
                         framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null,
                         segmentStart.NextSampleIndex,

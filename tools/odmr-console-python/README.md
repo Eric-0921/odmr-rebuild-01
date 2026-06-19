@@ -116,10 +116,15 @@ Each line includes:
 - `point_index`
 - `points_total`
 - `frames_total`
+- `samples_total`
 - `timeout_count`
 - `raw_len_bad_count`
 - `delta_gt1_count`
 - `quality_status`
+- `lockin_model`
+- `collector_contract`
+- `decode_failures`
+- `effective_sample_hz_per_parameter`
 
 The Python side should treat progress as UI state only. Final data truth remains
 the run artifact set and C# `artifact-check` / `audit-continuity`.

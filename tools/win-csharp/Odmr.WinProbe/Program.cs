@@ -63,7 +63,8 @@ internal static class Program
             Odmr.WinProbe oe1300-net-idn [--host 192.168.1.1] [--port 10001]
             Odmr.WinProbe oe1300-net-rall [--host 192.168.1.1] [--port 10001] [--count 1] --out-dir <dir>
             Odmr.WinProbe oe1300-net-labview-demo [--host 192.168.1.1] [--port 10001] [--post-write-delay-ms 5] [--drain-before-write true|false] [--preview-param-index 0] [--write-values true|false] [--csv-write-mode all|unique-only] --duration-sec 10 --out-dir <dir>
-            Odmr.WinProbe smb-probe [--list-resources] [--resource USB::0x0AAD::0x0054::106789::INSTR]
+            Odmr.WinProbe smb-probe [--list-resources] [--resource USB::0x0AAD::0x0054::106789::INSTR | --host 169.254.2.20 [--port 5025] | --station configs/stations/lab_a.json]
+            Odmr.WinProbe smb-validate [same target options as smb-probe] [--smb-profile <json>]
             Odmr.WinProbe sweep-only-run [--resource ASRL8::INSTR] [--baud 921600] [--smb-resource USB::0x0AAD::0x0054::106789::INSTR] [--repeat 1] --out-dir <dir>
             Odmr.WinProbe minimal-3point-run [--resource ASRL8::INSTR] [--baud 921600] [--smb-resource USB::0x0AAD::0x0054::106789::INSTR] [--x COM4] [--y COM6] [--z COM3] [--cycles 1] [--laser-background] [--laser-port COM9] [--laser-power-mw 50] --out-dir <dir>
             Odmr.WinProbe m8812-probe [--x COM4] [--y COM6] [--z COM3]

@@ -88,6 +88,9 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo -
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- oe1300-net-labview-demo --host 192.168.1.1 --port 10001 --post-write-delay-ms 5 --preview-param-index 0 --csv-write-mode unique-only --duration-sec 10 --out-dir runs/oe1300_net_labview_demo_unique
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --list-resources
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --resource USB::0x0AAD::0x0054::106789::INSTR
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --host 169.254.2.20 --port 5025
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-probe --station configs/stations/lab_a.json
+dotnet run --project tools/win-csharp/Odmr.WinProbe -- smb-validate --smb-profile configs/profiles/smb100a_run_pll_default.json --station configs/stations/lab_a.json
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- m8812-probe --x COM4 --y COM6 --z COM3
 dotnet run --project tools/win-csharp/Odmr.WinProbe -- laser-probe --port COM9 --off-only
 ```
@@ -194,11 +197,18 @@ For strict LabVIEW-style behavior, `--drain-before-write` now defaults to
 `false`. The pre-drain path should only be used as a socket-backlog diagnostic,
 not as the default collector behavior.
 
-`smb-probe` now defaults to R&S VISA USB resource access and only sends:
+`smb-probe` accepts exactly one connection source: `--resource` for VISA,
+`--host [--port]` for TCP, or `--station` for station transport hints. Each
+path only sends:
 
 - `*IDN?`
 - `SYST:ERR?`
 - `OUTP?`
+
+`smb-validate` is kept as a compatibility command for profile smoke checks. It
+uses the same connection source rules, applies the selected SMB profile, runs
+one configured sweep, then verifies cleanup returns RF output to off and
+frequency mode to CW/FIX.
 
 `m8812-probe` only performs the safe minimum serial check:
 

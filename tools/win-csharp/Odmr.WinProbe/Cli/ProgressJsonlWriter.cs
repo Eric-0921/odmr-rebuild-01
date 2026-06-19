@@ -51,6 +51,7 @@ internal sealed class ProgressJsonlWriter : IProgress<RunProgressEvent>, IDispos
                 point_index = value.PointIndex,
                 points_total = value.PointsTotal,
                 frames_total = value.FramesTotal,
+                samples_total = value.SamplesTotal,
                 timeout_count = value.TimeoutCount,
                 raw_len_bad_count = value.RawLenBadCount,
                 delta_gt1_count = value.DeltaGt1Count,

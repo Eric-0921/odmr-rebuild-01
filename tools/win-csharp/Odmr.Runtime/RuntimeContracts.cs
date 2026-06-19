@@ -48,4 +48,5 @@ public sealed record RunProgressEvent(
     string? LockinModel = null,
     string? CollectorContract = null,
     long? DecodeFailures = null,
-    double? EffectiveSampleHzPerParameter = null);
+    double? EffectiveSampleHzPerParameter = null,
+    long? SamplesTotal = null);

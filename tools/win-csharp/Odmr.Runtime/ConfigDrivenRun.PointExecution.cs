@@ -147,6 +147,8 @@ public static partial class ConfigDrivenRun
             rf_output_policy = "point_output_on_after_sweep_config_segment_scoped_execute",
             sweep_window_policy = "segment_scoped_execute_only"
         });
+        var sweepStartSnapshot = collector.Snapshot();
+        var effectiveEstimatedRunDurationMs = options.EstimatedRunDurationMsOverride ?? bundle.ResolvedPlan.EstimatedRunDurationMs;
         ReportProgress(
             options,
             RuntimeState.PointRunning,
@@ -155,12 +157,12 @@ public static partial class ConfigDrivenRun
             point.PointId,
             index,
             bundle.ResolvedPlan.ResolvedPointCount,
-            collector.Snapshot().Stats.FramesOk,
+            sweepStartSnapshot.Stats.FramesOk,
             null,
             null,
             null,
             null,
-            bundle.ResolvedPlan.EstimatedRunDurationMs,
+            effectiveEstimatedRunDurationMs,
             sweep.EstimatedSweepDurationMs + bundle.Plan.PointSettleMs + bundle.SmbProfile.EstimatedPointConfigurationMs,
             sweep.EstimatedSweepDurationMs,
             sweep.SweepPoints,
@@ -169,7 +171,10 @@ public static partial class ConfigDrivenRun
             sweep.StepHz,
             sweep.DwellMs,
             lockinModel: bundle.OeProfile.NormalizedModel,
-            collectorContract: RunConfigLoader.CollectorContractFor(bundle.OeProfile.NormalizedModel));
+            collectorContract: RunConfigLoader.CollectorContractFor(bundle.OeProfile.NormalizedModel),
+            decodeFailures: sweepStartSnapshot.DecodeFailures,
+            effectiveSampleHzPerParameter: sweepStartSnapshot.EffectiveSampleHzPerParameter,
+            samplesTotal: sweepStartSnapshot.SamplesWritten);
         AppendEvent(eventsPath, processStart, bundle.Plan.RunId, "rf_exposure_started", "rf", point.PointId, "smb100a_main", new
         {
             segment_id = segmentId,
@@ -222,6 +227,7 @@ public static partial class ConfigDrivenRun
             rf_exposure_started_monotonic_ns = rfExposureStartedMonotonicNs,
             rf_exposure_ended_monotonic_ns = rfExposureEndedMonotonicNs
         });
+        var sweepCompletedSnapshot = collector.Snapshot();
         ReportProgress(
             options,
             RuntimeState.PointRunning,
@@ -230,12 +236,12 @@ public static partial class ConfigDrivenRun
             point.PointId,
             index,
             bundle.ResolvedPlan.ResolvedPointCount,
-            collector.Snapshot().Stats.FramesOk,
+            sweepCompletedSnapshot.Stats.FramesOk,
             null,
             null,
             null,
             null,
-            bundle.ResolvedPlan.EstimatedRunDurationMs,
+            effectiveEstimatedRunDurationMs,
             sweep.EstimatedSweepDurationMs + bundle.Plan.PointSettleMs + bundle.SmbProfile.EstimatedPointConfigurationMs,
             sweepObservation.EstimatedSweepDurationMs,
             sweep.SweepPoints,
@@ -244,7 +250,10 @@ public static partial class ConfigDrivenRun
             sweep.StepHz,
             sweep.DwellMs,
             lockinModel: bundle.OeProfile.NormalizedModel,
-            collectorContract: RunConfigLoader.CollectorContractFor(bundle.OeProfile.NormalizedModel));
+            collectorContract: RunConfigLoader.CollectorContractFor(bundle.OeProfile.NormalizedModel),
+            decodeFailures: sweepCompletedSnapshot.DecodeFailures,
+            effectiveSampleHzPerParameter: sweepCompletedSnapshot.EffectiveSampleHzPerParameter,
+            samplesTotal: sweepCompletedSnapshot.SamplesWritten);
 
         var segment = new SegmentRecord(
             1,
@@ -256,7 +265,7 @@ public static partial class ConfigDrivenRun
             segmentEndTs,
             segmentStartMonotonicNs,
             segmentEndMonotonicNs,
-            "sample_values.csv",
+            collector.CollectorArtifactFileName,
             framesInSegment > 0 ? segmentStart.NextFrameSeq : null,
             framesInSegment > 0 ? segmentEnd.NextFrameSeq - 1 : null,
             segmentStart.NextSampleIndex,
@@ -555,9 +564,11 @@ public static partial class ConfigDrivenRun
                 ? "clean"
                 : pointTimeouts <= thresholds.MaxTimeoutCount ? "recovered_timeout" : "degraded_timeout";
             qualityStatus = framesInSegment == 0
-                ? "failed_no_blocks"
+                ? "failed_no_frames"
                 : framesUnique == 0
                 ? "failed_duplicate_only"
+                : framesUnique < thresholds.MinFrames
+                ? "failed_min_frames"
                 : pointTimeouts > thresholds.MaxTimeoutCount
                 ? "failed_timeout"
                 : pointDecodeFailures > 0

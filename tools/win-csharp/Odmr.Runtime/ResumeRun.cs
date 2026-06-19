@@ -4,6 +4,7 @@ using Odmr.Artifacts;
 namespace Odmr.Runtime;
 
 public sealed record ResumePlan(
+    string RunId,
     string PreviousRunDir,
     string PreviousStatus,
     string ResumeOutDir,
@@ -32,6 +33,7 @@ public static class ResumeRun
         if (!string.IsNullOrWhiteSpace(previousStatus) &&
             !string.Equals(previousStatus, "failed", StringComparison.Ordinal) &&
             !string.Equals(previousStatus, "paused", StringComparison.Ordinal) &&
+            !string.Equals(previousStatus, "running", StringComparison.Ordinal) &&
             !string.Equals(previousStatus, "completed_with_failed_points", StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"run status is not resumable: status={previousStatus}");
@@ -46,6 +48,7 @@ public static class ResumeRun
 
         var resumePoint = bundle.ResolvedPlan.Points[resumeFromIndex];
         return new ResumePlan(
+            bundle.Plan.RunId,
             Path.GetFullPath(previousRunDir),
             string.IsNullOrWhiteSpace(previousStatus) ? "process_exited" : previousStatus,
             Path.GetFullPath(resumeOutDir),
@@ -71,6 +74,7 @@ public static class ResumeRun
             new
             {
                 schema_version = 1,
+                run_id = plan.RunId,
                 previous_run_dir = plan.PreviousRunDir,
                 previous_status = plan.PreviousStatus,
                 resume_from_point_id = plan.ResumeFromPointId,

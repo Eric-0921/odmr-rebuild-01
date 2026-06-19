@@ -46,6 +46,9 @@ internal static class DiagnosticsCliCommands
             case "smb-probe":
                 exitCode = SmbProbe(options);
                 return true;
+            case "smb-validate":
+                exitCode = SmbValidate(options);
+                return true;
             case "sweep-only-run":
                 exitCode = SweepOnlyRunCommand(options);
                 return true;
@@ -154,6 +157,8 @@ internal static class DiagnosticsCliCommands
 
     private static int SmbProbe(IReadOnlyDictionary<string, string> options)
     {
+        ValidateSmbProbeOptions(options, allowSmbProfile: false);
+
         if (CliSupport.GetBoolOption(options, "list-resources", false))
         {
             foreach (var visaResource in Smb100aVisa.ListResources())
@@ -164,8 +169,7 @@ internal static class DiagnosticsCliCommands
             return 0;
         }
 
-        var resource = CliSupport.GetOptionalOption(options, "resource") ?? CliSupport.ResolveSmbVisaResource();
-        var result = Smb100aVisa.Probe(resource);
+        var result = ProbeSmbFromOptions(options);
 
         Console.WriteLine(JsonSerializer.Serialize(result, JsonOptions.Pretty));
 
@@ -175,6 +179,266 @@ internal static class DiagnosticsCliCommands
         }
 
         return result.ErrorQueueClean ? 0 : CliSupport.Fail($"SMB100A error queue is not clean: {result.SystemError}");
+    }
+
+    private static int SmbValidate(IReadOnlyDictionary<string, string> options)
+    {
+        ValidateSmbProbeOptions(options, allowSmbProfile: true);
+        var profilePath = CliSupport.GetOptionalOption(options, "smb-profile");
+        if (string.IsNullOrWhiteSpace(profilePath))
+        {
+            Console.Error.WriteLine("smb-validate without --smb-profile is a compatibility alias for smb-probe");
+            return SmbProbe(options);
+        }
+
+        var profile = RunConfigLoader.ReadJson<Smb100aRunProfile>(profilePath);
+        var probe = ProbeSmbFromOptions(options);
+        if (!probe.IdentityMatched)
+        {
+            return CliSupport.Fail($"SMB100A identity mismatch: expected `{Smb100aDefaults.RequiredVendor}` and `{Smb100aDefaults.RequiredModel}`");
+        }
+
+        using var session = OpenSmbSession(probe);
+        foreach (var command in BuildSmbFixedCommands(profile.Fixed))
+        {
+            SendSmbProfileCommand(session, profile, command);
+        }
+
+        var sweep = profile.DefaultSweep.ApplyOverride(null);
+        session.ConfigureSweep(sweep, profile.CommandSettleMs);
+        var observation = session.ExecuteSweep(sweep);
+        var postSweepError = session.Query(Smb100aCommands.QuerySystemError);
+        session.Cleanup();
+        var cleanupOutput = session.Query(Smb100aCommands.QueryOutput);
+        var cleanupMode = session.Query(Smb100aCommands.QueryFrequencyMode);
+        var cleanupError = session.Query(Smb100aCommands.QuerySystemError);
+        var passed = cleanupOutput.Trim() == "0" &&
+            IsCwFrequencyMode(cleanupMode) &&
+            Smb100aTcp.ErrorIsClean(cleanupError);
+
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            schema_version = 1,
+            command = "smb-validate",
+            profile_id = profile.ProfileId,
+            probe,
+            sweep_points = sweep.SweepPoints,
+            estimated_sweep_duration_ms = observation.EstimatedSweepDurationMs,
+            opc_wait_ms = observation.OpcWaitMs,
+            fallback_used = observation.FallbackUsed,
+            post_sweep_error = postSweepError,
+            cleanup_output_state = cleanupOutput,
+            cleanup_frequency_mode = cleanupMode,
+            cleanup_error = cleanupError,
+            passed
+        }, JsonOptions.Pretty));
+
+        return passed ? 0 : CliSupport.Fail("SMB100A profile validation cleanup/readback failed");
+    }
+
+    private static void ValidateSmbProbeOptions(IReadOnlyDictionary<string, string> options, bool allowSmbProfile)
+    {
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "list-resources",
+            "resource",
+            "station",
+            "host",
+            "port"
+        };
+        if (allowSmbProfile)
+        {
+            allowed.Add("smb-profile");
+        }
+
+        var unknown = options.Keys.Where(key => !allowed.Contains(key)).OrderBy(key => key, StringComparer.Ordinal).ToArray();
+        if (unknown.Length > 0)
+        {
+            throw new InvalidOperationException($"unsupported smb-probe option(s): {string.Join(", ", unknown)}");
+        }
+
+        var targetCount = 0;
+        if (!string.IsNullOrWhiteSpace(CliSupport.GetOptionalOption(options, "resource")))
+        {
+            targetCount++;
+        }
+        if (!string.IsNullOrWhiteSpace(CliSupport.GetOptionalOption(options, "host")))
+        {
+            targetCount++;
+        }
+        if (!string.IsNullOrWhiteSpace(CliSupport.GetOptionalOption(options, "station")))
+        {
+            targetCount++;
+        }
+
+        if (targetCount > 1)
+        {
+            throw new InvalidOperationException("smb-probe target options are mutually exclusive: use only one of --resource, --host, --station");
+        }
+
+        if (CliSupport.GetBoolOption(options, "list-resources", false) && targetCount > 0)
+        {
+            throw new InvalidOperationException("smb-probe --list-resources cannot be combined with --resource, --host, or --station");
+        }
+
+        if (CliSupport.GetBoolOption(options, "list-resources", false) && options.ContainsKey("smb-profile"))
+        {
+            throw new InvalidOperationException("smb-validate --list-resources cannot be combined with --smb-profile");
+        }
+
+        if (options.ContainsKey("port") && string.IsNullOrWhiteSpace(CliSupport.GetOptionalOption(options, "host")))
+        {
+            throw new InvalidOperationException("smb-probe --port requires --host");
+        }
+    }
+
+    private static SmbProbeSummary ProbeSmbFromOptions(IReadOnlyDictionary<string, string> options)
+    {
+        var stationPath = CliSupport.GetOptionalOption(options, "station");
+        if (!string.IsNullOrWhiteSpace(stationPath))
+        {
+            return ProbeSmbFromStation(stationPath);
+        }
+
+        var host = CliSupport.GetOptionalOption(options, "host");
+        if (!string.IsNullOrWhiteSpace(host))
+        {
+            return Smb100aTcp.Probe(host, CliSupport.GetIntOption(options, "port", Smb100aDefaults.Port));
+        }
+
+        var resource = CliSupport.GetOptionalOption(options, "resource") ?? CliSupport.ResolveSmbVisaResource();
+        return Smb100aVisa.Probe(resource);
+    }
+
+    private static SmbProbeSummary ProbeSmbFromStation(string stationPath)
+    {
+        var station = RunConfigLoader.ReadJson<StationSpec>(stationPath);
+        var device = station.Devices.FirstOrDefault(device =>
+            string.Equals(device.DeviceId, "smb100a_main", StringComparison.Ordinal) &&
+            string.Equals(device.Kind, "smb100a", StringComparison.Ordinal)) ??
+            throw new InvalidOperationException("station missing required smb100a device `smb100a_main`");
+
+        return device.TransportHint.Transport switch
+        {
+            "tcp_socket" => ProbeSmbStationTcp(device),
+            "visa_resource" => ProbeSmbStationVisa(device),
+            _ => throw new InvalidOperationException($"unsupported SMB transport in station: {device.TransportHint.Transport}")
+        };
+    }
+
+    private static SmbProbeSummary ProbeSmbStationTcp(StationDeviceSpec device)
+    {
+        var candidates = new List<string>();
+        AppendUnique(candidates, device.TransportHint.Host);
+        foreach (var candidate in device.TransportHint.HostCandidates ?? Array.Empty<string>())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        var port = device.TransportHint.Port ?? Smb100aDefaults.Port;
+        return ProbeFirstMatchingSmb(candidates, host => Smb100aTcp.Probe(host, port), candidate => $"{candidate}:{port}");
+    }
+
+    private static SmbProbeSummary ProbeSmbStationVisa(StationDeviceSpec device)
+    {
+        var candidates = new List<string>();
+        AppendUnique(candidates, device.TransportHint.Resource);
+        foreach (var candidate in device.TransportHint.ResourceCandidates ?? Array.Empty<string>())
+        {
+            AppendUnique(candidates, candidate);
+        }
+        foreach (var candidate in Smb100aVisa.ListResources())
+        {
+            AppendUnique(candidates, candidate);
+        }
+
+        return ProbeFirstMatchingSmb(candidates, Smb100aVisa.Probe, candidate => candidate);
+    }
+
+    private static SmbProbeSummary ProbeFirstMatchingSmb(
+        IReadOnlyList<string> candidates,
+        Func<string, SmbProbeSummary> probe,
+        Func<string, string> describe)
+    {
+        if (candidates.Count == 0)
+        {
+            throw new InvalidOperationException("station SMB transport has no candidates");
+        }
+
+        var failures = new List<string>();
+        foreach (var candidate in candidates)
+        {
+            try
+            {
+                var result = probe(candidate);
+                if (result.IdentityMatched)
+                {
+                    return result;
+                }
+
+                failures.Add($"{describe(candidate)}: identity mismatch idn={result.Idn}");
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{describe(candidate)}: {ex.Message}");
+            }
+        }
+
+        throw new InvalidOperationException($"failed to probe SMB100A from station candidates: {string.Join(" | ", failures)}");
+    }
+
+    private static void AppendUnique(List<string> values, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || values.Contains(value, StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        values.Add(value);
+    }
+
+    private static ISmb100aSession OpenSmbSession(SmbProbeSummary probe)
+    {
+        return probe.Transport switch
+        {
+            "visa_resource" => Smb100aVisa.Open(probe.Resource ?? throw new InvalidOperationException("SMB VISA resource missing")),
+            "tcp_socket" => Smb100aTcp.Open(
+                probe.Host ?? throw new InvalidOperationException("SMB TCP host missing"),
+                probe.Port ?? throw new InvalidOperationException("SMB TCP port missing")),
+            _ => throw new InvalidOperationException($"unsupported SMB transport: {probe.Transport}")
+        };
+    }
+
+    private static void SendSmbProfileCommand(ISmb100aSession session, Smb100aRunProfile profile, string command)
+    {
+        session.Send(command);
+        Thread.Sleep(profile.CommandSettleMs);
+        if (profile.ErrorCheckAfterWrite)
+        {
+            session.EnsureNoError();
+        }
+    }
+
+    private static string[] BuildSmbFixedCommands(SmbFixedProfile fixedProfile) =>
+    [
+        fixedProfile.ModulationEnabled ? "MOD:STAT ON" : "MOD:STAT OFF",
+        fixedProfile.FmEnabled ? "FM:STAT ON" : "FM:STAT OFF",
+        $"FM:SOUR {fixedProfile.FmSource}",
+        $"FM:MODE {fixedProfile.FmMode}",
+        $"FM:DEV {fixedProfile.FmDeviationHz.ToString(CultureInfo.InvariantCulture)}Hz",
+        fixedProfile.LfOutputEnabled ? "LFO ON" : "LFO OFF",
+        $"LFO:VOLT {fixedProfile.LfVoltageMv.ToString(CultureInfo.InvariantCulture)}mV",
+        $"LFO:FREQ {fixedProfile.LfFrequencyHz.ToString(CultureInfo.InvariantCulture)}Hz",
+        $"LFO:SHAP {fixedProfile.LfShape}",
+        $"SOUR:LFO:SIMP {fixedProfile.LfSourceImpedance}"
+    ];
+
+    private static bool IsCwFrequencyMode(string value)
+    {
+        var normalized = value.Trim();
+        return normalized.Equals("CW", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("FIX", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("FIXED", StringComparison.OrdinalIgnoreCase);
     }
 
     private static int SweepOnlyRunCommand(IReadOnlyDictionary<string, string> options)

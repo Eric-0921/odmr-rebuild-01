@@ -38,6 +38,7 @@ resume-run --previous-run <dir> --out-dir <dir> --progress-jsonl <path> --stop-r
 - `raw_len_bad_count`
 - `delta_gt1_count`
 - `quality_status`
+- `samples_total`
 - `estimated_run_duration_ms`
 - `estimated_point_duration_ms`
 - `estimated_sweep_duration_ms`
@@ -46,6 +47,10 @@ resume-run --previous-run <dir> --out-dir <dir> --progress-jsonl <path> --stop-r
 - `stop_hz`
 - `step_hz`
 - `dwell_ms`
+- `lockin_model`
+- `collector_contract`
+- `decode_failures`
+- `effective_sample_hz_per_parameter`
 
 这些 progress record 只在 run、collector、point、cleanup 边界写出，不写逐帧数据。
 
@@ -140,7 +145,8 @@ dotnet run --project tools/win-csharp/Odmr.WinProbe -- audit-continuity --run <r
 - `stop-request-file` 验证：
   - run dir: `runs/python_console_gate24_stop_20260614_072800`
   - 第 1 个 point 完成后停止
-  - `stop_after_current_point_requested` 出现在 progress/events
+  - `pause_after_current_point_requested` 出现在 progress/events
+  - terminal event 为 `run_paused`
   - cleanup 完整
   - `artifact-check passed`
 - 15min laser background 第一次：

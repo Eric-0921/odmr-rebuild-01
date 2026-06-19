@@ -176,7 +176,8 @@ public static partial class ConfigDrivenRun
                 lockinModel: lockinModel,
                 collectorContract: collectorContract,
                 decodeFailures: collectorSnapshot.DecodeFailures,
-                effectiveSampleHzPerParameter: collectorSnapshot.EffectiveSampleHzPerParameter);
+                effectiveSampleHzPerParameter: collectorSnapshot.EffectiveSampleHzPerParameter,
+                samplesTotal: collectorSnapshot.SamplesWritten);
 
             laser = ApplyLaserProfile(bundle, eventsPath, processStart);
             double[]? baselineCurrentA = null;
@@ -225,7 +226,8 @@ public static partial class ConfigDrivenRun
                         lockinModel: lockinModel,
                         collectorContract: collectorContract,
                         decodeFailures: stoppingSnapshot.DecodeFailures,
-                        effectiveSampleHzPerParameter: stoppingSnapshot.EffectiveSampleHzPerParameter);
+                        effectiveSampleHzPerParameter: stoppingSnapshot.EffectiveSampleHzPerParameter,
+                        samplesTotal: stoppingSnapshot.SamplesWritten);
                     break;
                 }
 
@@ -254,7 +256,8 @@ public static partial class ConfigDrivenRun
                     lockinModel: lockinModel,
                     collectorContract: collectorContract,
                     decodeFailures: beforePointSnapshot.DecodeFailures,
-                    effectiveSampleHzPerParameter: beforePointSnapshot.EffectiveSampleHzPerParameter);
+                    effectiveSampleHzPerParameter: beforePointSnapshot.EffectiveSampleHzPerParameter,
+                    samplesTotal: beforePointSnapshot.SamplesWritten);
 
                 var quality = RunPoint(
                     bundle,
@@ -301,7 +304,8 @@ public static partial class ConfigDrivenRun
                     lockinModel: lockinModel,
                     collectorContract: collectorContract,
                     decodeFailures: afterPointSnapshot.DecodeFailures,
-                    effectiveSampleHzPerParameter: afterPointSnapshot.EffectiveSampleHzPerParameter);
+                    effectiveSampleHzPerParameter: afterPointSnapshot.EffectiveSampleHzPerParameter,
+                    samplesTotal: afterPointSnapshot.SamplesWritten);
             }
         }
         catch (EmergencyStopException ex)
@@ -477,7 +481,8 @@ public static partial class ConfigDrivenRun
                 lockinModel: lockinModel,
                 collectorContract: collectorContract,
                 decodeFailures: snapshot.DecodeFailures,
-                effectiveSampleHzPerParameter: snapshot.EffectiveSampleHzPerParameter);
+                effectiveSampleHzPerParameter: snapshot.EffectiveSampleHzPerParameter,
+                samplesTotal: snapshot.SamplesWritten);
 
             if (cleanupFailure is null)
             {
@@ -535,7 +540,8 @@ public static partial class ConfigDrivenRun
             lockinModel: lockinModel,
             collectorContract: collectorContract,
             decodeFailures: finalSnapshot.DecodeFailures,
-            effectiveSampleHzPerParameter: finalSnapshot.EffectiveSampleHzPerParameter);
+            effectiveSampleHzPerParameter: finalSnapshot.EffectiveSampleHzPerParameter,
+            samplesTotal: finalSnapshot.SamplesWritten);
 
         RallArtifactWriter.WritePrettyJson(
             manifestPath,
@@ -650,7 +656,8 @@ public static partial class ConfigDrivenRun
         string? lockinModel = null,
         string? collectorContract = null,
         long? decodeFailures = null,
-        double? effectiveSampleHzPerParameter = null)
+        double? effectiveSampleHzPerParameter = null,
+        long? samplesTotal = null)
     {
         options.Progress?.Report(new RunProgressEvent(
             state,
@@ -675,7 +682,8 @@ public static partial class ConfigDrivenRun
             lockinModel,
             collectorContract,
             decodeFailures,
-            effectiveSampleHzPerParameter));
+            effectiveSampleHzPerParameter,
+            samplesTotal));
     }
 
     private static string PathRelative(string root, string path) => Path.GetRelativePath(root, path).Replace('\\', '/');

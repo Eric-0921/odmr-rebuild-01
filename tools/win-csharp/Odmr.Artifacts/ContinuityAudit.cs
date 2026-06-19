@@ -190,6 +190,7 @@ public static class ContinuityAudit
         var summary = ReadSummary(runDir);
         var indexGapCount = CountIndexGaps(blocks);
         var uniqueBlocks = blocks.Count(block => block.UniqueBlock);
+        var segmentReports = segments.Select(segment => BuildOe1300SegmentReport(segment, blocks)).ToArray();
         var maxGapMs = MaxObservedGapMs(blocks.Select(ToFrameRecord).ToArray());
         var elapsedSeconds = ElapsedSeconds(blocks.Select(ToFrameRecord).ToArray());
         var queryHz = elapsedSeconds > 0 ? blocks.Count / elapsedSeconds : summary.QueryHz;
@@ -202,7 +203,8 @@ public static class ContinuityAudit
             summary.RawLenBadCount,
             summary.DecodeFailures,
             effectiveSampleHzPerParameter) &&
-            indexGapCount == 0
+            indexGapCount == 0 &&
+            segmentReports.All(report => string.Equals(report.Verdict, "continuous", StringComparison.Ordinal))
             ? "continuous"
             : "degraded";
 
@@ -228,7 +230,7 @@ public static class ContinuityAudit
             uniqueBlockHz,
             effectiveSampleHzPerParameter,
             verdict,
-            segments.Select(BuildSegmentReport).ToArray());
+            segmentReports);
     }
 
     private static int CountIndexGaps(IReadOnlyList<CollectorBlockAuditRecord> blocks)
@@ -334,6 +336,71 @@ public static class ContinuityAudit
             0.0,
             "continuous",
             []);
+    }
+
+    private static ContinuitySegmentReport BuildOe1300SegmentReport(
+        SegmentRecord segment,
+        IReadOnlyList<CollectorBlockAuditRecord> blocks)
+    {
+        var segmentBlocks = segment.BlockSeqStart.HasValue && segment.BlockSeqEnd.HasValue
+            ? blocks
+                .Where(block =>
+                    block.RallIndex >= segment.BlockSeqStart.Value &&
+                    block.RallIndex <= segment.BlockSeqEnd.Value)
+                .OrderBy(block => block.RallIndex)
+                .ToArray()
+            : Array.Empty<CollectorBlockAuditRecord>();
+        var framesTotal = segmentBlocks.Length;
+        var framesUnique = segmentBlocks.LongCount(block => block.UniqueBlock);
+        var duplicateFrames = Math.Max(0, framesTotal - framesUnique);
+        var boundariesEvaluated = Math.Max(0, framesTotal - 1);
+        var indexGaps = CountIndexGaps(segmentBlocks);
+        var maxGapMs = MaxObservedGapMs(segmentBlocks.Select(ToFrameRecord).ToArray());
+        var medianGapMs = MedianObservedGapMs(segmentBlocks);
+        var verdict = framesTotal == 0
+            ? "missing_segment_frames"
+            : framesUnique == 0
+            ? "duplicate_only"
+            : indexGaps > 0
+            ? "index_gap"
+            : "continuous";
+
+        return new ContinuitySegmentReport(
+            segment.PointId,
+            segment.SegmentId,
+            framesTotal,
+            framesTotal,
+            framesUnique,
+            duplicateFrames,
+            boundariesEvaluated,
+            indexGaps,
+            duplicateFrames,
+            medianGapMs,
+            maxGapMs,
+            0.0,
+            0.0,
+            verdict,
+            []);
+    }
+
+    private static double MedianObservedGapMs(IReadOnlyList<CollectorBlockAuditRecord> blocks)
+    {
+        if (blocks.Count < 2)
+        {
+            return 0.0;
+        }
+
+        var gaps = new List<double>(blocks.Count - 1);
+        for (var index = 1; index < blocks.Count; index++)
+        {
+            gaps.Add(GapMs(ToFrameRecord(blocks[index - 1]), ToFrameRecord(blocks[index])));
+        }
+
+        gaps.Sort();
+        var middle = gaps.Count / 2;
+        return gaps.Count % 2 == 1
+            ? gaps[middle]
+            : Math.Round((gaps[middle - 1] + gaps[middle]) / 2.0, 4);
     }
 
     private static CollectorFrameAuditRecord ToFrameRecord(CollectorBlockAuditRecord block) =>

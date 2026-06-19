@@ -99,9 +99,10 @@ internal static class RunCliCommands
         var previousRunDir = CliSupport.GetRequiredOption(options, "previous-run");
         var outDir = CliSupport.GetRequiredOption(options, "out-dir");
         var progressPath = CliSupport.GetOptionalOption(options, "progress-jsonl");
+        var resumePlan = ResumeRun.Prepare(previousRunDir, outDir);
         using var progress = string.IsNullOrWhiteSpace(progressPath)
             ? null
-            : new ProgressJsonlWriter(progressPath, Path.GetFileName(Path.GetFullPath(outDir)));
+            : new ProgressJsonlWriter(progressPath, resumePlan.RunId);
         using var stopAfterPointCancellation = new CancellationTokenSource();
         using var emergencyCancellation = new CancellationTokenSource();
         using var watcherCancellation = new CancellationTokenSource();
