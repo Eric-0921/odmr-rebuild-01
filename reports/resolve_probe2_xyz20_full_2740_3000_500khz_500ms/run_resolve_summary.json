@@ -1,0 +1,12 @@
+{
+  "total_chunks": 45,
+  "ok_chunks": 45,
+  "failed_chunks": 0,
+  "min_run_hours": 5.5187,
+  "max_run_hours": 5.5187,
+  "mean_run_hours": 5.5187,
+  "smb_profile": "configs/profiles/smb100a_probe2_full_2740_3000_500khz_500ms_m10.json",
+  "oe_profile": "configs/profiles/oe1022d_run_ch_b_observed_tc100ms.json",
+  "laser_profile": "configs/profiles/cni_laser_run_on_background.json",
+  "manifest_csv": "configs/generated/probe2_xyz20_full_2740_3000_500khz_500ms_chunk_manifest.csv"
+}

@@ -1,0 +1,703 @@
+{
+  "run_id": "probe2_xyz20_z240_y100_180_x000_280_full_2740_3000_500khz_500ms_m75",
+  "operator": "local",
+  "acquisition_window_ms": 0,
+  "point_settle_ms": 500,
+  "failure_policy": "continue",
+  "mag_baseline_policy": {
+    "baseline_current_a": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "settle_ms": 1000,
+    "readback_samples": 3,
+    "settle_tolerance_a": 0.002,
+    "voltage_v": 75.0,
+    "voltage_protection_v": 75.0,
+    "output_enabled": true
+  },
+  "quality_thresholds": {
+    "min_frames": 20,
+    "max_timeout_count": 2,
+    "max_duplicate_ratio": 0.3,
+    "max_last_frame_age_ms": 500
+  },
+  "points": [
+    {
+      "point_id": "p001_x000_y100_z240ut",
+      "target_b_nt": [
+        0.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p002_x020_y100_z240ut",
+      "target_b_nt": [
+        20000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p003_x040_y100_z240ut",
+      "target_b_nt": [
+        40000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p004_x060_y100_z240ut",
+      "target_b_nt": [
+        60000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p005_x080_y100_z240ut",
+      "target_b_nt": [
+        80000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p006_x100_y100_z240ut",
+      "target_b_nt": [
+        100000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p007_x120_y100_z240ut",
+      "target_b_nt": [
+        120000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p008_x140_y100_z240ut",
+      "target_b_nt": [
+        140000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p009_x160_y100_z240ut",
+      "target_b_nt": [
+        160000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p010_x180_y100_z240ut",
+      "target_b_nt": [
+        180000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p011_x200_y100_z240ut",
+      "target_b_nt": [
+        200000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p012_x220_y100_z240ut",
+      "target_b_nt": [
+        220000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p013_x240_y100_z240ut",
+      "target_b_nt": [
+        240000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p014_x260_y100_z240ut",
+      "target_b_nt": [
+        260000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p015_x280_y100_z240ut",
+      "target_b_nt": [
+        280000.0,
+        100000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p016_x000_y120_z240ut",
+      "target_b_nt": [
+        0.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p017_x020_y120_z240ut",
+      "target_b_nt": [
+        20000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p018_x040_y120_z240ut",
+      "target_b_nt": [
+        40000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p019_x060_y120_z240ut",
+      "target_b_nt": [
+        60000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p020_x080_y120_z240ut",
+      "target_b_nt": [
+        80000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p021_x100_y120_z240ut",
+      "target_b_nt": [
+        100000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p022_x120_y120_z240ut",
+      "target_b_nt": [
+        120000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p023_x140_y120_z240ut",
+      "target_b_nt": [
+        140000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p024_x160_y120_z240ut",
+      "target_b_nt": [
+        160000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p025_x180_y120_z240ut",
+      "target_b_nt": [
+        180000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p026_x200_y120_z240ut",
+      "target_b_nt": [
+        200000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p027_x220_y120_z240ut",
+      "target_b_nt": [
+        220000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p028_x240_y120_z240ut",
+      "target_b_nt": [
+        240000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p029_x260_y120_z240ut",
+      "target_b_nt": [
+        260000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p030_x280_y120_z240ut",
+      "target_b_nt": [
+        280000.0,
+        120000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p031_x000_y140_z240ut",
+      "target_b_nt": [
+        0.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p032_x020_y140_z240ut",
+      "target_b_nt": [
+        20000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p033_x040_y140_z240ut",
+      "target_b_nt": [
+        40000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p034_x060_y140_z240ut",
+      "target_b_nt": [
+        60000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p035_x080_y140_z240ut",
+      "target_b_nt": [
+        80000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p036_x100_y140_z240ut",
+      "target_b_nt": [
+        100000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p037_x120_y140_z240ut",
+      "target_b_nt": [
+        120000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p038_x140_y140_z240ut",
+      "target_b_nt": [
+        140000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p039_x160_y140_z240ut",
+      "target_b_nt": [
+        160000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p040_x180_y140_z240ut",
+      "target_b_nt": [
+        180000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p041_x200_y140_z240ut",
+      "target_b_nt": [
+        200000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p042_x220_y140_z240ut",
+      "target_b_nt": [
+        220000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p043_x240_y140_z240ut",
+      "target_b_nt": [
+        240000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p044_x260_y140_z240ut",
+      "target_b_nt": [
+        260000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p045_x280_y140_z240ut",
+      "target_b_nt": [
+        280000.0,
+        140000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p046_x000_y160_z240ut",
+      "target_b_nt": [
+        0.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p047_x020_y160_z240ut",
+      "target_b_nt": [
+        20000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p048_x040_y160_z240ut",
+      "target_b_nt": [
+        40000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p049_x060_y160_z240ut",
+      "target_b_nt": [
+        60000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p050_x080_y160_z240ut",
+      "target_b_nt": [
+        80000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p051_x100_y160_z240ut",
+      "target_b_nt": [
+        100000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p052_x120_y160_z240ut",
+      "target_b_nt": [
+        120000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p053_x140_y160_z240ut",
+      "target_b_nt": [
+        140000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p054_x160_y160_z240ut",
+      "target_b_nt": [
+        160000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p055_x180_y160_z240ut",
+      "target_b_nt": [
+        180000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p056_x200_y160_z240ut",
+      "target_b_nt": [
+        200000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p057_x220_y160_z240ut",
+      "target_b_nt": [
+        220000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p058_x240_y160_z240ut",
+      "target_b_nt": [
+        240000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p059_x260_y160_z240ut",
+      "target_b_nt": [
+        260000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p060_x280_y160_z240ut",
+      "target_b_nt": [
+        280000.0,
+        160000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p061_x000_y180_z240ut",
+      "target_b_nt": [
+        0.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p062_x020_y180_z240ut",
+      "target_b_nt": [
+        20000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p063_x040_y180_z240ut",
+      "target_b_nt": [
+        40000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p064_x060_y180_z240ut",
+      "target_b_nt": [
+        60000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p065_x080_y180_z240ut",
+      "target_b_nt": [
+        80000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p066_x100_y180_z240ut",
+      "target_b_nt": [
+        100000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p067_x120_y180_z240ut",
+      "target_b_nt": [
+        120000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p068_x140_y180_z240ut",
+      "target_b_nt": [
+        140000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p069_x160_y180_z240ut",
+      "target_b_nt": [
+        160000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p070_x180_y180_z240ut",
+      "target_b_nt": [
+        180000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p071_x200_y180_z240ut",
+      "target_b_nt": [
+        200000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p072_x220_y180_z240ut",
+      "target_b_nt": [
+        220000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p073_x240_y180_z240ut",
+      "target_b_nt": [
+        240000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p074_x260_y180_z240ut",
+      "target_b_nt": [
+        260000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    },
+    {
+      "point_id": "p075_x280_y180_z240ut",
+      "target_b_nt": [
+        280000.0,
+        180000.0,
+        240000.0
+      ],
+      "magnetic_mode": "controlled"
+    }
+  ]
+}

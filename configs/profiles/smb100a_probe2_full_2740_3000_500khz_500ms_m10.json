@@ -1,0 +1,31 @@
+{
+  "profile_id": "smb100a_probe2_full_2740_3000_500khz_500ms_m10",
+  "command_settle_ms": 300,
+  "error_check_after_write": true,
+  "fixed": {
+    "modulation_enabled": true,
+    "fm_enabled": true,
+    "fm_source": "INT",
+    "fm_mode": "HDEV",
+    "fm_deviation_hz": 4000000.0,
+    "lf_output_enabled": true,
+    "lf_voltage_mv": 137.0,
+    "lf_frequency_hz": 500.0,
+    "lf_shape": "SQU",
+    "lf_source_impedance": "LOW"
+  },
+  "default_sweep": {
+    "start_hz": 2740000000.0,
+    "stop_hz": 3000000000.0,
+    "step_hz": 500000.0,
+    "dwell_ms": 500,
+    "power_dbm": -10.0,
+    "sweep_mode": "AUTO",
+    "spacing": "LIN",
+    "shape": "SAWT",
+    "trigger_source": "AUTO",
+    "output_voltage_start_v": 0.0,
+    "output_voltage_stop_v": 3.0,
+    "rf_output_enabled": true
+  }
+}
